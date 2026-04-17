@@ -10,8 +10,7 @@ export function generateHTML(
   markdown: string = "",
   measuresMarkdown: string = "",
   functionsMarkdown: string = "",
-  calcGroupsMarkdown: string = "",
-  qualityMarkdown: string = ""
+  calcGroupsMarkdown: string = ""
 ): string {
   const ts = new Date().toISOString().replace("T", " ").substring(0, 16);
   // JSON.stringify safely escapes each markdown body for embedding in JS consts.
@@ -19,7 +18,6 @@ export function generateHTML(
   const measuresMarkdownLiteral = JSON.stringify(measuresMarkdown);
   const functionsMarkdownLiteral = JSON.stringify(functionsMarkdown);
   const calcGroupsMarkdownLiteral = JSON.stringify(calcGroupsMarkdown);
-  const qualityMarkdownLiteral = JSON.stringify(qualityMarkdown);
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -197,6 +195,16 @@ export function generateHTML(
   .ci-ord{font-size:11px;color:var(--text-faint);font-weight:600;min-width:20px}
   .ci-name{font-size:13px;font-weight:600;color:var(--text-body)}
 
+  /* Page-layout wireframe */
+  .wf-wrap{display:flex;flex-direction:column;gap:8px}
+  .wf-svg{width:100%;max-height:520px;display:block;border-radius:6px;background:var(--surface-deep)}
+  .wf-svg .wf-visual{cursor:help}
+  .wf-svg .wf-type{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;letter-spacing:.02em;pointer-events:none}
+  .wf-svg .wf-title{font-family:'DM Sans',system-ui,sans-serif;font-size:11px;fill:var(--text);font-weight:500;pointer-events:none}
+  .wf-svg .wf-visual:hover rect{fill-opacity:.4;stroke-width:2.5}
+  .wf-legend{display:flex;flex-wrap:wrap;gap:4px;justify-content:flex-end}
+  .wf-legend-chip{font-size:10px;padding:1px 7px;border-radius:3px;font-family:'JetBrains Mono',monospace;letter-spacing:.02em;text-transform:uppercase}
+
   .desc-line{font-size:11px;color:var(--text-dim);font-style:italic;margin-top:3px;line-height:1.4}
   .desc-muted{font-size:11px;color:var(--text-faint);line-height:1.4}
   .field-name[data-desc]{cursor:help}
@@ -318,7 +326,6 @@ export function generateHTML(
         <button class="filter-btn" id="md-tab-measures" onclick="switchMd('measures')">Measures</button>
         <button class="filter-btn" id="md-tab-functions" onclick="switchMd('functions')">Functions</button>
         <button class="filter-btn" id="md-tab-calcgroups" onclick="switchMd('calcgroups')">Calc Groups</button>
-        <button class="filter-btn" id="md-tab-quality" onclick="switchMd('quality')">Quality</button>
       </div>
       <div style="flex:1;color:var(--text-dim);font-size:12px;margin-left:8px" id="md-subtitle">Semantic-model documentation (no DAX)</div>
       <div style="display:flex;gap:4px">
@@ -341,7 +348,6 @@ const MARKDOWN=${markdownLiteral};
 const MARKDOWN_MEASURES=${measuresMarkdownLiteral};
 const MARKDOWN_FUNCTIONS=${functionsMarkdownLiteral};
 const MARKDOWN_CALCGROUPS=${calcGroupsMarkdownLiteral};
-const MARKDOWN_QUALITY=${qualityMarkdownLiteral};
 const REPORT_NAME=${JSON.stringify(reportName)};
 let activeMd="model";
 let mdViewMode="rendered";
@@ -400,34 +406,9 @@ let searchTerms={measures:"",columns:""};
 let openPages=new Set();
 let openTables=new Set();
 
-const pageData=(()=>{
-  const map=new Map();
-  const addToPage=(pageName,visualType,visualTitle,fieldName,fieldTable,fieldType)=>{
-    if(!map.has(pageName))map.set(pageName,{name:pageName,visuals:new Map(),measures:new Set(),columns:new Set()});
-    const p=map.get(pageName);
-    const vKey=visualTitle;
-    if(!p.visuals.has(vKey))p.visuals.set(vKey,{type:visualType,title:visualTitle,bindings:[]});
-    const vb=p.visuals.get(vKey).bindings;
-    if(!vb.some(b=>b.fieldName===fieldName&&b.fieldTable===fieldTable))vb.push({fieldName,fieldTable,fieldType});
-    if(fieldType==="measure")p.measures.add(fieldName);
-    else p.columns.add(fieldName);
-  };
-  DATA.measures.forEach(m=>m.usedIn.forEach(u=>addToPage(u.pageName,u.visualType,u.visualTitle,m.name,m.table,"measure")));
-  DATA.columns.forEach(c=>c.usedIn.forEach(u=>addToPage(u.pageName,u.visualType,u.visualTitle,c.name,c.table,"column")));
-  return [...map.values()].map(p=>{
-    const visuals=[...p.visuals.values()];
-    const typeCounts={};
-    visuals.forEach(v=>{typeCounts[v.type]=(typeCounts[v.type]||0)+1;});
-    const slicerCount=typeCounts["slicer"]||0;
-    const coverage=DATA.totals.measuresInModel>0?Math.round(p.measures.size/DATA.totals.measuresInModel*100):0;
-    return{
-      name:p.name,visualCount:visuals.length,
-      measures:[...p.measures],columns:[...p.columns],
-      measureCount:p.measures.size,columnCount:p.columns.size,
-      slicerCount,typeCounts,coverage,visuals
-    };
-  });
-})();
+// Pages are now built server-side with full structure (width/height/visuals
+// with positions, etc.). Just use DATA.pages directly.
+const pageData=DATA.pages||[];
 
 function uc(n){return n===0?"zero":n<=1?"low":"good"}
 
@@ -642,6 +623,63 @@ function openLineage(type,name){
   }
 }
 
+// ─── Page wireframe (SVG) ──────────────────────────────────────────────────
+// Categorical colour palette — semi-transparent fill + solid stroke. Honours
+// dark/light themes via opacity on a CSS variable-friendly hex.
+const WF_COLORS={
+  chart:   "#3B82F6",  // blue
+  table:   "#64748B",  // slate
+  card:    "#10B981",  // emerald
+  slicer:  "#EC4899",  // pink
+  map:     "#F59E0B",  // amber
+  shape:   "#A78BFA",  // violet
+  button:  "#06B6D4",  // cyan
+  ai:      "#EF4444",  // red
+  other:   "#6B7280"   // neutral
+};
+
+function renderPageWireframe(p){
+  var w=p.width||1280, h=p.height||720;
+  var visuals=p.wireframeVisuals||[];
+  if(visuals.length===0){
+    return '<div style="font-size:11px;color:var(--text-faint);padding:8px 0">No visual layout captured.</div>';
+  }
+  // Per-visual SVG nodes. Already sorted by ascending z server-side.
+  var nodes=visuals.map(function(v){
+    var color=WF_COLORS[v.category]||WF_COLORS.other;
+    var pos=v.position||{x:0,y:0,width:100,height:60};
+    // Truncate title for inline label; full title goes in the <title> tooltip.
+    var label=v.title||v.type||"";
+    var bindingSummary=(v.bindings||[]).slice(0,12).map(function(b){
+      return (b.bindingRole?b.bindingRole+": ":"")+b.fieldTable+"["+b.fieldName+"]";
+    }).join("\\n");
+    var tip=v.type+" \u00b7 "+(v.title||"(untitled)")+(bindingSummary?"\\n\\n"+bindingSummary:"");
+    return '<g class="wf-visual">'+
+      '<title>'+escAttr(tip)+'</title>'+
+      '<rect x="'+pos.x+'" y="'+pos.y+'" width="'+pos.width+'" height="'+pos.height+'" rx="4" ry="4" fill="'+color+'" fill-opacity="0.20" stroke="'+color+'" stroke-width="1.5"/>'+
+      '<text class="wf-type" x="'+(pos.x+8)+'" y="'+(pos.y+14)+'" fill="'+color+'">'+escHtml(v.type)+'</text>'+
+      '<text class="wf-title" x="'+(pos.x+pos.width/2)+'" y="'+(pos.y+pos.height/2+4)+'" text-anchor="middle">'+escHtml(label)+'</text>'+
+    '</g>';
+  }).join("");
+
+  // Distinct categories present on this page → small legend chips.
+  var cats={};
+  visuals.forEach(function(v){cats[v.category]=(cats[v.category]||0)+1;});
+  var legend=Object.keys(cats).sort().map(function(c){
+    var color=WF_COLORS[c]||WF_COLORS.other;
+    return '<span class="wf-legend-chip" style="background:'+color+'22;color:'+color+';border:1px solid '+color+'55">'+c+' \u00d7 '+cats[c]+'</span>';
+  }).join("");
+
+  return ''+
+    '<div class="wf-wrap">'+
+      '<svg class="wf-svg" viewBox="0 0 '+w+' '+h+'" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Page layout wireframe">'+
+        '<rect x="0" y="0" width="'+w+'" height="'+h+'" fill="var(--surface-alt)" stroke="var(--border)" stroke-width="2"/>'+
+        nodes+
+      '</svg>'+
+      '<div class="wf-legend">'+legend+'</div>'+
+    '</div>';
+}
+
 function renderPages(){
   const FC={measure:"#F59E0B",column:"#3B82F6"};
   const hiddenSet=new Set(DATA.hiddenPages||[]);
@@ -678,6 +716,10 @@ function renderPages(){
         <span class="page-expand">▼</span>
       </div>
       <div class="page-body"><div class="page-body-inner">
+        <div class="page-section">
+          <div class="page-section-title">Layout<span class="line"></span></div>
+          \${renderPageWireframe(p)}
+        </div>
         <div class="page-section">
           <div class="page-section-title">Visual types<span class="line"></span></div>
           <div class="page-type-summary">\${typeChips}</div>
@@ -858,6 +900,7 @@ function renderSources(){
   var compatLevel=DATA.compatibilityLevel!=null?DATA.compatibilityLevel:"\u2014";
   var modelDesc=mp.description?'<div class="desc-line" style="margin-top:8px;font-size:13px">'+escHtml(mp.description)+'</div>':'';
   var propsRows=
+    '<tr><td><strong>Model name</strong></td><td>'+escHtml(mp.name||"\u2014")+'</td></tr>'+
     '<tr><td><strong>Compatibility level</strong></td><td>'+escHtml(String(compatLevel))+'</td></tr>'+
     '<tr><td><strong>Cultures</strong></td><td>'+escHtml(culturesLabel)+'</td></tr>'+
     '<tr><td><strong>Implicit measures</strong></td><td>'+escHtml(implicitLabel)+'</td></tr>'+
@@ -1071,22 +1114,20 @@ function currentMd(){
     case "measures":   return MARKDOWN_MEASURES;
     case "functions":  return MARKDOWN_FUNCTIONS;
     case "calcgroups": return MARKDOWN_CALCGROUPS;
-    case "quality":    return MARKDOWN_QUALITY;
     default:           return MARKDOWN;
   }
 }
 function currentMdFilename(){
   var suffix="-semantic-model.md";
-  if(activeMd==="measures")        suffix="-measures.md";
+  if(activeMd==="measures")   suffix="-measures.md";
   else if(activeMd==="functions")  suffix="-functions.md";
   else if(activeMd==="calcgroups") suffix="-calculation-groups.md";
-  else if(activeMd==="quality")    suffix="-data-quality.md";
   return REPORT_NAME+suffix;
 }
 
 function switchMd(which){
   activeMd=which;
-  var ids=["model","measures","functions","calcgroups","quality"];
+  var ids=["model","measures","functions","calcgroups"];
   ids.forEach(function(id){
     var el=document.getElementById("md-tab-"+id);
     if(el)el.classList.toggle("active",which===id);
@@ -1096,7 +1137,6 @@ function switchMd(which){
     if(which==="measures")        sub.textContent="Measures reference · A\u2013Z alphabetical (no DAX expressions)";
     else if(which==="functions")  sub.textContent="Functions reference · per-UDF parameters, descriptions and bodies";
     else if(which==="calcgroups") sub.textContent="Calculation groups reference · per-item descriptions and bodies";
-    else if(which==="quality")    sub.textContent="Data quality review · coverage, removal candidates, indirect entities, inactive relationships";
     else                          sub.textContent="Semantic-model documentation (no DAX expressions)";
   }
   renderDocs();

@@ -1,9 +1,48 @@
 import { findSemanticModelPath, parseModel, ModelRelationship, ModelFunction, ModelCalcGroup, RawExpression, RawPartition, ModelProperties } from "./model-parser.js";
-import { scanReportBindings } from "./report-scanner.js";
+import { scanReportBindings, VisualPosition } from "./report-scanner.js";
 
 export type ModelExpression = RawExpression;
 export type PartitionInfo = RawPartition;
 export type { ModelProperties } from "./model-parser.js";
+export type { VisualPosition } from "./report-scanner.js";
+
+/** Visual category for wireframe colour-coding. */
+export type VisualCategory = "chart" | "table" | "card" | "slicer" | "map" | "shape" | "button" | "ai" | "other";
+
+/** Per-visual structure used by the layout / wireframe renderer. */
+export interface WireframeVisual {
+  visualId: string;
+  type: string;
+  title: string;
+  category: VisualCategory;
+  position: VisualPosition;
+  /** Field bindings on this visual instance (NOT deduplicated across visuals). */
+  bindings: Array<{ fieldName: string; fieldTable: string; fieldType: string; bindingRole: string }>;
+}
+
+/**
+ * Map a Power BI visualType to a colour-coded category for the wireframe.
+ * Anything unrecognised falls back to "other".
+ */
+function categorizeVisual(visualType: string): VisualCategory {
+  const t = (visualType || "").toLowerCase();
+  if (t === "tableex" || t === "pivottable") return "table";
+  if (t === "card" || t === "cardvisual" || t === "cardnew" || t === "multirowcard" || t === "kpi" || t === "gauge") return "card";
+  if (t === "slicer" || t === "listslicer" || t === "textslicer" || t === "advancedslicervisual") return "slicer";
+  if (t === "map" || t === "filledmap" || t === "azuremap" || t === "shapemap") return "map";
+  if (t === "shape" || t === "basicshape" || t === "image" || t === "textbox") return "shape";
+  if (t === "actionbutton" || t === "pagenavigator" || t === "bookmarknavigator") return "button";
+  if (t === "decompositiontreevisual" || t === "qnavisual" || t === "keyinfluencers") return "ai";
+  // Heuristic for chart family: anything containing "chart" or known chart-like names.
+  if (
+    t.includes("chart") ||
+    t === "treemap" ||
+    t === "funnel" ||
+    t === "ribbon" ||
+    t === "waterfall"
+  ) return "chart";
+  return "other";
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Types
@@ -99,6 +138,11 @@ export interface PageData {
   typeCounts: Record<string, number>;
   coverage: number;
   visuals: Array<{ type: string; title: string; bindings: Array<{ fieldName: string; fieldTable: string; fieldType: string }> }>;
+  /** Page canvas size in PBI coordinate space (default 1280×720). */
+  width: number;
+  height: number;
+  /** Per-visual instances with positions for the wireframe renderer. */
+  wireframeVisuals: WireframeVisual[];
 }
 
 export interface FullData {
@@ -157,7 +201,31 @@ export function buildFullData(reportPath: string): FullData {
   const modelPath = findSemanticModelPath(reportPath);
   const rawModel = parseModel(modelPath);
   const allMeasureNames = rawModel.measures.map(m => m.name);
-  const { bindings, pageCount, visualCount, hiddenPages } = scanReportBindings(reportPath);
+  const { bindings, pageCount, visualCount, hiddenPages, pages: scannedPages, visuals: scannedVisuals } = scanReportBindings(reportPath);
+
+  // Page lookup for width/height; visual lookup keyed by pageName so wireframe
+  // assembly can pull all visuals belonging to a given page below.
+  const pageStructByName = new Map<string, { width: number; height: number }>();
+  for (const sp of scannedPages) {
+    pageStructByName.set(sp.pageName, { width: sp.width, height: sp.height });
+  }
+  const visualsByPageName = new Map<string, typeof scannedVisuals>();
+  for (const sv of scannedVisuals) {
+    const arr = visualsByPageName.get(sv.pageName) || [];
+    arr.push(sv);
+    visualsByPageName.set(sv.pageName, arr);
+  }
+  // Per-visual binding lookup: key = pageName|visualId, value = bindings on that instance.
+  const bindingsByVisual = new Map<string, Array<{ fieldName: string; fieldTable: string; fieldType: string; bindingRole: string }>>();
+  for (const b of bindings) {
+    const key = `${b.pageName}|${b.visualId}`;
+    const arr = bindingsByVisual.get(key) || [];
+    // Deduplicate by field+role within the same visual instance.
+    if (!arr.some(x => x.fieldName === b.fieldName && x.fieldTable === b.tableName && x.bindingRole === b.bindingRole)) {
+      arr.push({ fieldName: b.fieldName, fieldTable: b.tableName, fieldType: b.fieldType, bindingRole: b.bindingRole });
+    }
+    bindingsByVisual.set(key, arr);
+  }
 
   // Build measures
   const measures: ModelMeasure[] = rawModel.measures.map(m => {
@@ -394,21 +462,46 @@ export function buildFullData(reportPath: string): FullData {
     };
   });
 
-  const pages: PageData[] = [...pageMap.values()].map(p => {
-    const visuals = [...p.visuals.values()];
+  // Build PageData for every scanned page (including ones with no bound
+  // fields — they may still have decorative shapes / buttons / text).
+  const pages: PageData[] = scannedPages.map(sp => {
+    const p = pageMap.get(sp.pageName);
+    const aggregatedVisuals = p ? [...p.visuals.values()] : [];
     const typeCounts: Record<string, number> = {};
-    visuals.forEach(v => { typeCounts[v.type] = (typeCounts[v.type] || 0) + 1; });
+    // Use the scanned visual list for the canonical type count (every visual,
+    // not just those with bindings).
+    const pageVisuals = visualsByPageName.get(sp.pageName) || [];
+    pageVisuals.forEach(v => { typeCounts[v.visualType] = (typeCounts[v.visualType] || 0) + 1; });
+
+    const wireframeVisuals: WireframeVisual[] = pageVisuals
+      .slice()
+      .sort((a, b) => a.position.z - b.position.z)
+      .map(v => ({
+        visualId: v.visualId,
+        type: v.visualType,
+        title: v.visualTitle,
+        category: categorizeVisual(v.visualType),
+        position: v.position,
+        bindings: bindingsByVisual.get(`${sp.pageName}|${v.visualId}`) || [],
+      }));
+
+    const measures = p ? [...p.measures] : [];
+    const columns = p ? [...p.columns] : [];
+
     return {
-      name: p.name,
-      visualCount: visuals.length,
-      measures: [...p.measures],
-      columns: [...p.columns],
-      measureCount: p.measures.size,
-      columnCount: p.columns.size,
+      name: sp.pageName,
+      visualCount: pageVisuals.length,
+      measures,
+      columns,
+      measureCount: measures.length,
+      columnCount: columns.length,
       slicerCount: typeCounts["slicer"] || 0,
       typeCounts,
-      coverage: rawModel.measures.length > 0 ? Math.round(p.measures.size / rawModel.measures.length * 100) : 0,
-      visuals,
+      coverage: rawModel.measures.length > 0 ? Math.round(measures.length / rawModel.measures.length * 100) : 0,
+      visuals: aggregatedVisuals,
+      width: sp.width,
+      height: sp.height,
+      wireframeVisuals,
     };
   });
 

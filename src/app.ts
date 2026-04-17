@@ -9,7 +9,7 @@ import * as fs from "fs";
 import { exec } from "child_process";
 import { buildFullData } from "./data-builder.js";
 import { generateHTML } from "./html-generator.js";
-import { generateMarkdown } from "./md-generator.js";
+import { generateMarkdown, generateMeasuresMd, generateFunctionsMd, generateCalcGroupsMd, generateQualityMd } from "./md-generator.js";
 import { findSemanticModelPath } from "./model-parser.js";
 
 // ---------------------------------------------------------------------------
@@ -329,8 +329,12 @@ const server = http.createServer((req, res) => {
     try {
       const data = buildFullData(resolved);
       const reportName = path.basename(resolved).replace(/\.Report$/, "");
-      const md = generateMarkdown(data, reportName);
-      const html = generateHTML(data, reportName, md);
+      const modelMd = generateMarkdown(data, reportName);
+      const measuresMd = generateMeasuresMd(data, reportName);
+      const functionsMd = generateFunctionsMd(data, reportName);
+      const calcGroupsMd = generateCalcGroupsMd(data, reportName);
+      const qualityMd = generateQualityMd(data, reportName);
+      const html = generateHTML(data, reportName, modelMd, measuresMd, functionsMd, calcGroupsMd, qualityMd);
       saveRecent(resolved);
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
       res.end(html);
