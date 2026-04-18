@@ -1,5 +1,69 @@
 import type { FullData } from "./data-builder.js";
-import { safeJSON } from "./render/safe.js";
+import { safeJSON, escHtml as serverEscHtml } from "./render/safe.js";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { fileURLToPath } from "node:url";
+
+// ─────────────────────────────────────────────────────────────────────
+// Vendored DAX syntax highlighter (see vendor/dax-highlight/README.md)
+//
+// Loaded once at module-load from vendor/dax-highlight/ and inlined
+// into the generated HTML. Zero runtime deps preserved — the vendor
+// files are just read off disk, like package.json in app.ts.
+//
+// Path resolution tries three locations so the same code works when
+// compiled to dist/ (production), dist-test/src/ (unit tests), or
+// run via ts-node / any other out-dir layout.
+// ─────────────────────────────────────────────────────────────────────
+const __dirname_html = path.dirname(fileURLToPath(import.meta.url));
+function readVendor(relative: string): string {
+  const candidates = [
+    path.resolve(__dirname_html, "..", "vendor", relative),
+    path.resolve(__dirname_html, "..", "..", "vendor", relative),
+    path.resolve(process.cwd(), "vendor", relative),
+  ];
+  for (const p of candidates) {
+    try { return fs.readFileSync(p, "utf8"); } catch { /* try next */ }
+  }
+  throw new Error("vendor file not found: " + relative);
+}
+const DAX_HIGHLIGHT_JS  = readVendor("dax-highlight/dax-highlight.js");
+const DAX_HIGHLIGHT_CSS = readVendor("dax-highlight/dax-highlight.css");
+
+// ─────────────────────────────────────────────────────────────────────
+// Compiled client bundle — src/client/main.ts → dist/client/main.js
+//
+// The embedded <script> block used to live inline inside generateHTML's
+// template literal. Stop 5 moved it out: client code is now a real TS
+// file, type-checked alongside the server, and inlined here at
+// generation time.
+//
+// Path is relative to __dirname_html so it works under:
+//   dist/html-generator.js        -> ./client/main.js
+//   dist-test/src/html-generator.js -> ./client/main.js  (same layout)
+// ─────────────────────────────────────────────────────────────────────
+function readCompiledClient(): string {
+  const candidates = [
+    path.resolve(__dirname_html, "client", "main.js"),
+    path.resolve(__dirname_html, "..", "client", "main.js"),
+  ];
+  for (const p of candidates) {
+    try {
+      let body = fs.readFileSync(p, "utf8");
+      // TypeScript auto-adds `export {};` when a .ts file has only
+      // ambient refs (which our globals.d.ts triggers). Strip it —
+      // the inlined `<script>` is a classic script, not a module,
+      // and `export` there is a syntax error.
+      body = body.replace(/\nexport\s*\{\s*\};?\s*$/s, "\n");
+      return body;
+    } catch { /* try next */ }
+  }
+  throw new Error(
+    "compiled client bundle not found — run `npm run build` first. " +
+    "Searched: " + candidates.join(", ")
+  );
+}
+const CLIENT_JS = readCompiledClient();
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // HTML Dashboard Generation
@@ -32,7 +96,7 @@ export function generateHTML(
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Model Usage - ${reportName}</title>
+<title>Model Usage - ${serverEscHtml(reportName)}</title>
 <script>(function(){try{var t=localStorage.getItem('usage-theme')||'dark';document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -63,6 +127,7 @@ export function generateHTML(
     --clr-slicer:     #EC4899;  /* pink    — slicer fields           */
     --clr-unused:     #EF4444;  /* red     — unused / danger         */
     --clr-indirect:   #94A3B8;  /* slate   — indirect (neutral)      */
+    --clr-variable:   #F97316;  /* orange  — DAX named variables     */
 
     /* Soft (≈12%) and mid (≈30%) alphas paired with each category colour.
        Kept as rgba literals because var() can't participate in channel-level
@@ -78,6 +143,7 @@ export function generateHTML(
     --clr-slicer-soft:    rgba(236,72,153,.12);  --clr-slicer-mid:    rgba(236,72,153,.30);
     --clr-unused-soft:    rgba(239,68,68,.12);   --clr-unused-mid:    rgba(239,68,68,.30);
     --clr-indirect-soft:  rgba(148,163,184,.12); --clr-indirect-mid:  rgba(148,163,184,.30);
+    --clr-variable-soft:  rgba(249,115,22,.12);  --clr-variable-mid:  rgba(249,115,22,.30);
 
     /* ─── Typography scale ──────────────────────────────────────────────── */
     --fs-xs:10px;  --fs-sm:11px;  --fs-md:13px;  --fs-lg:14px;
@@ -119,6 +185,7 @@ export function generateHTML(
     --clr-slicer:     #BE185D;
     --clr-unused:     #B91C1C;
     --clr-indirect:   #475569;
+    --clr-variable:   #C2410C;  /* orange-700 — AA contrast on light canvas */
     --clr-measure-soft:   rgba(180,83,9,.10);    --clr-measure-mid:   rgba(180,83,9,.30);
     --clr-column-soft:    rgba(29,78,216,.08);   --clr-column-mid:    rgba(29,78,216,.28);
     --clr-source-soft:    rgba(4,120,87,.10);    --clr-source-mid:    rgba(4,120,87,.28);
@@ -130,6 +197,7 @@ export function generateHTML(
     --clr-slicer-soft:    rgba(190,24,93,.08);   --clr-slicer-mid:    rgba(190,24,93,.28);
     --clr-unused-soft:    rgba(185,28,28,.10);   --clr-unused-mid:    rgba(185,28,28,.30);
     --clr-indirect-soft:  rgba(71,85,105,.10);   --clr-indirect-mid:  rgba(71,85,105,.25);
+    --clr-variable-soft:  rgba(194,65,12,.10);   --clr-variable-mid:  rgba(194,65,12,.28);
   }
   body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(--text-body);min-height:100vh;padding-bottom:48px;position:relative;overflow-x:hidden;transition:background .2s,color .2s}
 
@@ -452,18 +520,51 @@ export function generateHTML(
   .md-rendered ol ul{margin:2px 0 6px}
 
   @media(max-width:768px){.summary{grid-template-columns:repeat(3,1fr)}.lineage-flow-row{flex-direction:column}.lineage-arrow-col{transform:rotate(90deg);padding:8px 0;width:100%}}
+
+  /* ── DAX syntax highlighter (vendor/dax-highlight) ───────────────── */
+  ${DAX_HIGHLIGHT_CSS}
+
+  /* ── Theme bridge — blend DAX colours with our --clr-* palette ───── */
+  /* The highlighter ships with a neutral dark palette. We keep its
+     default behaviour in dark mode and override for light mode via
+     our existing [data-theme="light"] attribute — no media-query
+     flicker. Tokens mapped to semantic --clr-* colours that already
+     theme-switch elsewhere in the dashboard (measure amber, function
+     teal, upstream purple, source emerald). */
+  .code-dax {
+    --dax-fg:        var(--text);
+    --dax-comment:   var(--text-fainter);
+    --dax-keyword:   var(--clr-upstream);
+    --dax-function:  var(--clr-function);
+    --dax-variable:  var(--clr-variable);  /* orange — named VARs + _prefixed idents */
+    --dax-measure:   var(--clr-measure);
+    --dax-ref:       var(--clr-source);
+    --dax-string:    var(--clr-success);
+    --dax-number:    var(--clr-calc);
+  }
+  /* When embedded in our .lineage-dax block, inherit the block's
+     monospace font / size from the existing rule and add our token
+     classes on top. */
+  .lineage-dax.code-dax { font-family: inherit; line-height: inherit; tab-size: 2; }
+  .lineage-dax .dax-k, .lineage-dax .dax-f, .lineage-dax .dax-v,
+  .lineage-dax .dax-m, .lineage-dax .dax-r, .lineage-dax .dax-s,
+  .lineage-dax .dax-n, .lineage-dax .dax-c {
+    /* Spans need no further layout tweaks — inherit .lineage-dax
+       monospace styling; the colour rules from .code-dax .dax-*
+       already apply. */
+  }
 </style>
 </head>
 <body>
 <div class="container">
   <div class="header">
     <div class="header-left">
-      <div class="top"><span class="usage-map-badge">Usage Map</span><span class="header-sep">|</span><span class="header-sub">${reportName}</span></div>
+      <div class="top"><span class="usage-map-badge">Usage Map</span><span class="header-sep">|</span><span class="header-sub">${serverEscHtml(reportName)}</span></div>
       <div class="timestamp">Generated: ${ts}</div>
     </div>
     <div class="header-actions">
-      <button class="theme-btn" id="theme-btn" onclick="toggleTheme()" title="Toggle light/dark theme" aria-label="Toggle theme">☾</button>
-      <button class="refresh-btn" onclick="location.reload()">↻ Refresh</button>
+      <button class="theme-btn" id="theme-btn" data-action="theme" title="Toggle light/dark theme" aria-label="Toggle theme">☾</button>
+      <button class="refresh-btn" data-action="reload">↻ Refresh</button>
     </div>
   </div>
   <div class="summary" id="summary"></div>
@@ -472,11 +573,11 @@ export function generateHTML(
   <div class="panel" id="panel-measures">
     <div class="search-row">
       <input class="search-input" placeholder="Search measures..." oninput="filterTable('measures',this.value)">
-      <button class="filter-btn" id="btn-unused-m" onclick="toggleUnused('measures')">Not on visual</button>
+      <button class="filter-btn" id="btn-unused-m" data-action="unused-filter" data-entity="measures">Not on visual</button>
     </div>
     <div class="table-wrap"><table class="data-table"><thead><tr>
-      <th onclick="sortTable('measures','name')">Measure ↕</th><th onclick="sortTable('measures','table')">Table ↕</th>
-      <th onclick="sortTable('measures','usageCount')">Used ↕</th><th onclick="sortTable('measures','pageCount')">Pages ↕</th>
+      <th data-action="sort" data-table="measures" data-key="name">Measure ↕</th><th data-action="sort" data-table="measures" data-key="table">Table ↕</th>
+      <th data-action="sort" data-table="measures" data-key="usageCount">Used ↕</th><th data-action="sort" data-table="measures" data-key="pageCount">Pages ↕</th>
       <th>Dependencies</th><th>Used In</th><th>Format</th>
     </tr></thead><tbody id="tbody-measures"></tbody></table></div>
     <div class="panel-footer" id="footer-measures"></div>
@@ -485,12 +586,12 @@ export function generateHTML(
   <div class="panel" id="panel-columns">
     <div class="search-row">
       <input class="search-input" placeholder="Search columns..." oninput="filterTable('columns',this.value)">
-      <button class="filter-btn" id="btn-unused-c" onclick="toggleUnused('columns')">Not on visual</button>
+      <button class="filter-btn" id="btn-unused-c" data-action="unused-filter" data-entity="columns">Not on visual</button>
     </div>
     <div class="table-wrap"><table class="data-table"><thead><tr>
-      <th onclick="sortTable('columns','name')">Column ↕</th><th onclick="sortTable('columns','table')">Table ↕</th>
-      <th onclick="sortTable('columns','dataType')">Type ↕</th><th onclick="sortTable('columns','usageCount')">Used ↕</th>
-      <th onclick="sortTable('columns','pageCount')">Pages ↕</th><th>Used In</th>
+      <th data-action="sort" data-table="columns" data-key="name">Column ↕</th><th data-action="sort" data-table="columns" data-key="table">Table ↕</th>
+      <th data-action="sort" data-table="columns" data-key="dataType">Type ↕</th><th data-action="sort" data-table="columns" data-key="usageCount">Used ↕</th>
+      <th data-action="sort" data-table="columns" data-key="pageCount">Pages ↕</th><th>Used In</th>
     </tr></thead><tbody id="tbody-columns"></tbody></table></div>
     <div class="panel-footer" id="footer-columns"></div>
   </div>
@@ -506,22 +607,22 @@ export function generateHTML(
   <div class="panel" id="panel-docs">
     <div class="search-row">
       <div style="display:flex;gap:4px;flex-wrap:wrap">
-        <button class="filter-btn active" id="md-tab-model" onclick="switchMd('model')">Model</button>
-        <button class="filter-btn" id="md-tab-datadict" onclick="switchMd('datadict')">Data Dictionary</button>
-        <button class="filter-btn" id="md-tab-measures" onclick="switchMd('measures')">Measures</button>
-        <button class="filter-btn" id="md-tab-functions" onclick="switchMd('functions')">Functions</button>
-        <button class="filter-btn" id="md-tab-calcgroups" onclick="switchMd('calcgroups')">Calc Groups</button>
-        <button class="filter-btn" id="md-tab-quality" onclick="switchMd('quality')">Quality</button>
+        <button class="filter-btn active" id="md-tab-model" data-action="md-tab" data-md="model">Model</button>
+        <button class="filter-btn" id="md-tab-datadict" data-action="md-tab" data-md="datadict">Data Dictionary</button>
+        <button class="filter-btn" id="md-tab-measures" data-action="md-tab" data-md="measures">Measures</button>
+        <button class="filter-btn" id="md-tab-functions" data-action="md-tab" data-md="functions">Functions</button>
+        <button class="filter-btn" id="md-tab-calcgroups" data-action="md-tab" data-md="calcgroups">Calc Groups</button>
+        <button class="filter-btn" id="md-tab-quality" data-action="md-tab" data-md="quality">Quality</button>
       </div>
       <div style="flex:1;color:var(--text-dim);font-size:12px;margin-left:8px" id="md-subtitle">Semantic-model documentation (no DAX)</div>
       <div style="display:flex;gap:4px">
-        <button class="filter-btn active" id="md-mode-rendered" onclick="switchMdMode('rendered')">Rendered</button>
-        <button class="filter-btn" id="md-mode-raw" onclick="switchMdMode('raw')">Raw</button>
+        <button class="filter-btn active" id="md-mode-rendered" data-action="md-mode" data-mode="rendered">Rendered</button>
+        <button class="filter-btn" id="md-mode-raw" data-action="md-mode" data-mode="raw">Raw</button>
       </div>
-      <button class="filter-btn" onclick="expandAllDetails()" title="Expand all collapsed sections">⊕ All</button>
-      <button class="filter-btn" onclick="collapseAllDetails()" title="Collapse all sections">⊖ All</button>
-      <button class="filter-btn" id="md-copy-btn" onclick="copyMarkdown()">⎘ Copy</button>
-      <button class="filter-btn" onclick="downloadMarkdown()">⤓ Download</button>
+      <button class="filter-btn" data-action="md-expand-all" title="Expand all collapsed sections">⊕ All</button>
+      <button class="filter-btn" data-action="md-collapse-all" title="Collapse all sections">⊖ All</button>
+      <button class="filter-btn" id="md-copy-btn" data-action="md-copy">⎘ Copy</button>
+      <button class="filter-btn" data-action="md-download">⤓ Download</button>
     </div>
     <div id="md-rendered" class="md-rendered"></div>
     <pre id="md-source" class="md-source" style="display:none"></pre>
@@ -534,16 +635,18 @@ export function generateHTML(
   <div class="rb-left">
     <span class="usage-map-badge">Usage Map</span>
     <span class="rb-sep">|</span>
-    <span class="rb-report">${reportName}</span>
+    <span class="rb-report">${serverEscHtml(reportName)}</span>
   </div>
   <div class="rb-center">
     <span class="dot"></span>
     <span class="timer">Last scan ${ts}</span>
-    <button onclick="location.reload()">Re-scan</button>
+    <button data-action="reload">Re-scan</button>
   </div>
   <div class="rb-right">v${version}<span class="rb-sep">·</span>local<span class="rb-sep">·</span>no data leaves your machine</div>
 </div>
 
+<!-- DAX syntax highlighter (vendor/dax-highlight) — exposes window.DaxHighlight -->
+<script>${DAX_HIGHLIGHT_JS}</script>
 <script>
 const DATA=${safeJSON(data)};
 const MARKDOWN=${markdownLiteral};
@@ -555,1042 +658,9 @@ const MARKDOWN_DATADICT=${dataDictionaryMarkdownLiteral};
 const REPORT_NAME=${safeJSON(reportName)};
 const APP_VERSION=${safeJSON(version)};
 const GENERATED_AT=${safeJSON(ts)};
-let activeMd="model";
-let mdViewMode="rendered";
 
-function escHtml(s){
-  return String(s==null?"":s)
-    .replace(/&/g,"&amp;")
-    .replace(/</g,"&lt;")
-    .replace(/>/g,"&gt;")
-    .replace(/"/g,"&quot;")
-    .replace(/'/g,"&#39;");
-}
-function escAttr(s){return escHtml(s);}
-
-function toggleTheme(){
-  var cur=document.documentElement.getAttribute('data-theme')||'dark';
-  var next=cur==='dark'?'light':'dark';
-  document.documentElement.setAttribute('data-theme',next);
-  try{localStorage.setItem('usage-theme',next);}catch(e){}
-  var btn=document.getElementById('theme-btn');
-  if(btn)btn.textContent=next==='dark'?'☾':'☀';
-}
-
-function addCopyButtons(){
-  document.querySelectorAll('.lineage-dax:not([data-copy-wired])').forEach(function(el){
-    el.setAttribute('data-copy-wired','1');
-    var dax=el.textContent;
-    el.setAttribute('data-dax',dax);
-    var btn=document.createElement('button');
-    btn.className='copy-btn';
-    btn.textContent='⎘';
-    btn.title='Copy DAX';
-    btn.onclick=function(e){
-      e.stopPropagation();
-      var text=el.getAttribute('data-dax')||'';
-      function ok(){btn.textContent='✓';btn.classList.add('copied');setTimeout(function(){btn.textContent='⎘';btn.classList.remove('copied');},1500);}
-      function fallback(){
-        var ta=document.createElement('textarea');ta.value=text;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();
-        var success=false;try{success=document.execCommand('copy');}catch(err){}
-        document.body.removeChild(ta);
-        if(success)ok();else{btn.textContent='✗';setTimeout(function(){btn.textContent='⎘';},1500);}
-      }
-      if(navigator.clipboard&&navigator.clipboard.writeText){
-        navigator.clipboard.writeText(text).then(ok).catch(fallback);
-      }else{fallback();}
-    };
-    el.appendChild(btn);
-  });
-}
-(function(){var t=document.documentElement.getAttribute('data-theme')||'dark';var btn=document.getElementById('theme-btn');if(btn)btn.textContent=t==='dark'?'☾':'☀';})();
-
-let activeTab="measures",lastTab="measures";
-let sortState={measures:{key:"usageCount",desc:true},columns:{key:"usageCount",desc:true}};
-let showUnusedOnly={measures:false,columns:false};
-let searchTerms={measures:"",columns:""};
-let openPages=new Set();
-let openTables=new Set();
-
-// Page data is built server-side now (data-builder.ts) so we get the
-// full page list — including text-only / empty pages that have no
-// data-field bindings. Previously this was recomputed in the client
-// from measure/column usedIn lists, which silently dropped any page
-// whose visuals didn't touch the model (producing -ve "visible" counts
-// when hiddenPages > bound pages).
-const pageData=(DATA.pages||[]).slice();
-
-function uc(n){return n===0?"zero":n<=1?"low":"good"}
-
-function renderSummary(){
-  const t=DATA.totals;
-  const totalOrphan=t.measuresUnused+t.columnsUnused;
-  const hiddenCount=(DATA.hiddenPages||[]).length;
-  const visibleCount=t.pages-hiddenCount;
-  const tipDirect=\`Fields bound to at least one visual (data well, filter, or conditional formatting). \${t.measuresDirect} measures · \${t.columnsDirect} columns.\`;
-  const tipIndirect=\`Not on any visual, but referenced by direct measures via DAX or used in a relationship — keep these. \${t.measuresIndirect} measures · \${t.columnsIndirect} columns.\`;
-  const tipUnused=\`Not referenced anywhere in the report — safe to remove. \${t.measuresUnused} measures · \${t.columnsUnused} columns.\`;
-  const tipPages=\`Total pages in the report. \${visibleCount} visible · \${hiddenCount} hidden (tooltip / drillthrough / nav-suppressed).\`;
-  const tipVisuals=\`Total visuals across all pages.\`;
-  document.getElementById("summary").innerHTML=\`
-    <div class="stat has-tip" data-tooltip="\${tipDirect}"><div class="stat-value good">\${t.measuresDirect+t.columnsDirect}</div><div class="stat-label">Direct</div><div class="stat-detail">\${t.measuresDirect}M · \${t.columnsDirect}C</div></div>
-    <div class="stat has-tip" data-tooltip="\${tipIndirect}"><div class="stat-value \${t.measuresIndirect+t.columnsIndirect>0?'warn':''}">\${t.measuresIndirect+t.columnsIndirect}</div><div class="stat-label">Indirect</div><div class="stat-detail">\${t.measuresIndirect}M · \${t.columnsIndirect}C</div></div>
-    <div class="stat has-tip" data-tooltip="\${tipUnused}"><div class="stat-value \${totalOrphan>0?'danger':''}">\${totalOrphan}</div><div class="stat-label">Unused</div><div class="stat-detail">\${t.measuresUnused}M · \${t.columnsUnused}C</div></div>
-    <div class="stat has-tip" data-tooltip="\${tipPages}"><div class="stat-value">\${t.pages}</div><div class="stat-label">Pages</div><div class="stat-detail">\${visibleCount}V · \${hiddenCount}H</div></div>
-    <div class="stat has-tip" data-tooltip="\${tipVisuals}"><div class="stat-value">\${t.visuals}</div><div class="stat-label">Visuals</div></div>
-  \`;
-}
-
-function renderTabs(){
-  const um=DATA.totals.measuresUnused+DATA.totals.columnsUnused;
-  // Bottom-up build order: data foundations first, then calculation logic,
-  // then consumption (pages), then analysis (unused/lineage), then docs.
-  document.getElementById("tabs").innerHTML=[
-    // Data layer
-    {id:"sources",l:"Sources",b:(DATA.tables||[]).filter(function(t){return (t.partitions||[]).length>0;}).length},
-    {id:"tables",l:"Tables",b:DATA.tables.length},
-    {id:"columns",l:"Columns",b:DATA.columns.length},
-    {id:"relationships",l:"Relationships",b:DATA.relationships.length},
-    // Calculation layer
-    {id:"measures",l:"Measures",b:DATA.measures.length},
-    {id:"calcgroups",l:"Calc Groups",b:DATA.calcGroups.length},
-    {id:"functions",l:"Functions",b:DATA.functions.filter(f=>!f.name.endsWith('.About')).length},
-    // Consumption
-    {id:"pages",l:"Pages",b:pageData.length},
-    // Analysis
-    {id:"unused",l:"Unused",b:um,w:um>0},
-    {id:"lineage",l:"Lineage",b:null},
-    // Output
-    {id:"docs",l:"Docs",b:null}
-  ].map(t=>\`<button class="tab \${activeTab===t.id?'active':''}" onclick="switchTab('\${t.id}')">\${t.l}\${t.b!==null?\`<span class="tab-count \${t.w?'warn':''}">\${t.b}</span>\`:''}</button>\`).join("");
-}
-
-// Shared panel-footer writer. Each render* function calls this at the end
-// with its own count string on the left and (optionally) a sort / meta on
-// the right. Writes into a target element by id; silent if absent.
-function setPanelFooter(id, leftHtml, rightHtml){
-  var el=document.getElementById(id);
-  if(!el)return;
-  var left='<div class="left">'+leftHtml+'</div>';
-  var right=rightHtml?'<div class="right">'+rightHtml+'</div>':'';
-  el.innerHTML=left+right;
-}
-function sortIndicator(state){
-  if(!state||!state.key)return "";
-  return 'Sorted by '+state.key+' '+(state.desc?'↓':'↑');
-}
-
-function switchTab(id){
-  if(id!=="lineage")lastTab=id;
-  activeTab=id;renderTabs();
-  document.querySelectorAll(".panel").forEach(p=>p.classList.remove("active"));
-  document.getElementById("panel-"+id).classList.add("active");
-  if(id==="lineage"&&!document.getElementById("lineage-content").innerHTML.trim())
-    document.getElementById("lineage-content").innerHTML='<div style="text-align:center;padding:60px 20px;color:var(--text-faint)"><div style="font-size:16px;margin-bottom:8px">Click a measure or column name to view its lineage</div><div style="font-size:12px">Go to the Measures or Columns tab and click any field name</div></div>';
-}
-
-function sc(s){return s==='unused'?'unused':s==='indirect'?'indirect':''}
-function renderMeasures(){
-  let items=[...DATA.measures];const s=sortState.measures;
-  items.sort((a,b)=>{let av=a[s.key],bv=b[s.key];if(typeof av==='string')return s.desc?bv.localeCompare(av):av.localeCompare(bv);return s.desc?bv-av:av-bv;});
-  if(showUnusedOnly.measures)items=items.filter(m=>m.status!=='direct');
-  if(searchTerms.measures){const q=searchTerms.measures.toLowerCase();items=items.filter(m=>m.name.toLowerCase().includes(q)||m.table.toLowerCase().includes(q));}
-  document.getElementById("tbody-measures").innerHTML=items.map(m=>{
-    const deps=m.daxDependencies.map(d=>\`<span class="dep-chip" onclick="openLineage('measure','\${d}')">\${d}</span>\`).join("")||'<span style="color:var(--text-faint)">—</span>';
-    const pages=[...new Set(m.usedIn.map(u=>u.pageName))];
-    const used=pages.map(p=>\`<span class="used-chip">\${p}</span>\`).join("")||'<span style="color:var(--text-faint)">—</span>';
-    const statusBadge=m.status==='indirect'?'<span class="badge badge--indirect">INDIRECT</span>':m.status==='unused'?'<span class="badge badge--unused">UNUSED</span>':'';
-    const nameAttr=m.description?' title="'+escAttr(m.description)+'" data-desc="1"':'';
-    const descRow=m.description?'<div class="desc-muted" style="margin-top:2px;font-size:11px">'+escHtml(m.description)+'</div>':'';
-    return \`<tr class="\${sc(m.status)}"><td><span class="field-name"\${nameAttr} onclick="openLineage('measure','\${m.name}')">\${m.name}</span>\${statusBadge}\${descRow}</td><td><span class="field-table">\${m.table}</span></td><td><span class="usage-count \${uc(m.usageCount)}">\${m.usageCount}</span></td><td><span class="usage-count \${uc(m.pageCount)}">\${m.pageCount}</span></td><td>\${deps}</td><td>\${used}</td><td><span class="format-str">\${m.formatString||'—'}</span></td></tr>\`;
-  }).join("");
-  setPanelFooter("footer-measures",
-    "Showing "+items.length+" of "+DATA.measures.length+" measures · "+DATA.totals.measuresUnused+" unused · "+DATA.totals.measuresIndirect+" indirect",
-    sortIndicator(sortState.measures));
-}
-
-function renderColumns(){
-  let items=[...DATA.columns];const s=sortState.columns;
-  items.sort((a,b)=>{let av=a[s.key],bv=b[s.key];if(typeof av==='string')return s.desc?bv.localeCompare(av):av.localeCompare(bv);return s.desc?bv-av:av-bv;});
-  if(showUnusedOnly.columns)items=items.filter(c=>c.status!=='direct');
-  if(searchTerms.columns){const q=searchTerms.columns.toLowerCase();items=items.filter(c=>c.name.toLowerCase().includes(q)||c.table.toLowerCase().includes(q));}
-  document.getElementById("tbody-columns").innerHTML=items.map(c=>{
-    const pages=[...new Set(c.usedIn.map(u=>u.pageName))];
-    const used=pages.map(p=>\`<span class="used-chip">\${p}</span>\`).join("")||'<span style="color:var(--text-faint)">—</span>';
-    // SLICER badge intentionally omitted here — it now lives on the per-column
-    // row inside the Tables tab, next to PK/FK/CALC/HIDDEN, where it's more
-    // useful in context.
-    const statusBadge=c.status==='indirect'?'<span class="badge badge--indirect">INDIRECT</span>':c.status==='unused'?'<span class="badge badge--unused">UNUSED</span>':'';
-    const cNameAttr=c.description?' title="'+escAttr(c.description)+'" data-desc="1"':'';
-    const cDescRow=c.description?'<div class="desc-muted" style="margin-top:2px;font-size:11px">'+escHtml(c.description)+'</div>':'';
-    return \`<tr class="\${sc(c.status)}"><td><span class="field-name"\${cNameAttr} onclick="openLineage('column','\${c.name}')">\${c.name}</span>\${statusBadge}\${cDescRow}</td><td><span class="field-table">\${c.table}</span></td><td><span class="mono" style="font-size:11px;color:#64748B">\${c.dataType}</span></td><td><span class="usage-count \${uc(c.usageCount)}">\${c.usageCount}</span></td><td><span class="usage-count \${uc(c.pageCount)}">\${c.pageCount}</span></td><td>\${used}</td></tr>\`;
-  }).join("");
-  setPanelFooter("footer-columns",
-    "Showing "+items.length+" of "+DATA.columns.length+" columns · "+DATA.totals.columnsUnused+" unused",
-    sortIndicator(sortState.columns));
-}
-
-function openLineage(type,name){
-  lastTab=activeTab!=="lineage"?activeTab:lastTab;
-  activeTab="lineage";renderTabs();
-  document.querySelectorAll(".panel").forEach(p=>p.classList.remove("active"));
-  document.getElementById("panel-lineage").classList.add("active");
-
-  const el=document.getElementById("lineage-content");
-  const backTab=type==="column"?"columns":"measures";
-
-  if(type==="measure"){
-    const m=DATA.measures.find(x=>x.name===name);
-    if(!m){el.innerHTML='<div style="color:var(--clr-unused);padding:20px">Measure not found</div>';return;}
-
-    const upstream=m.daxDependencies.map(d=>{
-      const dep=DATA.measures.find(x=>x.name===d);
-      return dep||{name:d,table:"?",formatString:""};
-    });
-    const usedFuncs=DATA.functions.filter(f=>!f.name.endsWith('.About')&&(m.daxExpression.includes("'"+f.name+"'")||m.daxExpression.includes(f.name+'(')));
-    const feedsInto=DATA.measures.filter(x=>x.daxDependencies.includes(m.name));
-    const extMatch=(m.daxExpression||'').match(/EXTERNALMEASURE\\s*\\(\\s*"([^"]*)"\\s*,\\s*\\w+\\s*,\\s*"DirectQuery to AS - ([^"]+)"\\s*\\)/i);
-    const extModel=extMatch?extMatch[2]:null;
-    const extRemoteName=extMatch?extMatch[1]:null;
-
-    el.innerHTML=\`
-      <div class="lineage-back" onclick="switchTab('\${backTab}')">← Back to \${backTab==='measures'?'Measures':'Columns'}</div>
-      <div class="lineage-hero">
-        <div class="lineage-hero-title"><span class="dot" style="background:var(--clr-measure)"></span>\${m.name}</div>
-        <div class="lineage-hero-meta">\${m.table} · \${m.formatString||'—'} · \${m.usageCount} visual\${m.usageCount!==1?'s':''} · \${m.pageCount} page\${m.pageCount!==1?'s':''}</div>
-        \${m.description?'<div class="desc-line" style="margin-top:8px;font-size:13px">'+escHtml(m.description)+'</div>':''}
-        <div class="lineage-dax">\${m.daxExpression}</div>
-      </div>
-      <div class="lineage-flow-row">
-        <div class="lineage-flow-col">
-          <div class="lineage-flow-col-label" style="color:var(--clr-upstream)">↑ Upstream</div>
-          \${usedFuncs.map(f=>\`
-            <div class="lc udf clickable" style="margin-bottom:4px" onclick="switchTab('functions')">
-              <div class="lc-name" style="color:var(--clr-function)">ƒ \${f.name}</div>
-              <div class="lc-sub">Function · \${f.parameters?f.parameters.split(',').length+' param'+(f.parameters.split(',').length!==1?'s':''):'no params'}</div>
-            </div>\`).join("")}
-          \${extModel?\`
-          <div class="lc" style="border-left:3px solid var(--clr-function);margin-bottom:4px;background:var(--clr-function-soft)">
-            <div class="lc-name" style="color:var(--clr-function)">⊡ \${extModel}</div>
-            <div class="lc-sub">External semantic model · EXTERNALMEASURE\${extRemoteName&&extRemoteName!==m.name?' · remote name "'+extRemoteName+'"':''}</div>
-          </div>\`:''}
-          <div class="lc source" style="margin-bottom:4px">
-            <div class="lc-name" style="color:var(--clr-source)">⬡ \${m.table}</div>
-            <div class="lc-sub">Source table</div>
-          </div>
-          \${upstream.length?upstream.map(u=>\`
-            <div class="lc upstream clickable" onclick="openLineage('measure','\${u.name}')">
-              <div class="lc-name">\${u.name}</div>
-              <div class="lc-sub">\${u.table} · \${u.formatString||''}</div>
-            </div>\`).join(""):\`\${(usedFuncs.length||extModel)?'':\`<div class="lc upstream empty"><div class="lc-name">No dependencies</div><div class="lc-sub">Base measure</div></div>\`}\`}
-        </div>
-        <div class="lineage-arrow-col">→</div>
-        <div class="lineage-flow-col">
-          <div class="lineage-flow-col-label" style="color:var(--clr-measure)">● This Measure</div>
-          <div class="lc center">
-            <div class="lc-name">\${m.name}</div>
-            <div class="lc-sub">\${m.daxExpression.length>50?m.daxExpression.substring(0,50)+'…':m.daxExpression}</div>
-          </div>
-          \${feedsInto.length?\`
-            <div class="feeds-label">Feeds into</div>
-            \${feedsInto.map(f=>\`
-              <div class="lc feeds clickable" onclick="openLineage('measure','\${f.name}')">
-                <div class="lc-name">\${f.name}</div>
-                <div class="lc-sub">\${f.formatString||''} · \${f.usageCount} visual\${f.usageCount!==1?'s':''}</div>
-              </div>\`).join("")}
-          \`:''}
-        </div>
-        <div class="lineage-arrow-col">→</div>
-        <div class="lineage-flow-col">
-          <div class="lineage-flow-col-label" style="color:var(--clr-downstream)">↓ Downstream</div>
-          \${m.usedIn.length?m.usedIn.map(d=>\`
-            <div class="lc downstream">
-              <div class="lc-name">\${d.visualTitle}</div>
-              <div class="lc-sub">\${d.visualType} · \${d.bindingRole}</div>
-              <div class="lc-role">\${d.pageName}</div>
-            </div>\`).join(""):\`<div class="lc downstream empty"><div class="lc-name" style="color:var(--clr-unused)">Not used</div><div class="lc-sub">Orphaned measure</div></div>\`}
-        </div>
-      </div>\`;
-    addCopyButtons();
-  }
-  else if(type==="column"){
-    const c=DATA.columns.find(x=>x.name===name);
-    if(!c){el.innerHTML='<div style="color:var(--clr-unused);padding:20px">Column not found</div>';return;}
-    const colRef=c.table+'['+c.name+']';
-    const related=DATA.measures.filter(m=>m.daxExpression.includes(colRef)||m.daxExpression.includes('['+c.name+']'));
-
-    el.innerHTML=\`
-      <div class="lineage-back" onclick="switchTab('columns')">← Back to Columns</div>
-      <div class="lineage-hero">
-        <div class="lineage-hero-title"><span class="dot" style="background:var(--clr-column)"></span>\${c.name}</div>
-        <div class="lineage-hero-meta">\${c.table} · \${c.dataType} · \${c.usageCount} visual\${c.usageCount!==1?'s':''} · \${c.pageCount} page\${c.pageCount!==1?'s':''}</div>
-        \${c.description?'<div class="desc-line" style="margin-top:8px;font-size:13px">'+escHtml(c.description)+'</div>':''}
-      </div>
-      <div class="lineage-flow-row">
-        <div class="lineage-flow-col">
-          <div class="lineage-flow-col-label" style="color:var(--clr-source)">↑ Source</div>
-          <div class="lc source">
-            <div class="lc-name" style="color:var(--clr-source)">⬡ \${c.table}</div>
-            <div class="lc-sub">\${c.dataType}</div>
-          </div>
-        </div>
-        <div class="lineage-arrow-col">→</div>
-        <div class="lineage-flow-col">
-          <div class="lineage-flow-col-label" style="color:var(--clr-column)">● This Column</div>
-          <div class="lc center col-type">
-            <div class="lc-name">\${c.name}</div>
-            <div class="lc-sub">\${c.table}[\${c.name}]</div>
-          </div>
-          \${related.length?\`
-            <div class="feeds-label">Measures referencing \${c.name}</div>
-            \${related.map(m=>\`
-              <div class="lc feeds clickable" onclick="openLineage('measure','\${m.name}')">
-                <div class="lc-name">\${m.name}</div>
-                <div class="lc-sub">\${m.formatString||''} · \${m.usageCount} visual\${m.usageCount!==1?'s':''}</div>
-              </div>\`).join("")}
-          \`:''}
-        </div>
-        <div class="lineage-arrow-col">→</div>
-        <div class="lineage-flow-col">
-          <div class="lineage-flow-col-label" style="color:var(--clr-downstream)">↓ Downstream</div>
-          \${c.usedIn.length?c.usedIn.map(d=>\`
-            <div class="lc downstream">
-              <div class="lc-name">\${d.visualTitle}</div>
-              <div class="lc-sub">\${d.visualType} · \${d.bindingRole}</div>
-              <div class="lc-role">\${d.pageName}</div>
-            </div>\`).join(""):\`<div class="lc downstream empty"><div class="lc-name" style="color:var(--clr-unused)">Not used</div><div class="lc-sub">Orphaned column</div></div>\`}
-        </div>
-      </div>\`;
-  }
-}
-
-function renderPages(){
-  const FC={measure:"#F59E0B",column:"#3B82F6"};
-  const hiddenSet=new Set(DATA.hiddenPages||[]);
-  document.getElementById("pages-content").innerHTML=pageData.map(p=>{
-    const isOpen=openPages.has(p.name);
-    const hiddenBadge=hiddenSet.has(p.name)?'<span class="badge badge--hidden" title="This page is marked HiddenInViewMode — typically a tooltip, drillthrough, or nav-suppressed page">HIDDEN</span>':'';
-
-    const typeChips=Object.entries(p.typeCounts).map(([t,c])=>\`<span class="page-type-chip">\${c}× \${t}</span>\`).join("");
-
-    const visualRows=p.visuals.map(v=>{
-      const bindingChips=v.bindings.map(b=>{
-        const color=b.fieldType==="measure"?FC.measure:FC.column;
-        return \`<span class="dep-chip" style="background:\${color}15;color:\${color};border-color:\${color}30;cursor:pointer" onclick="event.stopPropagation();openLineage('\${b.fieldType}','\${b.fieldName}')">\${b.fieldName}</span>\`;
-      }).join("");
-      return \`<div class="page-visual-row">
-        <span class="page-visual-type">\${v.type}</span>
-        <span class="page-visual-title">\${v.title}</span>
-        <div class="page-visual-bindings">\${bindingChips}</div>
-      </div>\`;
-    }).join("");
-
-    const measureChips=p.measures.map(m=>\`<span class="dep-chip" style="background:rgba(245,158,11,.1);color:var(--clr-measure);border-color:rgba(245,158,11,.2);cursor:pointer" onclick="event.stopPropagation();openLineage('measure','\${m}')">\${m}</span>\`).join("");
-    const columnChips=p.columns.map(c=>\`<span class="dep-chip" style="background:rgba(59,130,246,.1);color:var(--clr-column);border-color:rgba(59,130,246,.2);cursor:pointer" onclick="event.stopPropagation();openLineage('column','\${c}')">\${c}</span>\`).join("");
-
-    return \`<div class="page-card \${isOpen?'open':''}">
-      <div class="page-header" onclick="togglePage('\${p.name}')">
-        <div class="page-name">\${p.name}\${hiddenBadge}</div>
-        <div class="page-stats">
-          <div class="page-stat"><div class="page-stat-val" style="color:var(--clr-downstream)">\${p.visualCount}</div><div class="page-stat-label">Visuals</div></div>
-          <div class="page-stat"><div class="page-stat-val" style="color:var(--clr-measure)">\${p.measureCount}</div><div class="page-stat-label">Measures</div></div>
-          <div class="page-stat"><div class="page-stat-val" style="color:var(--clr-column)">\${p.columnCount}</div><div class="page-stat-label">Columns</div></div>
-          <div class="page-stat"><div class="page-stat-val" style="color:var(--clr-slicer)">\${p.slicerCount}</div><div class="page-stat-label">Slicers</div></div>
-        </div>
-        <span class="page-expand" aria-hidden="true"></span>
-      </div>
-      <div class="page-body"><div class="page-body-inner">
-        <div class="page-section">
-          <div class="page-section-title">Visual types<span class="line"></span></div>
-          <div class="page-type-summary">\${typeChips}</div>
-        </div>
-        <div class="page-section">
-          <div class="page-section-title">Measures (\${p.measureCount})<span class="line"></span></div>
-          <div style="display:flex;flex-wrap:wrap;gap:4px">\${measureChips||'<span style="color:#475569;font-size:12px">None</span>'}</div>
-        </div>
-        <div class="page-section">
-          <div class="page-section-title">Columns (\${p.columnCount})<span class="line"></span></div>
-          <div style="display:flex;flex-wrap:wrap;gap:4px">\${columnChips||'<span style="color:#475569;font-size:12px">None</span>'}</div>
-        </div>
-        <div class="page-section">
-          <div class="page-section-title">Visuals (\${p.visualCount})<span class="line"></span></div>
-          \${visualRows||(p.visualCount>0?'<span style="color:#475569;font-size:12px">No data-bound visuals on this page — text, shape, or image only.</span>':'<span style="color:#475569;font-size:12px">Empty page.</span>')}
-        </div>
-      </div></div>
-    </div>\`;
-  }).join("");
-  var hiddenCount=(DATA.hiddenPages||[]).length;
-  var visibleCount=pageData.length-hiddenCount;
-  var totalVisuals=pageData.reduce(function(a,p){return a+(p.visualCount||0);},0);
-  var pf=document.getElementById("pages-content");
-  if(pf)pf.insertAdjacentHTML("beforeend",
-    '<div class="panel-footer"><div class="left">'+
-      pageData.length+' pages · '+visibleCount+' visible · '+hiddenCount+' hidden · '+totalVisuals+' visuals'+
-    '</div></div>');
-}
-
-function togglePage(name){
-  if(openPages.has(name))openPages.delete(name);else openPages.add(name);
-  renderPages();
-}
-
-function toggleTableCard(name){
-  if(openTables.has(name))openTables.delete(name);else openTables.add(name);
-  renderTables();
-}
-
-function renderTables(){
-  const tables=DATA.tables||[];
-  // Precompute slicer lookup once per render so the per-row badge stays cheap.
-  // TableColumnData doesn't carry isSlicerField — it lives on the flat ModelColumn.
-  const slicerSet=new Set((DATA.columns||[]).filter(c=>c.isSlicerField).map(c=>c.table+'|'+c.name));
-  document.getElementById("tables-content").innerHTML=tables.map(t=>{
-    const isOpen=openTables.has(t.name);
-    const calcGroupPill=t.isCalcGroup?'<span class="badge badge--calc-grp" title="This table is a calculation group">CALC GROUP</span>':'';
-
-    const colRows=t.columns.map(c=>{
-      const badges=[];
-      if(c.isKey)badges.push('<span class="badge badge--pk" title="Primary key — isKey:true set in the model">PK</span>');
-      else if(c.isInferredPK)badges.push('<span class="badge badge--pk-inf" title="Inferred primary key — this column is on the one-side of at least one relationship">PK</span>');
-      if(c.isFK)badges.push('<span class="badge badge--fk" title="Foreign key — used as fromColumn in a relationship">FK</span>');
-      if(c.isCalculated)badges.push('<span class="badge badge--calc" title="Calculated column">CALC</span>');
-      if(c.isHidden)badges.push('<span class="badge badge--hid-col" title="isHidden:true">HIDDEN</span>');
-      if(slicerSet.has(t.name+'|'+c.name))badges.push('<span class="badge badge--slicer" title="Bound to at least one slicer visual">SLICER</span>');
-      const statusClass=c.status==='unused'?'zero':c.status==='indirect'?'low':'good';
-      // Relationship column: FK target (outgoing) or incoming PK refs, or both if the column is a bridge
-      const parts=[];
-      if(c.isFK&&c.fkTarget)parts.push(\`<span class="rel-out">→ \${c.fkTarget.table}[\${c.fkTarget.column}]</span>\`);
-      if(c.incomingRefs&&c.incomingRefs.length>0){
-        const refs=c.incomingRefs.map(r=>\`<span class="rel-in\${r.isActive?'':' rel-inactive'}">← \${r.table}[\${r.column}]\${r.isActive?'':' <span style="font-size:9px;opacity:.7">(inactive)</span>'}</span>\`).join('<span style="color:var(--text-fainter);margin:0 4px">·</span>');
-        parts.push(refs);
-      }
-      const relText=parts.length?parts.join('<br>'):'<span style="color:var(--text-fainter)">—</span>';
-      const colDesc=c.description?'<div class="desc-muted" style="margin-top:3px">'+escHtml(c.description)+'</div>':'';
-      return \`<div class="tcol-row">
-        <div>
-          <span class="tcol-name" onclick="openLineage('column','\${c.name.replace(/'/g,"\\\\'")}')">\${c.name}</span>\${badges.join('')}
-          <span class="usage-count \${statusClass}" style="margin-left:8px;font-size:10px">\${c.usageCount}</span>
-          \${colDesc}
-        </div>
-        <div class="tcol-type">\${c.dataType}</div>
-        <div class="tcol-fk">\${relText}</div>
-      </div>\`;
-    }).join("")||'<div style="padding:8px 10px;color:var(--text-faint);font-size:12px">No columns</div>';
-
-    const measureList=t.measures.map(m=>{
-      const cls=m.status==='unused'?'zero':m.status==='indirect'?'low':'good';
-      return \`<span class="dep-chip" style="background:rgba(245,158,11,.1);color:var(--clr-measure);border-color:rgba(245,158,11,.2);cursor:pointer" onclick="event.stopPropagation();openLineage('measure','\${m.name.replace(/'/g,"\\\\'")}')">\${m.name} <span class="usage-count \${cls}" style="margin-left:4px;font-size:9px">\${m.usageCount}</span></span>\`;
-    }).join("")||'<span style="color:var(--text-faint);font-size:12px">None</span>';
-
-    const relRows=t.relationships.map(r=>{
-      const dirClass=r.direction==='outgoing'?'badge--direction-out':'badge--direction-in';
-      const dirLabel=r.direction==='outgoing'?'FK →':'← PK';
-      const inactive=r.isActive?'':' trel-inactive';
-      const arrow=r.direction==='outgoing'?'→':'←';
-      const other=r.direction==='outgoing'?\`\${r.toTable}[\${r.toColumn}]\`:\`\${r.fromTable}[\${r.fromColumn}]\`;
-      const self=r.direction==='outgoing'?\`[\${r.fromColumn}]\`:\`[\${r.toColumn}]\`;
-      return \`<div class="trel-row\${inactive}">
-        <span class="badge \${dirClass}">\${dirLabel}</span>
-        <span>\${self} <span style="color:var(--text-faint)">\${arrow}</span> \${other}</span>
-        \${r.isActive?'':'<span style="font-size:9px;color:var(--text-dim);margin-left:4px">(inactive)</span>'}
-      </div>\`;
-    }).join("")||'<div style="padding:8px 10px;color:var(--text-faint);font-size:12px">No relationships</div>';
-
-    const tableDesc=t.description?'<div class="desc-line">'+escHtml(t.description)+'</div>':'';
-    return \`<div class="page-card \${isOpen?'open':''}">
-      <div class="page-header" onclick="toggleTableCard('\${t.name.replace(/'/g,"\\\\'")}')">
-        <div style="flex:1;min-width:0">
-          <div class="page-name">\${t.name}\${calcGroupPill}</div>
-          \${tableDesc}
-        </div>
-        <div class="page-stats">
-          <div class="page-stat"><div class="page-stat-val" style="color:var(--clr-column)">\${t.columnCount}</div><div class="page-stat-label">Columns</div></div>
-          <div class="page-stat"><div class="page-stat-val" style="color:var(--clr-measure)">\${t.measureCount}</div><div class="page-stat-label">Measures</div></div>
-          <div class="page-stat"><div class="page-stat-val" style="color:var(--clr-measure)">\${t.keyCount}</div><div class="page-stat-label">Keys</div></div>
-          <div class="page-stat"><div class="page-stat-val" style="color:var(--clr-column)">\${t.fkCount}</div><div class="page-stat-label">FKs</div></div>
-        </div>
-        <span class="page-expand" aria-hidden="true"></span>
-      </div>
-      <div class="page-body"><div class="page-body-inner">
-        <div class="page-section">
-          <div class="page-section-title">Columns (\${t.columnCount})<span class="line"></span></div>
-          <div class="tcol-row" style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-dim);font-weight:600;border-bottom:1px solid var(--border);padding-bottom:4px">
-            <div>Name</div><div>Type</div><div>Relationship</div>
-          </div>
-          \${colRows}
-        </div>
-        <div class="page-section">
-          <div class="page-section-title">Measures (\${t.measureCount})<span class="line"></span></div>
-          <div style="display:flex;flex-wrap:wrap;gap:4px">\${measureList}</div>
-        </div>
-        <div class="page-section">
-          <div class="page-section-title">Relationships (\${t.relationships.length})<span class="line"></span></div>
-          \${relRows}
-        </div>
-      </div></div>
-    </div>\`;
-  }).join("")||'<div style="text-align:center;padding:60px 20px;color:var(--text-faint);font-size:13px">No tables found</div>';
-  var totalCols=tables.reduce(function(a,t){return a+(t.columnCount||0);},0);
-  var totalMs=tables.reduce(function(a,t){return a+(t.measureCount||0);},0);
-  var pf=document.getElementById("tables-content");
-  if(pf)pf.insertAdjacentHTML("beforeend",
-    '<div class="panel-footer"><div class="left">'+
-      tables.length+' tables · '+totalCols+' columns · '+totalMs+' measures'+
-    '</div></div>');
-}
-
-var openOrphanSections=new Set();
-function toggleOrphanSection(id){if(openOrphanSections.has(id))openOrphanSections.delete(id);else openOrphanSections.add(id);renderUnused();}
-
-function orphanSection(id,title,subtitle,color,count,countLabel,items){
-  const isOpen=openOrphanSections.has(id);
-  return \`<div class="page-card \${isOpen?'open':''}" style="border-left:3px solid \${color}">
-    <div class="page-header" onclick="toggleOrphanSection('\${id}')">
-      <div style="flex:1">
-        <div class="page-name" style="font-size:14px">\${title}</div>
-        <div style="font-size:11px;color:#64748B;margin-top:2px">\${subtitle}</div>
-      </div>
-      <div class="page-stats">
-        <div class="page-stat"><div class="page-stat-val" style="color:\${color}">\${count}</div><div class="page-stat-label">\${countLabel}</div></div>
-      </div>
-      <span class="page-expand" aria-hidden="true"></span>
-    </div>
-    <div class="page-body"><div class="page-body-inner">
-      <div style="display:flex;flex-wrap:wrap;gap:8px">\${items}</div>
-    </div></div>
-  </div>\`;
-}
-
-function renderUnused(){
-  const unusedM=DATA.measures.filter(m=>m.status==='unused'),indirectM=DATA.measures.filter(m=>m.status==='indirect');
-  const unusedC=DATA.columns.filter(c=>c.status==='unused'),indirectC=DATA.columns.filter(c=>c.status==='indirect');
-  const pureOrphanM=unusedM.filter(m=>!m.dependedOnBy.length);
-  const chainOrphanM=unusedM.filter(m=>m.dependedOnBy.length>0);
-  let h='';
-
-  if(pureOrphanM.length) h+=orphanSection('pure-m','Unused Measures — Not Referenced Anywhere','No visual uses them and no other measure references them — safe to remove','var(--clr-unused)',pureOrphanM.length,'Measures',
-    pureOrphanM.map(m=>\`<div class="lc clickable" style="border-left:3px solid var(--clr-unused);flex:0 0 auto" onclick="event.stopPropagation();openLineage('measure','\${m.name}')"><div class="lc-name">\${m.name}</div><div class="lc-sub">\${m.table} · \${m.formatString||''}</div></div>\`).join(""));
-
-  if(chainOrphanM.length) h+=orphanSection('chain-m','Unused Measures — Dead Chain','Other measures depend on them, but the full chain never reaches any visual','var(--clr-unused)',chainOrphanM.length,'Measures',
-    chainOrphanM.map(m=>\`<div class="lc clickable" style="border-left:3px solid var(--clr-unused);flex:0 0 auto" onclick="event.stopPropagation();openLineage('measure','\${m.name}')"><div class="lc-name">\${m.name}</div><div class="lc-sub">\${m.table} · \${m.formatString||''} · depended on by \${m.dependedOnBy.length}</div></div>\`).join(""));
-
-  if(unusedC.length) h+=orphanSection('orphan-c','Unused Columns','No visual, measure, or relationship uses them — safe to hide or remove','var(--clr-unused)',unusedC.length,'Columns',
-    unusedC.map(c=>\`<div class="lc clickable" style="border-left:3px solid var(--clr-unused);flex:0 0 auto" onclick="event.stopPropagation();openLineage('column','\${c.name}')"><div class="lc-name">\${c.name}</div><div class="lc-sub">\${c.table} · \${c.dataType}</div></div>\`).join(""));
-
-  if(indirectM.length) h+=orphanSection('indirect-m','Indirect Measures','Not on any visual, but used inside other measures that are — keep these','var(--clr-indirect)',indirectM.length,'Measures',
-    indirectM.map(m=>\`<div class="lc clickable" style="border-left:3px solid var(--clr-indirect);flex:0 0 auto" onclick="event.stopPropagation();openLineage('measure','\${m.name}')"><div class="lc-name">\${m.name}</div><div class="lc-sub">\${m.table} · \${m.formatString||''}</div></div>\`).join(""));
-
-  if(indirectC.length) h+=orphanSection('indirect-c','Indirect Columns','Not on any visual, but used in a relationship or measure DAX — keep these','var(--clr-indirect)',indirectC.length,'Columns',
-    indirectC.map(c=>\`<div class="lc clickable" style="border-left:3px solid var(--clr-indirect);flex:0 0 auto" onclick="event.stopPropagation();openLineage('column','\${c.name}')"><div class="lc-name">\${c.name}</div><div class="lc-sub">\${c.table} · \${c.dataType}</div></div>\`).join(""));
-
-  if(!unusedM.length&&!unusedC.length&&!indirectM.length&&!indirectC.length)h='<div style="text-align:center;padding:40px;color:var(--clr-success);font-weight:600">All fields are in use ✓</div>';
-  var totalUnused=unusedM.length+unusedC.length;
-  h+='<div class="panel-footer"><div class="left">'+
-    (totalUnused?totalUnused+' unused items · safe to review for removal':'No unused items to review')+
-    '</div></div>';
-  document.getElementById("unused-content").innerHTML=h;
-}
-
-function renderSources(){
-  var host=document.getElementById("sources-content");
-  if(!host)return;
-
-  // ── Model properties card (top of the tab) ────────────────────────────────
-  var mp=DATA.modelProperties||{};
-  var culturesLabel=(mp.cultures&&mp.cultures.length>0)?mp.cultures.join(", "):(mp.culture||"\u2014");
-  var implicitLabel=mp.discourageImplicitMeasures?"Discouraged":"Allowed";
-  var valueFilterLabel=mp.valueFilterBehavior||"Automatic (default)";
-  var compatLevel=DATA.compatibilityLevel!=null?DATA.compatibilityLevel:"\u2014";
-  var modelDesc=mp.description?'<div class="desc-line" style="margin-top:8px;font-size:13px">'+escHtml(mp.description)+'</div>':'';
-  var propsRows=
-    '<tr><td><strong>Compatibility level</strong></td><td>'+escHtml(String(compatLevel))+'</td></tr>'+
-    '<tr><td><strong>Cultures</strong></td><td>'+escHtml(culturesLabel)+'</td></tr>'+
-    '<tr><td><strong>Implicit measures</strong></td><td>'+escHtml(implicitLabel)+'</td></tr>'+
-    '<tr><td><strong>Value filter behavior</strong></td><td>'+escHtml(valueFilterLabel)+'</td></tr>';
-  if(mp.sourceQueryCulture){
-    propsRows+='<tr><td><strong>Source query culture</strong></td><td>'+escHtml(mp.sourceQueryCulture)+'</td></tr>';
-  }
-  if(mp.defaultPowerBIDataSourceVersion){
-    propsRows+='<tr><td><strong>Datasource version</strong></td><td>'+escHtml(mp.defaultPowerBIDataSourceVersion)+'</td></tr>';
-  }
-  var modelPropsCard=
-    '<div class="page-card" style="margin-bottom:14px">'+
-      '<div class="page-header" style="cursor:default"><div style="flex:1">'+
-        '<div class="page-name" style="font-size:14px">Model properties</div>'+
-        '<div style="font-size:11px;color:var(--text-dim);margin-top:2px">Top-level metadata from <code>model.tmdl</code> / <code>database.tmdl</code> / <code>cultures/</code>. Server and Database name are runtime-only and not stored in the files.</div>'+
-        modelDesc+
-      '</div></div>'+
-      '<div style="padding:0 18px 14px">'+
-        '<table class="data-table"><tbody>'+propsRows+'</tbody></table>'+
-      '</div>'+
-    '</div>';
-
-  var tablesWithSources=(DATA.tables||[]).filter(function(t){return (t.partitions||[]).length>0;});
-  var modeCounts={};
-  var totalParts=0;
-  tablesWithSources.forEach(function(t){
-    (t.partitions||[]).forEach(function(p){
-      var m=(p.mode||"import").toLowerCase();
-      modeCounts[m]=(modeCounts[m]||0)+1;
-      totalParts++;
-    });
-  });
-
-  var modeChips=Object.keys(modeCounts).sort(function(a,b){return modeCounts[b]-modeCounts[a];}).map(function(m){
-    return '<span class="dep-chip" style="background:rgba(59,130,246,.1);color:var(--clr-column);border-color:rgba(59,130,246,.2)">'+modeCounts[m]+'\u00d7 '+escHtml(m)+'</span>';
-  }).join('');
-
-  var compatLine=DATA.compatibilityLevel
-    ? '<div style="font-size:11px;color:var(--text-dim);margin-top:6px">Compatibility level: <strong style="color:var(--text)">'+DATA.compatibilityLevel+'</strong></div>'
-    : '';
-
-  var summary=
-    '<div class="page-card" style="margin-bottom:14px">'+
-      '<div class="page-header" style="cursor:default">'+
-        '<div style="flex:1">'+
-          '<div class="page-name" style="font-size:14px">Storage modes</div>'+
-          '<div style="font-size:11px;color:var(--text-dim);margin-top:2px">'+tablesWithSources.length+' table'+(tablesWithSources.length===1?'':'s')+' with sources · '+totalParts+' partition'+(totalParts===1?'':'s')+'</div>'+
-          '<div style="margin-top:8px">'+(modeChips||'<span style="color:var(--text-faint)">None</span>')+'</div>'+
-          compatLine+
-        '</div>'+
-      '</div>'+
-    '</div>';
-
-  // Parameters / expressions block
-  var exprBlock="";
-  if((DATA.expressions||[]).length>0){
-    var rows=DATA.expressions.map(function(e){
-      var kind=e.kind==="parameter"?"Parameter":"M expression";
-      var val=String(e.value||"");
-      if(val.length>120)val=val.substring(0,117)+"\u2026";
-      var desc=e.description?'<div class="desc-muted" style="margin-top:3px;font-size:11px">'+escHtml(e.description)+'</div>':'';
-      return '<tr><td><strong>'+escHtml(e.name)+'</strong>'+desc+'</td><td><span class="field-table">'+kind+'</span></td><td><code style="font-size:11px;color:var(--code-name)">'+escHtml(val)+'</code></td></tr>';
-    }).join('');
-    exprBlock=
-      '<div class="page-card" style="margin-bottom:14px">'+
-        '<div class="page-header" style="cursor:default"><div style="flex:1">'+
-          '<div class="page-name" style="font-size:14px">Parameters &amp; expressions</div>'+
-          '<div style="font-size:11px;color:var(--text-dim);margin-top:2px">Top-level M expressions defined in <code>expressions.tmdl</code></div>'+
-        '</div></div>'+
-        '<div style="padding:0 18px 14px">'+
-          '<table class="data-table"><thead><tr><th>Name</th><th>Kind</th><th>Value</th></tr></thead><tbody>'+rows+'</tbody></table>'+
-        '</div>'+
-      '</div>';
-  }
-
-  // Per-table sources
-  var perTableBlock="";
-  if(tablesWithSources.length>0){
-    var sourceRows="";
-    tablesWithSources.forEach(function(t){
-      (t.partitions||[]).forEach(function(p){
-        var loc=p.sourceLocation?'<code style="font-size:11px;color:var(--text-muted);word-break:break-all">'+escHtml(p.sourceLocation)+'</code>':'<span style="color:var(--text-faint)">\u2014</span>';
-        sourceRows+=
-          '<tr>'+
-            '<td><strong>'+escHtml(t.name)+'</strong></td>'+
-            '<td><span class="dep-chip" style="background:rgba(34,197,94,.1);color:var(--clr-success);border-color:rgba(34,197,94,.2)">'+escHtml(p.mode||'import')+'</span></td>'+
-            '<td><span class="dep-chip" style="background:rgba(168,85,247,.1);color:var(--clr-calc);border-color:rgba(168,85,247,.2)">'+escHtml(p.sourceType||'Unknown')+'</span></td>'+
-            '<td>'+loc+'</td>'+
-          '</tr>';
-      });
-    });
-    perTableBlock=
-      '<div class="page-card">'+
-        '<div class="page-header" style="cursor:default"><div style="flex:1">'+
-          '<div class="page-name" style="font-size:14px">Per-table sources</div>'+
-          '<div style="font-size:11px;color:var(--text-dim);margin-top:2px">Source type is inferred from the M code; location is the first string literal in the partition source.</div>'+
-        '</div></div>'+
-        '<div style="padding:0 18px 14px">'+
-          '<table class="data-table"><thead><tr><th>Table</th><th>Mode</th><th>Source type</th><th>Location</th></tr></thead><tbody>'+sourceRows+'</tbody></table>'+
-        '</div>'+
-      '</div>';
-  }
-
-  var sourcesFooter='<div class="panel-footer"><div class="left">'+
-    tablesWithSources.length+' source tables'+
-    '</div></div>';
-  if(tablesWithSources.length===0&&(DATA.expressions||[]).length===0){
-    // Even when there's no partition info, show the model properties card.
-    host.innerHTML=modelPropsCard+'<div style="text-align:center;padding:40px 20px;color:var(--text-faint);font-size:13px">No partition or expression information found in this model.</div>'+sourcesFooter;
-    return;
-  }
-  host.innerHTML=modelPropsCard+summary+exprBlock+perTableBlock+sourcesFooter;
-}
-
-function renderRelationships(){
-  const rels=DATA.relationships;
-  var activeCount=rels.filter(function(r){return r.isActive;}).length;
-  var inactiveCount=rels.length-activeCount;
-  var relFooter='<div class="panel-footer"><div class="left">'+
-    rels.length+' relationships · '+activeCount+' active · '+inactiveCount+' inactive'+
-    '</div></div>';
-  if(!rels.length){document.getElementById("relationships-content").innerHTML='<div style="text-align:center;padding:40px;color:#6B7280">No relationships found in the model</div>'+relFooter;return;}
-  let h='<div class="table-wrap"><table class="data-table"><thead><tr><th>From Table</th><th>From Column</th><th></th><th>To Table</th><th>To Column</th><th>Status</th></tr></thead><tbody>';
-  for(const r of rels){
-    const statusColor=r.isActive?'var(--clr-success)':'var(--text-faint)';
-    const statusLabel=r.isActive?'Active':'Inactive';
-    h+=\`<tr>
-      <td style="font-weight:600">\${r.fromTable}</td>
-      <td>\${r.fromColumn}</td>
-      <td style="text-align:center;color:#6B7280;font-size:18px">→</td>
-      <td style="font-weight:600">\${r.toTable}</td>
-      <td>\${r.toColumn}</td>
-      <td><span style="color:\${statusColor};font-size:12px;font-weight:500">\${statusLabel}</span></td>
-    </tr>\`;
-  }
-  h+='</tbody></table></div>'+relFooter;
-  document.getElementById("relationships-content").innerHTML=h;
-}
-
-function renderFunctions(){
-  const fns=DATA.functions.filter(f=>!f.name.endsWith('.About'));
-  var fnsFooter='<div class="panel-footer"><div class="left">'+fns.length+' function'+(fns.length===1?'':'s')+'</div></div>';
-  if(!fns.length){document.getElementById("functions-content").innerHTML='<div style="text-align:center;padding:40px;color:#6B7280">No user-defined functions found in the model</div>'+fnsFooter;return;}
-  let h='<div style="display:flex;flex-direction:column;gap:12px">';
-  for(const f of fns){
-    const refMeasures=DATA.measures.filter(m=>m.daxExpression.includes("'"+f.name+"'")||m.daxExpression.includes(f.name+'('));
-    const params=f.parameters?f.parameters.split(',').map(p=>{
-      const parts=p.trim().split(/\\s*:\\s*/);
-      return parts.length>=2?'<span style="color:var(--code-name)">'+parts[0].trim()+'</span> <span style="color:var(--code-punct)">:</span> <span style="color:var(--code-type)">'+parts.slice(1).join(':').trim()+'</span>':'<span style="color:var(--code-name)">'+p.trim()+'</span>';
-    }).join('<span style="color:var(--code-punct)">, </span>'):'<span style="color:var(--code-punct);font-style:italic">none</span>';
-    const desc=f.description?'<div style="font-size:11px;color:#64748B;margin-top:6px;line-height:1.4">'+f.description.replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</div>':'';
-    const expr=f.expression.replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    const measureChips=refMeasures.map(m=>\`<span class="dep-chip" style="background:rgba(245,158,11,.1);color:var(--clr-measure);border-color:rgba(245,158,11,.2);cursor:pointer" onclick="event.stopPropagation();openLineage('measure','\${m.name}')">\${m.name}</span>\`).join('');
-    h+=\`<div class="page-card">
-      <div class="page-header" onclick="this.parentElement.classList.toggle('open')">
-        <div style="flex:1">
-          <div class="page-name" style="font-size:14px">\${f.name}</div>
-          <div style="font-size:11px;color:#64748B;margin-top:2px;font-family:'JetBrains Mono',monospace">( \${params} )</div>
-        </div>
-        <div class="page-stats">
-          <div class="page-stat"><div class="page-stat-val" style="color:var(--clr-measure)">\${refMeasures.length}</div><div class="page-stat-label">Measures</div></div>
-        </div>
-        <span class="page-expand" aria-hidden="true"></span>
-      </div>
-      <div class="page-body"><div class="page-body-inner">
-        \${desc}
-        \${refMeasures.length?\`<div style="margin-top:8px"><div style="font-size:10px;color:#475569;text-transform:uppercase;letter-spacing:.06em;font-weight:600;margin-bottom:6px">Measures using this function</div><div style="display:flex;flex-wrap:wrap;gap:4px">\${measureChips}</div></div>\`:''}
-        <div class="lineage-dax" style="margin-top:8px;max-height:300px;overflow-y:auto">\${expr}</div>
-      </div></div>
-    </div>\`;
-  }
-  h+='</div>'+fnsFooter;
-  document.getElementById("functions-content").innerHTML=h;
-}
-
-function renderCalcGroups(){
-  const cgs=DATA.calcGroups;
-  var cgsFooter='<div class="panel-footer"><div class="left">'+cgs.length+' calc group'+(cgs.length===1?'':'s')+'</div></div>';
-  if(!cgs.length){document.getElementById("calcgroups-content").innerHTML='<div style="text-align:center;padding:40px;color:#6B7280">No calculation groups found in the model</div>'+cgsFooter;return;}
-  let h='<div style="display:flex;flex-direction:column;gap:12px">';
-  for(const cg of cgs){
-    const desc=cg.description?'<div style="font-size:11px;color:var(--text-dim);margin-top:4px">'+cg.description.replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</div>':'';
-    let items='';
-    for(const item of cg.items){
-      const expr=item.expression.replace(/</g,'&lt;').replace(/>/g,'&gt;');
-      const fmtBadge=item.formatStringExpression?'<span class="mono" style="margin-left:8px;font-size:10px;color:var(--text-dim)">fmt: '+item.formatStringExpression.replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</span>':'';
-      const itemDesc=item.description?'<div style="font-size:11px;color:var(--text-dim);margin-bottom:4px">'+item.description.replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</div>':'';
-      items+=\`<div class="ci-card">
-        <div class="ci-head">
-          <span class="ci-ord">\${item.ordinal}</span>
-          <span class="ci-name">\${item.name}</span>\${fmtBadge}
-        </div>\${itemDesc}
-        <div class="lineage-dax" style="font-size:12px">\${expr}</div>
-      </div>\`;
-    }
-    h+=\`<div class="page-card">
-      <div class="page-header" onclick="this.parentElement.classList.toggle('open')">
-        <div style="flex:1">
-          <div class="page-name" style="font-size:14px">\${cg.name}</div>
-          \${desc}
-        </div>
-        <div class="page-stats">
-          <div class="page-stat"><div class="page-stat-val" style="color:var(--clr-upstream)">\${cg.items.length}</div><div class="page-stat-label">Items</div></div>
-          <div class="page-stat"><div class="page-stat-val" style="color:#64748B">\${cg.precedence}</div><div class="page-stat-label">Precedence</div></div>
-        </div>
-        <span class="page-expand" aria-hidden="true"></span>
-      </div>
-      <div class="page-body"><div class="page-body-inner">\${items}</div></div>
-    </div>\`;
-  }
-  h+='</div>'+cgsFooter;
-  document.getElementById("calcgroups-content").innerHTML=h;
-}
-
-function sortTable(t,k){const s=sortState[t];if(s.key===k)s.desc=!s.desc;else{s.key=k;s.desc=true;}t==="measures"?renderMeasures():renderColumns();}
-function filterTable(t,v){searchTerms[t]=v;t==="measures"?renderMeasures():renderColumns();}
-function toggleUnused(t){showUnusedOnly[t]=!showUnusedOnly[t];document.getElementById("btn-unused-"+(t==="measures"?"m":"c")).classList.toggle("active");t==="measures"?renderMeasures():renderColumns();}
-
-function currentMd(){
-  switch(activeMd){
-    case "datadict":   return MARKDOWN_DATADICT;
-    case "measures":   return MARKDOWN_MEASURES;
-    case "functions":  return MARKDOWN_FUNCTIONS;
-    case "calcgroups": return MARKDOWN_CALCGROUPS;
-    case "quality":    return MARKDOWN_QUALITY;
-    default:           return MARKDOWN;
-  }
-}
-function currentMdFilename(){
-  var suffix="-semantic-model.md";
-  if(activeMd==="datadict")        suffix="-data-dictionary.md";
-  else if(activeMd==="measures")   suffix="-measures.md";
-  else if(activeMd==="functions")  suffix="-functions.md";
-  else if(activeMd==="calcgroups") suffix="-calculation-groups.md";
-  else if(activeMd==="quality")    suffix="-data-quality.md";
-  return REPORT_NAME+suffix;
-}
-
-function switchMd(which){
-  activeMd=which;
-  var ids=["model","datadict","measures","functions","calcgroups","quality"];
-  ids.forEach(function(id){
-    var el=document.getElementById("md-tab-"+id);
-    if(el)el.classList.toggle("active",which===id);
-  });
-  var sub=document.getElementById("md-subtitle");
-  if(sub){
-    if(which==="datadict")        sub.textContent="Data dictionary reference \u00b7 per-table columns, constraints, hierarchies (no DAX expressions)";
-    else if(which==="measures")   sub.textContent="Measures reference \u00b7 A\u2013Z alphabetical (no DAX expressions)";
-    else if(which==="functions")  sub.textContent="Functions reference \u00b7 per-UDF parameters, descriptions and bodies";
-    else if(which==="calcgroups") sub.textContent="Calculation groups reference \u00b7 per-item descriptions and bodies";
-    else if(which==="quality")    sub.textContent="Data quality review \u00b7 coverage, removal candidates, indirect entities, inactive relationships";
-    else                          sub.textContent="Semantic-model documentation (no DAX expressions)";
-  }
-  renderDocs();
-}
-
-function switchMdMode(mode){
-  mdViewMode=mode;
-  var rb=document.getElementById("md-mode-rendered");
-  var wb=document.getElementById("md-mode-raw");
-  if(rb)rb.classList.toggle("active",mode==="rendered");
-  if(wb)wb.classList.toggle("active",mode==="raw");
-  var rendered=document.getElementById("md-rendered");
-  var source=document.getElementById("md-source");
-  if(rendered)rendered.style.display=mode==="rendered"?"":"none";
-  if(source)source.style.display=mode==="raw"?"":"none";
-  renderDocs();
-}
-
-function expandAllDetails(){
-  var host=document.getElementById("md-rendered");
-  if(!host)return;
-  host.querySelectorAll("details").forEach(function(d){d.open=true;});
-}
-function collapseAllDetails(){
-  var host=document.getElementById("md-rendered");
-  if(!host)return;
-  host.querySelectorAll("details").forEach(function(d){d.open=false;});
-}
-
-// ─── Minimal markdown-to-HTML renderer ──────────────────────────────────────
-// Handles only the syntax we actually produce: headings, bold/italic/code,
-// links, bullets, blockquotes, hr, pipe tables, strikethrough, and raw
-// <details>/<summary>/<a id="..."> passthrough. NOT a general-purpose renderer.
-function mdEscapeHtml(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");}
-
-function mdInline(s){
-  // Preserve inline code spans first (null-byte placeholder).
-  var codes=[];
-  s=s.replace(/\`([^\`]+)\`/g,function(_,c){codes.push(c);return "\\u0000"+(codes.length-1)+"\\u0000";});
-  s=mdEscapeHtml(s);
-  // Restore specific inline HTML tags we emit and want to pass through.
-  // Opening/closing forms of: details, summary, strong, small, br, and <a id="...">/</a>.
-  s=s.replace(/&lt;(\\/?)(details|summary|strong|small|br)(\\s*\\/?)&gt;/g,function(_,slash,tag,tail){
-    return "<"+slash+tag+tail+">";
-  });
-  s=s.replace(/&lt;a id=&quot;([^&]*)&quot;&gt;/g,function(_,id){return '<a id="'+id+'">';});
-  s=s.replace(/&lt;\\/a&gt;/g,"</a>");
-  // <span class="..."> passthrough so the dashboard renders status badges,
-  // key-annotation badges, and chip pills as their styled components instead
-  // of literal escaped HTML. Attribute is restricted to class= to limit the
-  // surface; mdEscapeHtml has already neutralised &, <, > in the class value.
-  s=s.replace(/&lt;span class=&quot;([^&]*)&quot;&gt;/g,function(_,cls){return '<span class="'+cls+'">';});
-  s=s.replace(/&lt;\\/span&gt;/g,"</span>");
-  // Bold ** **
-  s=s.replace(/\\*\\*([^*]+)\\*\\*/g,"<strong>$1</strong>");
-  // Italic _ _ (require word-boundary-ish neighbours so interior underscores don't match)
-  s=s.replace(/(^|[\\s(>])_([^_]+)_(?=$|[\\s.,;:!?)<])/g,"$1<em>$2</em>");
-  // Strikethrough ~~ ~~
-  s=s.replace(/~~([^~]+)~~/g,"<del>$1</del>");
-  // Links [text](url)
-  s=s.replace(/\\[([^\\]]+)\\]\\(([^)]+)\\)/g,function(_,t,u){return '<a href="'+u+'">'+t+"</a>";});
-  // Restore code spans
-  s=s.replace(/\\u0000(\\d+)\\u0000/g,function(_,i){return "<code>"+mdEscapeHtml(codes[parseInt(i,10)])+"</code>";});
-  return s;
-}
-
-function mdParseTable(block){
-  // block: array of lines forming a pipe table (header, sep, rows...)
-  var head=block[0].trim().replace(/^\\||\\|$/g,"").split("|").map(function(c){return c.trim();});
-  var rows=block.slice(2).map(function(ln){
-    return ln.trim().replace(/^\\||\\|$/g,"").split("|").map(function(c){return c.trim();});
-  });
-  var html="<table><thead><tr>";
-  head.forEach(function(h){html+="<th>"+mdInline(h)+"</th>";});
-  html+="</tr></thead><tbody>";
-  rows.forEach(function(r){
-    html+="<tr>";
-    r.forEach(function(c){html+="<td>"+mdInline(c)+"</td>";});
-    html+="</tr>";
-  });
-  html+="</tbody></table>";
-  return html;
-}
-
-function mdRender(md){
-  if(!md)return "";
-  var lines=md.split(/\\r?\\n/);
-  var out=[];
-  var i=0;
-  var paraBuf=[];
-  function flushPara(){
-    if(paraBuf.length===0)return;
-    var joined=paraBuf.join(" ").trim();
-    if(joined)out.push("<p>"+mdInline(joined)+"</p>");
-    paraBuf=[];
-  }
-  while(i<lines.length){
-    var ln=lines[i];
-    // Raw HTML passthrough (whole line is one of the tags we produce).
-    if(/^\\s*<(\\/?)(details|summary|a)(\\s|>|\\/>)/.test(ln)){
-      flushPara();
-      out.push(ln);
-      i++;continue;
-    }
-    // Headings
-    var h=/^(#{1,6})\\s+(.+)$/.exec(ln);
-    if(h){flushPara();out.push("<h"+h[1].length+">"+mdInline(h[2])+"</h"+h[1].length+">");i++;continue;}
-    // HR
-    if(/^---+$/.test(ln.trim())){flushPara();out.push("<hr>");i++;continue;}
-    // Blank line
-    if(/^\\s*$/.test(ln)){flushPara();i++;continue;}
-    // Blockquote (consecutive > lines)
-    if(/^>\\s?/.test(ln)){
-      flushPara();
-      var qBuf=[];
-      while(i<lines.length&&/^>\\s?/.test(lines[i])){qBuf.push(lines[i].replace(/^>\\s?/,""));i++;}
-      out.push("<blockquote>"+mdInline(qBuf.join(" "))+"</blockquote>");
-      continue;
-    }
-    // Fenced code block: \`\`\` or \`\`\`lang … \`\`\`
-    // Content is rendered verbatim (HTML-escaped, not Markdown-processed) so
-    // DAX bodies and signatures don't accidentally trigger inline-code purple.
-    if(/^\\s*\`\`\`/.test(ln)){
-      flushPara();
-      var langLine=ln.trim();
-      var lang=langLine.replace(/^\`\`\`/,"").trim();
-      var codeLines=[];
-      i++;
-      while(i<lines.length&&!/^\\s*\`\`\`\\s*$/.test(lines[i])){
-        codeLines.push(lines[i]);
-        i++;
-      }
-      if(i<lines.length)i++; // skip closing fence
-      var langAttr=lang?' data-lang="'+mdEscapeHtml(lang)+'"':'';
-      out.push('<pre class="md-code"'+langAttr+'><code>'+mdEscapeHtml(codeLines.join("\\n"))+'</code></pre>');
-      continue;
-    }
-    // Numbered list (ordered). Supports indented bullets nested under each item.
-    if(/^\\s*\\d+\\.\\s+/.test(ln)){
-      flushPara();
-      var olItems=[];
-      while(i<lines.length){
-        var cur=lines[i];
-        if(/^\\s*\\d+\\.\\s+/.test(cur)){
-          olItems.push({text:cur.replace(/^\\s*\\d+\\.\\s+/,""),subs:[]});
-          i++;
-        }else if(/^\\s{2,}[-*]\\s+/.test(cur)&&olItems.length>0){
-          olItems[olItems.length-1].subs.push(cur.replace(/^\\s*[-*]\\s+/,""));
-          i++;
-        }else{
-          break;
-        }
-      }
-      var olHtml="<ol>"+olItems.map(function(it){
-        var li="<li>"+mdInline(it.text);
-        if(it.subs.length>0){
-          li+="<ul>"+it.subs.map(function(s){return "<li>"+mdInline(s)+"</li>";}).join("")+"</ul>";
-        }
-        return li+"</li>";
-      }).join("")+"</ol>";
-      out.push(olHtml);
-      continue;
-    }
-    // Bullet list
-    if(/^\\s*[-*]\\s+/.test(ln)){
-      flushPara();
-      var items=[];
-      while(i<lines.length&&/^\\s*[-*]\\s+/.test(lines[i])){
-        items.push(lines[i].replace(/^\\s*[-*]\\s+/,""));
-        i++;
-      }
-      out.push("<ul>"+items.map(function(x){return "<li>"+mdInline(x)+"</li>";}).join("")+"</ul>");
-      continue;
-    }
-    // Pipe table: header line followed by a separator line of dashes+pipes
-    if(/^\\s*\\|.*\\|\\s*$/.test(ln)&&i+1<lines.length&&/^\\s*\\|[\\s:\\-|]+\\|\\s*$/.test(lines[i+1])){
-      flushPara();
-      var block=[ln,lines[i+1]];
-      i+=2;
-      while(i<lines.length&&/^\\s*\\|.*\\|\\s*$/.test(lines[i])){block.push(lines[i]);i++;}
-      out.push(mdParseTable(block));
-      continue;
-    }
-    // Default: accumulate into paragraph
-    paraBuf.push(ln);
-    i++;
-  }
-  flushPara();
-  return out.join("\\n");
-}
-
-function renderDocs(){
-  var src=document.getElementById("md-source");
-  var rendered=document.getElementById("md-rendered");
-  var md=currentMd();
-  if(src)src.textContent=md;
-  if(rendered){
-    rendered.innerHTML=mdRender(md)+
-      '<hr style="border:none;border-top:1px dashed var(--border-soft);margin:18px 0 10px">'+
-      '<div style="font:11px/1.5 \\'JetBrains Mono\\',monospace;color:var(--text-faint);text-align:center">'+
-        'Generated by Power BI Lineage v'+APP_VERSION+' · '+GENERATED_AT+' · '+escHtml(REPORT_NAME)+
-      '</div>';
-  }
-  // Docs panel footer (outside .md-rendered) shows line / char totals.
-  var lineCount=md?md.split(/\\r?\\n/).length:0;
-  setPanelFooter("footer-docs",
-    lineCount+' lines · generated '+GENERATED_AT,
-    (md?md.length:0)+' chars');
-}
-
-function copyMarkdown(){
-  var btn=document.getElementById("md-copy-btn");
-  var text=currentMd();
-  function ok(){if(btn){btn.textContent="✓ Copied";setTimeout(function(){btn.textContent="⎘ Copy";},1500);}}
-  function fallback(){
-    var ta=document.createElement("textarea");ta.value=text;ta.style.position="fixed";ta.style.opacity="0";document.body.appendChild(ta);ta.select();
-    var ok2=false;try{ok2=document.execCommand("copy");}catch(e){}
-    document.body.removeChild(ta);
-    if(ok2)ok();else if(btn){btn.textContent="✗ Failed";setTimeout(function(){btn.textContent="⎘ Copy";},1500);}
-  }
-  if(navigator.clipboard&&navigator.clipboard.writeText){
-    navigator.clipboard.writeText(text).then(ok).catch(fallback);
-  }else{fallback();}
-}
-
-function downloadMarkdown(){
-  var text=currentMd();
-  var blob=new Blob([text],{type:"text/markdown;charset=utf-8"});
-  var url=URL.createObjectURL(blob);
-  var a=document.createElement("a");
-  a.href=url;a.download=currentMdFilename();
-  document.body.appendChild(a);a.click();document.body.removeChild(a);
-  setTimeout(function(){URL.revokeObjectURL(url);},1000);
-}
-
-renderSummary();renderTabs();renderMeasures();renderColumns();renderTables();renderRelationships();renderSources();renderFunctions();renderCalcGroups();renderPages();renderUnused();renderDocs();switchTab("measures");addCopyButtons();
+// Client runtime — extracted to src/client/main.ts in Stop 5, inlined here from dist/client/main.js.
+${CLIENT_JS}
 </script>
 </body>
 </html>`;

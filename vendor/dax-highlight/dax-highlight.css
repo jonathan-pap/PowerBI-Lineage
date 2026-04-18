@@ -1,0 +1,70 @@
+/*!
+ * dax-highlight.css — theme for dax-highlight.js
+ *
+ * All colors are exposed as CSS custom properties on `.code-dax` so you
+ * can retheme a single block or the whole site without editing this file.
+ *
+ * Default palette: dark theme, cool-neutral surface, pastel tokens.
+ * See :root block below for a light-theme override pattern.
+ */
+
+.code-dax {
+  /* Base */
+  --dax-fg:        rgba(240, 245, 255, 0.94);
+  --dax-bg:        transparent;
+  --dax-comment:   rgba(255, 255, 255, 0.55);
+
+  /* Semantic token colors */
+  --dax-keyword:   #8ab4ff;  /* VAR RETURN IF SWITCH TRUE FALSE IN AND OR NOT BLANK */
+  --dax-function:  #7fd1ff;  /* SUM(, CALCULATE(, FILTER( … */
+  --dax-variable:  #f7c97a;  /* _myVar, or the name after VAR */
+  --dax-measure:   #c4b5fd;  /* [Measure Name] */
+  --dax-ref:       #b6e3a7;  /* 'Table'[Column] */
+  --dax-string:    #f5a97f;  /* "text" */
+  --dax-number:    #f9d976;  /* 123, 12.5 */
+
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  color: var(--dax-fg);
+  background: var(--dax-bg);
+  line-height: 1.55;
+  tab-size: 2;
+}
+
+/* When dropped inside a <pre>, let the <pre> own the scrolling + padding */
+pre > code.code-dax {
+  display: block;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+}
+
+/* Token styles */
+.code-dax .dax-k { color: var(--dax-keyword);  font-weight: 700; }
+.code-dax .dax-f { color: var(--dax-function); font-weight: 600; }
+.code-dax .dax-v { color: var(--dax-variable); font-weight: 600; }
+.code-dax .dax-m { color: var(--dax-measure); }
+.code-dax .dax-r { color: var(--dax-ref); }
+.code-dax .dax-s { color: var(--dax-string); }
+.code-dax .dax-n { color: var(--dax-number); }
+.code-dax .dax-c { color: var(--dax-comment); font-style: italic; }
+
+/* --------------------------------------------------------------------------
+ * Optional: light-theme override
+ * Uncomment the block below (and/or add a class toggle) to support light mode.
+ * --------------------------------------------------------------------------
+
+@media (prefers-color-scheme: light) {
+  .code-dax {
+    --dax-fg:       #1e293b;
+    --dax-comment:  #64748b;
+    --dax-keyword:  #2563eb;
+    --dax-function: #0891b2;
+    --dax-variable: #b45309;
+    --dax-measure:  #7c3aed;
+    --dax-ref:      #15803d;
+    --dax-string:   #c2410c;
+    --dax-number:   #a16207;
+  }
+}
+ */
