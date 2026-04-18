@@ -46,6 +46,49 @@ function slug(s: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
+/**
+ * Azure DevOps Wiki-compatible heading slug.
+ *
+ * The hand-rolled TOCs and Jump-to navs in these MD docs need their
+ * `[text](#anchor)` links to resolve to actual heading anchors in both
+ * ADO Wiki AND GitHub AND our dashboard's inline MD renderer. ADO
+ * Wiki's slug algorithm differs from GitHub's in a handful of
+ * punctuation-stripping rules — most headings slug identically on
+ * both, but punctuation like `:`, `(`, `)`, `,` produces different
+ * anchors.
+ *
+ * This function matches ADO Wiki's rules per Microsoft's docs
+ * (learn.microsoft.com/azure/devops/project/wiki/markdown-guidance):
+ *
+ *   1. Lowercase.
+ *   2. Strip punctuation ADO itself strips — `:.,/&()!?'"`` `
+ *   3. Replace any remaining non-word-non-hyphen char with a hyphen.
+ *   4. Collapse consecutive hyphens, trim leading/trailing.
+ *
+ * GitHub is more lenient — anything that works as an ADO slug also
+ * resolves on GitHub because GitHub's algorithm happens to produce
+ * the same output for the character classes we emit as headings.
+ *
+ * `slug()` is retained for any non-MD callers that still want the old
+ * GitHub-specific rules; all MD generators use `adoSlug()` now.
+ */
+function adoSlug(heading: string): string {
+  return String(heading)
+    .toLowerCase()
+    // Strip the punctuation ADO Wiki itself strips. These chars do NOT
+    // become hyphens — they vanish entirely, joining the surrounding
+    // text.
+    .replace(/[:.,/&()!?'"`]/g, "")
+    // Replace remaining non-word-non-hyphen (Unicode whitespace,
+    // em-dash, en-dash, etc.) with a hyphen.
+    .replace(/[^\w\-]+/g, "-")
+    // Collapse consecutive hyphens.
+    .replace(/-+/g, "-")
+    // Trim leading/trailing hyphens.
+    .replace(/^-+|-+$/g, "");
+}
+export { adoSlug };
+
 /** Bucket letter used for A–Z grouping. Non-letter starts go to "#". */
 function bucketLetter(name: string): string {
   const ch = (name.trim().charAt(0) || "").toUpperCase();
