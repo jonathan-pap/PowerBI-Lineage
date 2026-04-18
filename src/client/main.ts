@@ -1003,6 +1003,37 @@ function renderTree(){
     parts.push('</details>'); // close tree-src
   }
 
+  // Calc Groups — pseudo-root. Calc groups are semantically tables
+  // (isCalcGroup=true entries in data.tables), but different models
+  // surface them differently depending on TMDL version / parser path.
+  // Render any calc group that ISN'T already represented as a table
+  // in the tree, so they never silently go missing from the catalog.
+  const calcGroupsInTables=new Set(tables.filter(t=>t.isCalcGroup).map(t=>t.name));
+  const uncoveredCalcGroups=(DATA.calcGroups||[]).filter(cg=>!calcGroupsInTables.has(cg.name));
+  if(uncoveredCalcGroups.length>0){
+    parts.push('<details class="tree-src">');
+    parts.push(`<summary><span class="tree-icon">🧮</span><strong>Calculation Groups</strong><span class="tree-meta">${uncoveredCalcGroups.length} group${uncoveredCalcGroups.length===1?'':'s'}</span></summary>`);
+    for(const cg of uncoveredCalcGroups){
+      const itemCount=(cg.items||[]).length;
+      parts.push('<details class="tree-table">');
+      parts.push(`<summary><span class="tree-icon">🧮</span><strong>${escHtml(cg.name)}</strong><span class="badge tree-role tree-role-calc-group">CALC GROUP</span><span class="tree-meta">${itemCount} item${itemCount===1?'':'s'} · precedence ${cg.precedence??0}</span></summary>`);
+      if(itemCount>0){
+        parts.push('<details class="tree-group">');
+        parts.push(`<summary><span class="tree-icon">📋</span>Items (${itemCount})</summary>`);
+        for(const it of cg.items){
+          parts.push(`<div class="tree-leaf tree-calc-item clickable" data-action="tab" data-tab="calcgroups">`+
+            `<span class="tree-icon">·</span>`+
+            `<span class="tree-name">${escHtml(it.name)}</span>`+
+            (it.ordinal!==undefined?`<span class="tree-type">#${it.ordinal}</span>`:'')+
+          `</div>`);
+        }
+        parts.push('</details>');
+      }
+      parts.push('</details>'); // close tree-table (calc group)
+    }
+    parts.push('</details>'); // close tree-src
+  }
+
   // UDFs — separate root branch, siblings to data sources
   const udfs=(DATA.functions||[]).filter(f=>!f.name.endsWith('.About'));
   if(udfs.length>0){
@@ -1021,14 +1052,17 @@ function renderTree(){
 
   el.innerHTML=parts.join('');
 
-  // Footer
+  // Footer — append via insertAdjacentHTML ("beforeend") so the tree
+  // body above isn't wiped. setPanelFooter() sets innerHTML on its
+  // target, which works for tabs that have a separate <div id="footer-X">
+  // slot but destroys content when called with the main panel id.
   const adc=autoDateCount();
   const autoToggle=adc>0
-    ? '<button class="filter-btn'+(showAutoDate?' active':'')+'" data-action="toggle-auto-date" title="'+(showAutoDate?'Hide':'Show')+' auto-date infrastructure">'+(showAutoDate?'Hide':'Show')+' auto-date ('+adc+')</button>'
+    ? `<button class="filter-btn${showAutoDate?' active':''}" data-action="toggle-auto-date" title="${showAutoDate?'Hide':'Show'} auto-date infrastructure">${showAutoDate?'Hide':'Show'} auto-date (${adc})</button>`
     : '';
-  setPanelFooter("tree-content",
-    tables.length+' table'+(tables.length===1?'':'s')+' · '+sortedSources.length+' source'+(sortedSources.length===1?'':'s')+(udfs.length>0?' · '+udfs.length+' UDF'+(udfs.length===1?'':'s'):'')+(adc>0&&!showAutoDate?' · <span style="color:var(--text-faint)">+'+adc+' auto-date hidden</span>':''),
-    autoToggle);
+  const footerLeft=`${tables.length} table${tables.length===1?'':'s'} · ${sortedSources.length} source${sortedSources.length===1?'':'s'}${udfs.length>0?` · ${udfs.length} UDF${udfs.length===1?'':'s'}`:''}${adc>0&&!showAutoDate?` · <span style="color:var(--text-faint)">+${adc} auto-date hidden</span>`:''}`;
+  el.insertAdjacentHTML("beforeend",
+    `<div class="panel-footer"><div class="left">${footerLeft}</div><div class="right">${autoToggle}</div></div>`);
 }
 
 function renderFunctions(){

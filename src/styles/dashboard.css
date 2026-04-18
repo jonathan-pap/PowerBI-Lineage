@@ -283,7 +283,7 @@
      rendered MD. Arrow supplied via ::before so templates can leave the span
      empty (no hard-coded arrow chars to maintain). */
   .page-expand{color:var(--text-faint);font-size:12px;flex-shrink:0;display:inline-block}
-  .page-expand::before{content:"\u25B8";display:inline-block;transition:transform .15s;line-height:1}
+  .page-expand::before{content:"▸";display:inline-block;transition:transform .15s;line-height:1}
   .page-card.open .page-expand::before{transform:rotate(90deg)}
   .page-body{max-height:0;overflow:hidden;transition:max-height .3s ease}
   .page-card.open .page-body{max-height:2000px}

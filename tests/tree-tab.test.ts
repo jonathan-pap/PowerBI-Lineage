@@ -74,6 +74,30 @@ test("Tree tab — CSS is inlined (classes that the render output depends on)", 
   }
 });
 
+test("Tree tab — renderTree writes body before footer (not clobbered)", () => {
+  // Regression guard: setPanelFooter() sets innerHTML on its target,
+  // which wipes any tree content written first. The Tree tab uses
+  // the main panel div as its target, so it must use
+  // insertAdjacentHTML("beforeend") not setPanelFooter. If that
+  // ever regresses, the tree body disappears and only the footer
+  // shows — exactly the bug the user screenshot caught.
+  const html = generateHTML(minimalData(), "t", "", "", "", "", "", "", "0");
+  // tsc reformats the function declaration with whitespace — tolerant regex.
+  const fnMatch = html.match(/function renderTree\(\)\s*\{([\s\S]+?)\n\}/);
+  assert.ok(fnMatch, "renderTree function body not found in inlined client");
+  const body = fnMatch![1];
+  // The only allowed way to write the footer is insertAdjacentHTML —
+  // anything that calls setPanelFooter on tree-content clobbers the body.
+  assert.ok(
+    !/setPanelFooter\(\s*["']tree-content["']/.test(body),
+    "renderTree uses setPanelFooter on tree-content — this wipes the tree body. Use insertAdjacentHTML('beforeend', ...) instead."
+  );
+  assert.ok(
+    /insertAdjacentHTML\(\s*["']beforeend["']/.test(body),
+    "renderTree should append the footer via insertAdjacentHTML('beforeend', ...) so the tree body survives."
+  );
+});
+
 if (FIXTURE_EXISTS) {
   test("Tree tab — on H&S fixture, render output emits expected structural hooks", () => {
     // Exercise the rendered tree against the real composite model. We
