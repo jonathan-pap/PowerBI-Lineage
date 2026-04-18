@@ -572,7 +572,7 @@ export function generateHTML(
 
   <div class="panel" id="panel-measures">
     <div class="search-row">
-      <input class="search-input" placeholder="Search measures..." oninput="filterTable('measures',this.value)">
+      <input class="search-input" placeholder="Search measures..." data-action="filter" data-entity="measures">
       <button class="filter-btn" id="btn-unused-m" data-action="unused-filter" data-entity="measures">Not on visual</button>
     </div>
     <div class="table-wrap"><table class="data-table"><thead><tr>
@@ -585,7 +585,7 @@ export function generateHTML(
 
   <div class="panel" id="panel-columns">
     <div class="search-row">
-      <input class="search-input" placeholder="Search columns..." oninput="filterTable('columns',this.value)">
+      <input class="search-input" placeholder="Search columns..." data-action="filter" data-entity="columns">
       <button class="filter-btn" id="btn-unused-c" data-action="unused-filter" data-entity="columns">Not on visual</button>
     </div>
     <div class="table-wrap"><table class="data-table"><thead><tr>

@@ -128,19 +128,36 @@ function generate(name: string): string {
 // Structural invariants
 // ──────────────────────────────────────────────────────────────────────
 
-test("XSS fuzz — no onclick= HTML attribute in rendered output", () => {
+test("XSS fuzz — no inline on*= HTML event-handler attributes in rendered output", () => {
+  // Stop 4 banned onclick="…" splices because field names in those
+  // contexts reached a JS parser. Same reasoning applies to every
+  // on*-prefixed HTML attribute (oninput, onchange, onsubmit,
+  // onkeyup, onmouseover, onerror, …). Original test only checked
+  // onclick — the Stop-5 /sc:analyze found two oninput= sites that
+  // slipped past. This broader assertion backfills that gap.
+  //
+  // DOM-property assignments like `btn.onclick=...` live in the
+  // literal script body and don't match `\s on…=` because there's
+  // no whitespace before `onclick` in `btn.onclick`.
+  // Require the attribute VALUE to start with an actual quote. Real
+  // HTML in our generator always quotes attribute values, so this
+  // catches every inline on-handler we might accidentally emit.
+  // Payloads that the generator HTML-escaped into text nodes land as
+  // `onerror=&quot;…&quot;` — the `=` is followed by `&`, not `"` or
+  // `'`, so this tighter pattern ignores them (correctly — they're
+  // harmless text, not event handlers).
+  const BANNED = /\son[a-z]+\s*=\s*['"]/i;
   for (const payload of [ADVERSARIAL, BREAKOUT, HTML_SPECIAL]) {
     const html = generate(payload);
-    // HTML-attribute onclick= (with space / quote before) should not
-    // appear. DOM-property assignments like btn.onclick=... live in
-    // the literal embedded-script source, which is fine — they don't
-    // splice user data.
-    const attrMatch = html.match(/\sonclick\s*=/i);
-    assert.equal(
-      attrMatch,
-      null,
-      "Found onclick= attribute in rendered HTML for payload " + JSON.stringify(payload)
-    );
+    const m = html.match(BANNED);
+    if (m) {
+      const idx = m.index ?? 0;
+      const ctx = html.slice(Math.max(0, idx - 40), idx + 80);
+      assert.fail(
+        "Found inline on*= attribute for payload " +
+        JSON.stringify(payload) + " near: " + JSON.stringify(ctx)
+      );
+    }
   }
 });
 
