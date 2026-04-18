@@ -11,6 +11,31 @@ Sections in each release follow the Keep-a-Changelog vocabulary: **Added**, **Ch
 
 ---
 
+## [0.5.2] — 2026-04-18 · Post-/sc:analyze follow-ups (branch `polish/analyze-followups`)
+
+Five commits closing every item from the previous analysis's "not addressed" list. No UX impact — all internal hardening + infrastructure.
+
+### Security
+- **Vendor integrity check.** `src/html-generator.ts` now pins SHA-256 hashes of every `vendor/` file in a `VENDOR_SHA256` map and verifies at module load. Mismatch throws loud — a tampered `vendor/` directory can't silently inline malicious JS into the generated dashboard. A paired test pins the known-good hash in a second place so desync between the two manifests fails in review. `vendor/dax-highlight/README.md` now covers the upgrade protocol (recompute hashes, update both manifests, run tests).
+- **EXTERNALMEASURE regex handles DAX-style doubled quotes.** `"foo""bar"` is DAX for the string `foo"bar`; the previous `[^"]*` pattern silently truncated after the first quote. Switched to `(?:[^"]|"")*` with a post-match `undoubleDaxQuotes()` helper. Rare edge case but "silently truncate" is an uglier failure mode than "no match", and the fix is mechanical. Regression test covers three cases (vanilla, doubled-quote remote name, doubled-quote external model).
+
+### Added
+- **GitHub Actions CI** (`.github/workflows/ci.yml`) running `npm ci && npm run typecheck && npm test && npm run build` across Node 18 / 20 / 22 on every push and PR. `concurrency` block cancels stale runs on the same PR. Plus a sanity step that asserts `dist/app.js`, `dist/client/main.js`, and `dist/client/render/md.js` all got emitted — catches tsconfig regressions that would silently drop modules the generator inlines. **Zero new deps.** ESLint deliberately deferred (adding it means 3-4 new devDeps; `tsc --noEmit` already catches the big class of errors that matter).
+- **`src/client/render/escape.ts`** — second type-safe module carved from `main.ts`. 60 lines covering `escHtml`, `escAttr`, `sc`, `uc` with proper `unknown`/`string`/`number` signatures and no `@ts-nocheck`. Added to the `readCompiledClient()` manifest in load-order (`escape.js` → `md.js` → `main.js`).
+
+### Changed
+- **`inferSource()` fast path.** Each of the ~45 connector patterns now carries a lowercase keyword (e.g. `"analysisservices.database"`); `inferSource()` lowercases the M body once per call and checks `indexOf(keyword)` before running the regex. Non-matching patterns skip their regex entirely. On the H&S composite model (48+ partitions) that's ~2,000 regex scans avoided per `generate()`. Same behaviour — every H&S integration test still passes.
+- **`readCompiledClient()` manifest now 3 entries** (`render/escape.js`, `render/md.js`, `main.js`). Order documented inline.
+
+### Test results
+56 / 56 green (was 54, +2 — EXTERNALMEASURE doubled-quote + vendor integrity pin).
+
+### Deliberately not in this release
+- Further module carves (`components/badge.ts`, `components/chip.ts`, `panels/lineage.ts`, panel-per-tab). Pattern is now clearly established by `render/md.ts` + `render/escape.ts`; each remaining carve is a cheap follow-up PR.
+- ESLint setup. See CI commit for rationale (devDep cost vs. `tsc --noEmit` already covering the big class of errors).
+
+---
+
 ## [0.5.1] — 2026-04-18 · Post-Stop-6 cleanup: inline handlers, CSS extraction, first module carve (branch `stop-6/composite-model-fixes`)
 
 Three housekeeping PRs from the `/sc:analyze` top-3 list, landed as one release.
@@ -281,5 +306,6 @@ First release to properly support Power BI **composite models** (mixed-storage w
 | 0.4.0 | `stop-5/client-split` (open) | Client code extracted to `src/client/main.ts` |
 | 0.5.0 | `stop-6/composite-model-fixes` (open) | Composite-model fixes (TMDL, entity partitions, EXTERNALMEASURE, auto-date) |
 | 0.5.1 | `stop-6/composite-model-fixes` (open) | Post-/sc:analyze cleanup — inline-handler migration, CSS extraction, md.ts carve |
+| 0.5.2 | `polish/analyze-followups` (open) | Follow-ups — EXTERNALMEASURE quotes, vendor SHA-256, inferSource fast path, CI, escape.ts carve |
 
 The v0.2 track was merged to `main` via cherry-pick on 2026-04-18 after the stacked PRs #4–#6 each landed on their feature-branch base rather than main. See the Stop-3 commit message for the reconciliation detail. v0.3.0 is on its own branch awaiting merge.
