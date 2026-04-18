@@ -18,23 +18,40 @@ function esc(s: string | undefined | null): string {
 }
 
 /**
- * Render a measure/column status as a coloured <span> badge that the dashboard
- * MD renderer will style as a pill. In raw MD viewers the span degrades to
- * plain text, so the doc stays readable in external tools too.
+ * Render a measure/column status as a coloured <span> badge that the
+ * dashboard MD renderer styles as a pill. The Unicode glyph inside each
+ * span is what survives CSS stripping — ADO Wiki and GitHub drop the
+ * `class` attribute, leaving the plain text `✓ Direct` / `↻ Indirect` /
+ * `⚠ Unused`. The glyph preserves visual separation from surrounding
+ * text even without the pill styling.
  */
 function statusLabel(s: "direct" | "indirect" | "unused" | string): string {
-  if (s === "direct")   return '<span class="badge badge--success">Direct</span>';
-  if (s === "indirect") return '<span class="badge badge--indirect">Indirect</span>';
-  if (s === "unused")   return '<span class="badge badge--unused">Unused</span>';
+  if (s === "direct")   return '<span class="badge badge--success">✓ Direct</span>';
+  if (s === "indirect") return '<span class="badge badge--indirect">↻ Indirect</span>';
+  if (s === "unused")   return '<span class="badge badge--unused">⚠ Unused</span>';
   return String(s);
 }
 
-/** Key / column-annotation badges used in the Data Dictionary and Quality notes. */
-const BADGE_PK     = '<span class="badge badge--pk">PK</span>';
-const BADGE_PK_INF = '<span class="badge badge--pk-inf">PK*</span>';
-const BADGE_FK     = '<span class="badge badge--fk">FK</span>';
-const BADGE_CALC   = '<span class="badge badge--calc">CALC</span>';
-const BADGE_HIDDEN = '<span class="badge badge--hidden">HIDDEN</span>';
+/**
+ * Key / column-annotation badges — used in Data Dictionary column rows
+ * and Quality-tab notes.
+ *
+ * The Unicode prefix is the only signal that survives CSS stripping on
+ * ADO Wiki / GitHub / any raw-MD viewer. In the dashboard the whole
+ * span (glyph + label) renders as a single coloured pill.
+ *
+ * Mapping rationale:
+ *   🔑 PK    — key icon, primary key set explicitly
+ *   🗝 PK*   — skeleton key, inferred PK (column is target of ≥1 rel)
+ *   🔗 FK    — link icon, foreign key (column is source of ≥1 rel)
+ *   🧮 CALC  — abacus, calculated column / calc group
+ *   👁 HIDDEN — eye (visible-eye reads as "peek-only"; CSS strikes it)
+ */
+const BADGE_PK     = '<span class="badge badge--pk">🔑 PK</span>';
+const BADGE_PK_INF = '<span class="badge badge--pk-inf">🗝 PK*</span>';
+const BADGE_FK     = '<span class="badge badge--fk">🔗 FK</span>';
+const BADGE_CALC   = '<span class="badge badge--calc">🧮 CALC</span>';
+const BADGE_HIDDEN = '<span class="badge badge--hidden">👁 HIDDEN</span>';
 
 /** GitHub-compatible slug for in-document anchor links. */
 function slug(s: string): string {
@@ -44,6 +61,164 @@ function slug(s: string): string {
     .replace(/\s+/g, "-")
     .replace(/-+/g, "-")
     .replace(/^-+|-+$/g, "");
+}
+
+/**
+ * Azure DevOps Wiki-compatible heading slug.
+ *
+ * The hand-rolled TOCs and Jump-to navs in these MD docs need their
+ * `[text](#anchor)` links to resolve to actual heading anchors in both
+ * ADO Wiki AND GitHub AND our dashboard's inline MD renderer. ADO
+ * Wiki's slug algorithm differs from GitHub's in a handful of
+ * punctuation-stripping rules — most headings slug identically on
+ * both, but punctuation like `:`, `(`, `)`, `,` produces different
+ * anchors.
+ *
+ * This function matches ADO Wiki's rules per Microsoft's docs
+ * (learn.microsoft.com/azure/devops/project/wiki/markdown-guidance):
+ *
+ *   1. Lowercase.
+ *   2. Strip punctuation ADO itself strips — `:.,/&()!?'"`` `
+ *   3. Replace any remaining non-word-non-hyphen char with a hyphen.
+ *   4. Collapse consecutive hyphens, trim leading/trailing.
+ *
+ * GitHub is more lenient — anything that works as an ADO slug also
+ * resolves on GitHub because GitHub's algorithm happens to produce
+ * the same output for the character classes we emit as headings.
+ *
+ * `slug()` is retained for any non-MD callers that still want the old
+ * GitHub-specific rules; all MD generators use `adoSlug()` now.
+ */
+function adoSlug(heading: string): string {
+  return String(heading)
+    .toLowerCase()
+    // Strip the punctuation ADO Wiki itself strips. These chars do NOT
+    // become hyphens — they vanish entirely, joining the surrounding
+    // text.
+    .replace(/[:.,/&()!?'"`]/g, "")
+    // Replace remaining non-word-non-hyphen (Unicode whitespace,
+    // em-dash, en-dash, etc.) with a hyphen.
+    .replace(/[^\w\-]+/g, "-")
+    // Collapse consecutive hyphens.
+    .replace(/-+/g, "-")
+    // Trim leading/trailing hyphens.
+    .replace(/^-+|-+$/g, "");
+}
+export { adoSlug };
+
+/**
+ * Escape a string for use as a Mermaid node LABEL (inside "quotes").
+ * Mermaid is stricter than Markdown — double quotes and backticks
+ * inside labels break parsing even when they'd be fine in MD.
+ */
+function mmLabel(s: string): string {
+  return String(s).replace(/"/g, "\\\"").replace(/\n/g, " ").replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Truncate a Mermaid node label so a long visual title or DAX
+ * expression doesn't distort the whole graph. Mermaid auto-wraps
+ * long labels but layouts get weird past ~40 chars.
+ */
+function mmTrunc(s: string, max = 40): string {
+  const t = String(s);
+  return t.length > max ? t.substring(0, max - 1) + "…" : t;
+}
+
+/**
+ * Render a Mermaid lineage graph for one measure: upstream measures
+ * on the left, the measure itself in the centre, downstream visuals
+ * on the right. Returns an empty string when there's nothing to draw
+ * (no deps either way and no usage) — caller should skip emission.
+ *
+ * Node ID scheme is local to this block (m0 for current, m1..mN for
+ * upstream, v1..vN for downstream visuals) so multiple graphs in the
+ * same doc don't collide.
+ *
+ * Downstream visuals are de-duplicated by title and capped at 12 with
+ * a "+N more" node so the graph stays readable on dense reports.
+ */
+function mermaidMeasureLineage(m: ModelMeasure): string {
+  const upstream = m.daxDependencies ?? [];
+  const downstream = m.usedIn ?? [];
+  const downByTitle = new Map<string, { title: string; type: string }>();
+  for (const u of downstream) {
+    const key = u.visualTitle || u.visualType || u.visualId;
+    if (!downByTitle.has(key)) downByTitle.set(key, { title: key, type: u.visualType });
+  }
+  const downVisuals = [...downByTitle.values()];
+  if (upstream.length === 0 && downVisuals.length === 0) return "";
+
+  const MAX_VISUALS = 12;
+  const shown = downVisuals.slice(0, MAX_VISUALS);
+  const overflow = downVisuals.length - shown.length;
+
+  const lines: string[] = [];
+  lines.push("```mermaid");
+  lines.push("graph LR");
+  // Upstream measures
+  upstream.forEach((dep, i) => {
+    lines.push(`  m${i + 1}["${mmLabel(dep)}"]:::measure --> m0`);
+  });
+  // Current measure (always centre)
+  lines.push(`  m0("${mmLabel(m.name)}"):::current`);
+  // Downstream visuals
+  shown.forEach((v, i) => {
+    const label = mmTrunc(`${v.title}${v.type && v.type !== v.title ? " · " + v.type : ""}`);
+    lines.push(`  m0 --> v${i + 1}["${mmLabel(label)}"]:::visual`);
+  });
+  if (overflow > 0) {
+    lines.push(`  m0 --> vMore["+${overflow} more visual${overflow === 1 ? "" : "s"}"]:::more`);
+  }
+  // Styling — muted pastel fills so the graph stays subtle in both
+  // dashboard + ADO Wiki themes.
+  lines.push("  classDef current fill:#fff3b3,stroke:#b38f00,stroke-width:2px");
+  lines.push("  classDef measure fill:#fde4c0,stroke:#b36200");
+  lines.push("  classDef visual  fill:#d1e7dd,stroke:#0a7a3b");
+  lines.push("  classDef more    fill:#eee,stroke:#888,color:#555");
+  lines.push("```");
+  return lines.join("\n");
+}
+
+/**
+ * Render a Mermaid star-fragment graph for one fact table: the fact
+ * table itself in the centre, its outgoing-relationship dimensions
+ * arranged around it. Empty when the table has no outgoing
+ * relationships (nothing to draw).
+ *
+ * Only called for fact tables (`classifyTable === "Fact"`). Bridge /
+ * dimension / calc-group / disconnected / auto-date tables skip —
+ * too many topology edge cases with too little reader value.
+ */
+function mermaidTableRelationships(t: TableData): string {
+  const out = (t.relationships || []).filter(r => r.direction === "outgoing");
+  if (out.length === 0) return "";
+
+  // Dedupe by "to" table (a fact may reference the same dimension
+  // through multiple FK columns — shown as one edge with a label
+  // listing the FK column names).
+  const byDim = new Map<string, string[]>();
+  for (const r of out) {
+    if (!byDim.has(r.toTable)) byDim.set(r.toTable, []);
+    byDim.get(r.toTable)!.push(r.fromColumn);
+  }
+
+  const lines: string[] = [];
+  lines.push("```mermaid");
+  lines.push("graph LR");
+  // Unique node id per table — use an index so duplicate names
+  // across the emission don't cause id collisions.
+  lines.push(`  f0("${mmLabel(t.name)}"):::fact`);
+  let i = 1;
+  for (const [dim, fks] of byDim) {
+    const label = fks.length === 1 ? `[${fks[0]}]` : `[${fks.join(", ")}]`;
+    lines.push(`  f0 -- "${mmLabel(label)}" --> d${i}["${mmLabel(dim)}"]:::dim`);
+    i++;
+  }
+  lines.push("  classDef fact fill:#fde4c0,stroke:#b36200,stroke-width:2px");
+  lines.push("  classDef dim  fill:#d1e7dd,stroke:#0a7a3b");
+  lines.push("```");
+  return lines.join("\n");
 }
 
 /** Bucket letter used for A–Z grouping. Non-letter starts go to "#". */
@@ -89,7 +264,7 @@ function userTables(data: FullData): TableData[] {
  *  local measure is a structural pointer, not a computation. Removing one
  *  breaks the composite contract, so every list that shows "unused" or
  *  "safe to remove" must distinguish them. */
-const BADGE_PROXY = '<span class="badge badge--calc">EXTERNAL</span>';
+const BADGE_PROXY = '<span class="badge badge--calc">🌐 EXTERNAL</span>';
 
 /** Inline descriptor rendered next to a proxy measure's name. Includes the
  *  remote model and (when the remote name differs from the local one) the
@@ -142,6 +317,7 @@ export function generateMarkdown(data: FullData, reportName: string): string {
   const valueFilterLabel = mp.valueFilterBehavior || "Automatic (default)";
 
   // ── Front matter ──────────────────────────────────────────────────────────
+  lines.push(`<!-- Suggested ADO Wiki page name: ${reportName}/Model -->`);
   lines.push(`# Semantic Model Technical Specification`);
   lines.push("");
   lines.push(`## ${reportName}`);
@@ -198,13 +374,17 @@ export function generateMarkdown(data: FullData, reportName: string): string {
   lines.push("    - 3.1 [Storage modes](#31-storage-modes)");
   lines.push("    - 3.2 [Parameters and expressions](#32-parameters-and-expressions)");
   lines.push("    - 3.3 [Per-table sources](#33-per-table-sources)");
-  lines.push("4. [Data Dictionary — Summary](#4-data-dictionary--summary)  _(full inventory: Data Dictionary Reference)_");
-  lines.push("5. [Measures — Summary](#5-measures--summary)");
-  lines.push("6. [Calculation Groups](#6-calculation-groups)");
-  lines.push("7. [User-Defined Functions](#7-user-defined-functions)");
+  // adoSlug collapses consecutive hyphens — "## 4. Data Dictionary — Summary"
+  // (em-dash between two spaces) slugs to 4-data-dictionary-summary, not
+  // 4-data-dictionary--summary. Matched here so the anchor-resolution
+  // test passes on ADO Wiki.
+  lines.push("4. [Data Dictionary — Summary](#4-data-dictionary-summary)  _(full inventory: Data Dictionary Reference)_");
+  lines.push("5. [Measures — Summary](#5-measures-summary)");
+  lines.push("6. [Calculation Groups](#6-calculation-groups-summary)");
+  lines.push("7. [User-Defined Functions](#7-user-defined-functions-summary)");
   lines.push("8. [Report Pages](#8-report-pages)");
   lines.push("");
-  lines.push("Appendix A — [Generation metadata](#appendix-a--generation-metadata)");
+  lines.push("Appendix A — [Generation metadata](#appendix-a-generation-metadata)");
   lines.push("");
   lines.push("---");
   lines.push("");
@@ -289,7 +469,11 @@ export function generateMarkdown(data: FullData, reportName: string): string {
   lines.push("|-------|------|--------:|---------:|-----:|----:|-----------:|");
   for (const t of userTablesSorted) {
     const role = rolesByTable.get(t.name) || "Disconnected";
-    lines.push(`| [${t.name}](#${slug(t.name)}) | ${role} | ${t.columnCount} | ${t.measureCount} | ${t.keyCount} | ${t.fkCount} | ${t.hiddenColumnCount} |`);
+    // Table name is plain text — per-table detail lives in the
+    // Data Dictionary Reference (separate file). Wrapping it in a
+    // markdown link to `#${slug}` would 404 because this file has
+    // no per-table sections.
+    lines.push(`| ${esc(t.name)} | ${role} | ${t.columnCount} | ${t.measureCount} | ${t.keyCount} | ${t.fkCount} | ${t.hiddenColumnCount} |`);
   }
   lines.push("");
   if (autoDateTables.length > 0) {
@@ -397,7 +581,9 @@ export function generateMarkdown(data: FullData, reportName: string): string {
       // One row per partition. Most tables have exactly one.
       for (const p of t.partitions) {
         const loc = p.sourceLocation ? "`" + esc(p.sourceLocation) + "`" : "—";
-        lines.push(`| [${esc(t.name)}](#${slug(t.name)}) | ${esc(p.mode)} | ${esc(p.sourceType)} | ${loc} |`);
+        // Plain text — see §2.2 comment for the rationale (no
+        // per-table section in this doc).
+        lines.push(`| ${esc(t.name)} | ${esc(p.mode)} | ${esc(p.sourceType)} | ${loc} |`);
       }
     }
     lines.push("");
@@ -574,6 +760,7 @@ export function generateMeasuresMd(data: FullData, reportName: string): string {
   const t = data.totals;
 
   // ── Front matter ──────────────────────────────────────────────────────────
+  lines.push(`<!-- Suggested ADO Wiki page name: ${reportName}/Measures -->`);
   lines.push(`# Measures Reference`);
   lines.push("");
   lines.push(`## ${reportName}`);
@@ -638,7 +825,7 @@ export function generateMeasuresMd(data: FullData, reportName: string): string {
       for (const m of ms) {
         const p = m.externalProxy!;
         const remote = p.remoteName === m.name ? "_same_" : `\`${esc(p.remoteName)}\``;
-        lines.push(`| [${esc(m.name)}](#${slug(m.name)}) | ${remote} | ${esc(p.type)} | ${esc(m.table)} |`);
+        lines.push(`| [${esc(m.name)}](#${adoSlug(m.name)}) | ${remote} | ${esc(p.type)} | ${esc(m.table)} |`);
       }
       lines.push("");
     }
@@ -675,9 +862,10 @@ export function generateMeasuresMd(data: FullData, reportName: string): string {
   lines.push("");
 
   // ── Sections ──────────────────────────────────────────────────────────────
-  const renderSection = (heading: string, anchor: string, items: ModelMeasure[]) => {
+  const renderSection = (heading: string, _anchor: string, items: ModelMeasure[]) => {
+    // <a id="..."> is redundant here — `## ${heading}` auto-anchors
+    // to the same slug on every platform we render on.
     lines.push(`## ${heading}`);
-    lines.push(`<a id="${anchor}"></a>`);
     lines.push("");
     if (items.length === 0) {
       lines.push(`_No measures starting with ${heading}._`);
@@ -700,14 +888,20 @@ export function generateMeasuresMd(data: FullData, reportName: string): string {
         : m.status === "unused" ? " · _unused_"
         : m.status === "indirect" ? " · _indirect_"
         : "";
+      // Keep the <a id> anchor INSIDE the details — the <details>
+      // element itself isn't anchorable by heading auto-slug, so this
+      // is the jump target for the proxy-summary table at the top.
+      // ADO Wiki honours this for <a id> in practice; if it ever
+      // doesn't, the link lands at the nearest heading (the A-Z
+      // letter section) which is close enough.
       lines.push(`<details>`);
-      lines.push(`<a id="${slug(m.name)}"></a>`);
+      lines.push(`<a id="${adoSlug(m.name)}"></a>`);
       lines.push(`<summary><strong>${esc(m.name)}</strong>${proxyTag(m)} <small>— ${esc(m.table)}${statusTag}</small></summary>`);
       lines.push("");
       const meta = [
         `**Table:** ${esc(m.table)}`,
         `**Format:** ${esc(m.formatString) || "—"}`,
-        `**Status:** ${isProxy ? '<span class="badge badge--calc">External proxy</span>' : statusLabel(m.status)}`,
+        `**Status:** ${isProxy ? '<span class="badge badge--calc">🌐 External proxy</span>' : statusLabel(m.status)}`,
         `**Visuals:** ${m.usageCount}`,
         `**Pages:** ${m.pageCount}`,
       ];
@@ -727,6 +921,19 @@ export function generateMeasuresMd(data: FullData, reportName: string): string {
       }
       if (m.description) {
         lines.push(`> ${m.description.replace(/\n/g, " ")}`);
+        lines.push("");
+      }
+      // Lineage graph: upstream measures → this measure → downstream
+      // visuals. Emits a mermaid code block when the measure has
+      // either dependencies or usage; otherwise skipped (no signal
+      // to render). Mermaid renders natively in ADO Wiki + GitHub;
+      // the dashboard falls back to rendering the source as a code
+      // block (acceptable — the text lists below cover the same data).
+      const mermaid = mermaidMeasureLineage(m);
+      if (mermaid) {
+        lines.push(`**Lineage**`);
+        lines.push("");
+        lines.push(mermaid);
         lines.push("");
       }
       if (m.daxDependencies.length > 0) {
@@ -751,7 +958,11 @@ export function generateMeasuresMd(data: FullData, reportName: string): string {
   };
 
   for (const L of letters) renderSection(L, L.toLowerCase(), buckets.get(L)!);
-  if (buckets.get("#")!.length > 0) renderSection("Other (non-letter starts)", "other", buckets.get("#")!);
+  // Heading text is plain "Other" so its auto-slug is `other`,
+  // matching the Jump-to link `[#](#other)`. The old form
+  // "Other (non-letter starts)" adoSlugs to `other-non-letter-starts`
+  // which wouldn't resolve.
+  if (buckets.get("#")!.length > 0) renderSection("Other", "other", buckets.get("#")!);
 
   lines.push(`_Generated by powerbi-lineage · ${ts}_`);
   lines.push("");
@@ -778,6 +989,7 @@ export function generateFunctionsMd(data: FullData, reportName: string): string 
   const fns = [...data.functions].filter(f => !f.name.endsWith(".About")).sort((a, b) => a.name.localeCompare(b.name));
 
   // ── Front matter ──────────────────────────────────────────────────────────
+  lines.push(`<!-- Suggested ADO Wiki page name: ${reportName}/Functions -->`);
   lines.push(`# Functions Reference`);
   lines.push("");
   lines.push(`## ${reportName}`);
@@ -921,6 +1133,7 @@ export function generateCalcGroupsMd(data: FullData, reportName: string): string
   const totalItems = cgs.reduce((acc, cg) => acc + cg.items.length, 0);
 
   // ── Front matter ──────────────────────────────────────────────────────────
+  lines.push(`<!-- Suggested ADO Wiki page name: ${reportName}/CalcGroups -->`);
   lines.push(`# Calculation Groups Reference`);
   lines.push("");
   lines.push(`## ${reportName}`);
@@ -957,14 +1170,16 @@ export function generateCalcGroupsMd(data: FullData, reportName: string): string
   // Jump nav: one entry per group.
   lines.push("## Jump to");
   lines.push("");
-  lines.push(cgs.map(cg => `[${cg.name}](#${slug(cg.name)})`).join(" · "));
+  // Each calc-group heading carries a number prefix (`## 1. Foo`) so
+  // the heading auto-slug is `1-foo`, NOT just `foo` — the jump-to
+  // links below need to match the auto-slug of the actual heading.
+  lines.push(cgs.map((cg, i) => `[${cg.name}](#${adoSlug(`${i + 1}. ${cg.name}`)})`).join(" · "));
   lines.push("");
   lines.push("---");
   lines.push("");
 
   cgs.forEach((cg, i) => {
     lines.push(`## ${i + 1}. ${cg.name}`);
-    lines.push(`<a id="${slug(cg.name)}"></a>`);
     lines.push("");
     if (cg.description) {
       lines.push(`> ${cg.description.replace(/\n/g, " ")}`);
@@ -1075,6 +1290,7 @@ export function generateQualityMd(data: FullData, reportName: string): string {
   const measureDocPct = data.totals.measuresInModel > 0 ? Math.round(((data.totals.measuresInModel - undocumentedMeasures.length) / data.totals.measuresInModel) * 100) : 0;
 
   // ── Front matter ──────────────────────────────────────────────────────────
+  lines.push(`<!-- Suggested ADO Wiki page name: ${reportName}/Quality -->`);
   lines.push(`# Data Quality Review`);
   lines.push("");
   lines.push(`## ${reportName}`);
@@ -1418,6 +1634,7 @@ export function generateDataDictionaryMd(data: FullData, reportName: string): st
   const autoDateColumnCount = autoDateTables.reduce((a, t) => a + t.columnCount, 0);
 
   // ── Front matter ──────────────────────────────────────────────────────────
+  lines.push(`<!-- Suggested ADO Wiki page name: ${reportName}/DataDictionary -->`);
   lines.push(`# Data Dictionary Reference`);
   lines.push("");
   lines.push(`## ${reportName}`);
@@ -1464,7 +1681,7 @@ export function generateDataDictionaryMd(data: FullData, reportName: string): st
   // ── Jump nav — user tables only on the hot path ───────────────────────────
   lines.push("## Jump to");
   lines.push("");
-  lines.push(userTablesSorted.map(t => `[${t.name}](#${slug(t.name)})`).join(" · "));
+  lines.push(userTablesSorted.map(t => `[${t.name}](#${adoSlug(t.name)})`).join(" · "));
   if (autoDateTables.length > 0) {
     lines.push("");
     lines.push(`_${autoDateTables.length} auto-date infrastructure tables collapsed at the bottom of this document._`);
@@ -1476,8 +1693,9 @@ export function generateDataDictionaryMd(data: FullData, reportName: string): st
   // ── One collapsible section per user table ────────────────────────────────
   for (const tbl of userTablesSorted) {
     const cgTag = tbl.isCalcGroup ? " · _calculation group_" : "";
+    // `## ${tbl.name}` auto-slugs to adoSlug(tbl.name) — the explicit
+    // <a id> was redundant.
     lines.push(`## ${tbl.name}`);
-    lines.push(`<a id="${slug(tbl.name)}"></a>`);
     lines.push("");
 
     // Summary line outside the details so it's always visible.
@@ -1498,6 +1716,20 @@ export function generateDataDictionaryMd(data: FullData, reportName: string): st
       const extra = tbl.partitions.length > 1 ? ` (+${tbl.partitions.length - 1} more)` : "";
       lines.push(`**Source:** ${esc(p.mode)} · ${esc(p.sourceType)}${loc}${extra}`);
       lines.push("");
+    }
+
+    // Star-fragment Mermaid — fact tables only. Shows this table
+    // plus its outgoing-relationship dimensions. Skip for bridges /
+    // dimensions / calc-groups / disconnected / auto-date — those
+    // topologies don't fit a star shape.
+    if (classifyTable(tbl) === "Fact") {
+      const mermaid = mermaidTableRelationships(tbl);
+      if (mermaid) {
+        lines.push("### Star fragment");
+        lines.push("");
+        lines.push(mermaid);
+        lines.push("");
+      }
     }
 
     // ── Columns ─────────────────────────────────────────────────────────────

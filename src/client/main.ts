@@ -260,7 +260,7 @@ function renderMeasures(){
     const deps=m.daxDependencies.map(d=>`<span class="dep-chip" data-action="lineage" data-type="measure" data-name="${escAttr(d)}">${escHtml(d)}</span>`).join("")||'<span style="color:var(--text-faint)">—</span>';
     const pages=[...new Set(m.usedIn.map(u=>u.pageName))];
     const used=pages.map(p=>`<span class="used-chip">${escHtml(p)}</span>`).join("")||'<span style="color:var(--text-faint)">—</span>';
-    const statusBadge=m.status==='indirect'?'<span class="badge badge--indirect">INDIRECT</span>':m.status==='unused'?'<span class="badge badge--unused">UNUSED</span>':'';
+    const statusBadge=m.status==='indirect'?'<span class="badge badge--indirect">↻ INDIRECT</span>':m.status==='unused'?'<span class="badge badge--unused">⚠ UNUSED</span>':'';
     const nameAttr=m.description?' title="'+escAttr(m.description)+'" data-desc="1"':'';
     const descRow=m.description?'<div class="desc-muted" style="margin-top:2px;font-size:11px">'+escHtml(m.description)+'</div>':'';
     return `<tr class="${sc(m.status)}"><td><span class="field-name"${nameAttr} data-action="lineage" data-type="measure" data-name="${escAttr(m.name)}">${escHtml(m.name)}</span>${statusBadge}${descRow}</td><td><span class="field-table">${escHtml(m.table)}</span></td><td><span class="usage-count ${uc(m.usageCount)}">${m.usageCount}</span></td><td><span class="usage-count ${uc(m.pageCount)}">${m.pageCount}</span></td><td>${deps}</td><td>${used}</td><td><span class="format-str">${escHtml(m.formatString||'—')}</span></td></tr>`;
@@ -281,7 +281,7 @@ function renderColumns(){
     // SLICER badge intentionally omitted here — it now lives on the per-column
     // row inside the Tables tab, next to PK/FK/CALC/HIDDEN, where it's more
     // useful in context.
-    const statusBadge=c.status==='indirect'?'<span class="badge badge--indirect">INDIRECT</span>':c.status==='unused'?'<span class="badge badge--unused">UNUSED</span>':'';
+    const statusBadge=c.status==='indirect'?'<span class="badge badge--indirect">↻ INDIRECT</span>':c.status==='unused'?'<span class="badge badge--unused">⚠ UNUSED</span>':'';
     const cNameAttr=c.description?' title="'+escAttr(c.description)+'" data-desc="1"':'';
     const cDescRow=c.description?'<div class="desc-muted" style="margin-top:2px;font-size:11px">'+escHtml(c.description)+'</div>':'';
     return `<tr class="${sc(c.status)}"><td><span class="field-name"${cNameAttr} data-action="lineage" data-type="column" data-name="${escAttr(c.name)}">${escHtml(c.name)}</span>${statusBadge}${cDescRow}</td><td><span class="field-table">${escHtml(c.table)}</span></td><td><span class="mono" style="font-size:11px;color:#64748B">${escHtml(c.dataType)}</span></td><td><span class="usage-count ${uc(c.usageCount)}">${c.usageCount}</span></td><td><span class="usage-count ${uc(c.pageCount)}">${c.pageCount}</span></td><td>${used}</td></tr>`;
@@ -437,7 +437,7 @@ function renderPages(){
   const hiddenSet=new Set(DATA.hiddenPages||[]);
   document.getElementById("pages-content").innerHTML=pageData.map(p=>{
     const isOpen=openPages.has(p.name);
-    const hiddenBadge=hiddenSet.has(p.name)?'<span class="badge badge--hidden" title="This page is marked HiddenInViewMode — typically a tooltip, drillthrough, or nav-suppressed page">HIDDEN</span>':'';
+    const hiddenBadge=hiddenSet.has(p.name)?'<span class="badge badge--hidden" title="This page is marked HiddenInViewMode — typically a tooltip, drillthrough, or nav-suppressed page">👁 HIDDEN</span>':'';
 
     const typeChips=Object.entries(p.typeCounts).map(([t,c])=>`<span class="page-type-chip">${c}× ${escHtml(t)}</span>`).join("");
 
@@ -514,16 +514,16 @@ function renderTables(){
   const slicerSet=new Set((DATA.columns||[]).filter(c=>c.isSlicerField).map(c=>c.table+'|'+c.name));
   document.getElementById("tables-content").innerHTML=tables.map(t=>{
     const isOpen=openTables.has(t.name);
-    const calcGroupPill=t.isCalcGroup?'<span class="badge badge--calc-grp" title="This table is a calculation group">CALC GROUP</span>':'';
+    const calcGroupPill=t.isCalcGroup?'<span class="badge badge--calc-grp" title="This table is a calculation group">🧮 CALC GROUP</span>':'';
 
     const colRows=t.columns.map(c=>{
       const badges=[];
-      if(c.isKey)badges.push('<span class="badge badge--pk" title="Primary key — isKey:true set in the model">PK</span>');
-      else if(c.isInferredPK)badges.push('<span class="badge badge--pk-inf" title="Inferred primary key — this column is on the one-side of at least one relationship">PK</span>');
-      if(c.isFK)badges.push('<span class="badge badge--fk" title="Foreign key — used as fromColumn in a relationship">FK</span>');
-      if(c.isCalculated)badges.push('<span class="badge badge--calc" title="Calculated column">CALC</span>');
-      if(c.isHidden)badges.push('<span class="badge badge--hid-col" title="isHidden:true">HIDDEN</span>');
-      if(slicerSet.has(t.name+'|'+c.name))badges.push('<span class="badge badge--slicer" title="Bound to at least one slicer visual">SLICER</span>');
+      if(c.isKey)badges.push('<span class="badge badge--pk" title="Primary key — isKey:true set in the model">🔑 PK</span>');
+      else if(c.isInferredPK)badges.push('<span class="badge badge--pk-inf" title="Inferred primary key — this column is on the one-side of at least one relationship">🗝 PK</span>');
+      if(c.isFK)badges.push('<span class="badge badge--fk" title="Foreign key — used as fromColumn in a relationship">🔗 FK</span>');
+      if(c.isCalculated)badges.push('<span class="badge badge--calc" title="Calculated column">🧮 CALC</span>');
+      if(c.isHidden)badges.push('<span class="badge badge--hid-col" title="isHidden:true">👁 HIDDEN</span>');
+      if(slicerSet.has(t.name+'|'+c.name))badges.push('<span class="badge badge--slicer" title="Bound to at least one slicer visual">🎚 SLICER</span>');
       const statusClass=c.status==='unused'?'zero':c.status==='indirect'?'low':'good';
       // Relationship column: FK target (outgoing) or incoming PK refs, or both if the column is a bridge
       const parts=[];
