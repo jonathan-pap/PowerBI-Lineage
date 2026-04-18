@@ -180,6 +180,47 @@ function mermaidMeasureLineage(m: ModelMeasure): string {
   return lines.join("\n");
 }
 
+/**
+ * Render a Mermaid star-fragment graph for one fact table: the fact
+ * table itself in the centre, its outgoing-relationship dimensions
+ * arranged around it. Empty when the table has no outgoing
+ * relationships (nothing to draw).
+ *
+ * Only called for fact tables (`classifyTable === "Fact"`). Bridge /
+ * dimension / calc-group / disconnected / auto-date tables skip —
+ * too many topology edge cases with too little reader value.
+ */
+function mermaidTableRelationships(t: TableData): string {
+  const out = (t.relationships || []).filter(r => r.direction === "outgoing");
+  if (out.length === 0) return "";
+
+  // Dedupe by "to" table (a fact may reference the same dimension
+  // through multiple FK columns — shown as one edge with a label
+  // listing the FK column names).
+  const byDim = new Map<string, string[]>();
+  for (const r of out) {
+    if (!byDim.has(r.toTable)) byDim.set(r.toTable, []);
+    byDim.get(r.toTable)!.push(r.fromColumn);
+  }
+
+  const lines: string[] = [];
+  lines.push("```mermaid");
+  lines.push("graph LR");
+  // Unique node id per table — use an index so duplicate names
+  // across the emission don't cause id collisions.
+  lines.push(`  f0("${mmLabel(t.name)}"):::fact`);
+  let i = 1;
+  for (const [dim, fks] of byDim) {
+    const label = fks.length === 1 ? `[${fks[0]}]` : `[${fks.join(", ")}]`;
+    lines.push(`  f0 -- "${mmLabel(label)}" --> d${i}["${mmLabel(dim)}"]:::dim`);
+    i++;
+  }
+  lines.push("  classDef fact fill:#fde4c0,stroke:#b36200,stroke-width:2px");
+  lines.push("  classDef dim  fill:#d1e7dd,stroke:#0a7a3b");
+  lines.push("```");
+  return lines.join("\n");
+}
+
 /** Bucket letter used for A–Z grouping. Non-letter starts go to "#". */
 function bucketLetter(name: string): string {
   const ch = (name.trim().charAt(0) || "").toUpperCase();
@@ -1669,6 +1710,20 @@ export function generateDataDictionaryMd(data: FullData, reportName: string): st
       const extra = tbl.partitions.length > 1 ? ` (+${tbl.partitions.length - 1} more)` : "";
       lines.push(`**Source:** ${esc(p.mode)} · ${esc(p.sourceType)}${loc}${extra}`);
       lines.push("");
+    }
+
+    // Star-fragment Mermaid — fact tables only. Shows this table
+    // plus its outgoing-relationship dimensions. Skip for bridges /
+    // dimensions / calc-groups / disconnected / auto-date — those
+    // topologies don't fit a star shape.
+    if (classifyTable(tbl) === "Fact") {
+      const mermaid = mermaidTableRelationships(tbl);
+      if (mermaid) {
+        lines.push("### Star fragment");
+        lines.push("");
+        lines.push(mermaid);
+        lines.push("");
+      }
     }
 
     // ── Columns ─────────────────────────────────────────────────────────────

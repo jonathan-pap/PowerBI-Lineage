@@ -86,9 +86,44 @@ if (!FIXTURE_EXISTS) {
 
   // ────────────────────────────────────────────────────────────────
   // Stop 5 — per-fact-table star fragments
-  // Deferred assertion — just notes shape here; Stop 5 adds real
-  // content to data-dictionary.md. Placeholder so the test file is
-  // already the home for these checks.
   // ────────────────────────────────────────────────────────────────
-  void generateDataDictionaryMd;
+
+  const datadict = generateDataDictionaryMd(data, "Health_and_Safety");
+
+  test("data-dictionary.md — fact tables produce star-fragment mermaid blocks", () => {
+    // H&S has 4 fact tables with outgoing relationships:
+    //   fct_health_safety, fct_injuries, fct_psif, fct_trcf_targets
+    // Plus some "Fact"-classified tables that have no outgoing rels
+    // (rare but possible — they'd emit no block). Expect ≥3 blocks.
+    const blocks = datadict.match(/### Star fragment\n\n```mermaid\n[\s\S]+?```/g) || [];
+    assert.ok(blocks.length >= 3,
+      `expected ≥3 star-fragment mermaid blocks in data-dictionary.md, found ${blocks.length}`);
+  });
+
+  test("data-dictionary.md — star-fragment blocks use fact/dim classDef", () => {
+    const m = datadict.match(/### Star fragment\n\n```mermaid\n([\s\S]+?)```/);
+    assert.ok(m, "no star fragment block to sample");
+    const body = m![1];
+    assert.match(body, /^graph LR/m,        "star fragment must start with `graph LR`");
+    assert.match(body, /f0\(/,              "missing centre fact node f0");
+    assert.match(body, /:::fact/,           "missing fact class on centre node");
+    assert.match(body, /:::dim/,            "missing dim class on leaf nodes");
+    assert.match(body, /classDef fact /,    "missing classDef fact");
+    assert.match(body, /classDef dim /,     "missing classDef dim");
+  });
+
+  test("data-dictionary.md — dimension tables do NOT emit a star fragment", () => {
+    // Pick a known dimension (dim_country) and assert its table
+    // section doesn't contain "### Star fragment".
+    const headerRx = /^## dim_country$/m;
+    const hi = datadict.search(headerRx);
+    assert.ok(hi >= 0, "dim_country section not found in data-dictionary");
+    // The section ends at the next "## " heading. Slice between.
+    const nextRx = /\n## \S/m;
+    const tailStart = hi + 10;
+    const tailHi = datadict.slice(tailStart).search(nextRx);
+    const section = datadict.slice(hi, tailStart + (tailHi > 0 ? tailHi : datadict.length - tailStart));
+    assert.ok(!section.includes("### Star fragment"),
+      "dim_country (a dimension) emitted a star-fragment block — should only fire for facts");
+  });
 }
