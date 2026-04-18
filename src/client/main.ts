@@ -24,15 +24,10 @@
 let activeMd="model";
 let mdViewMode="rendered";
 
-function escHtml(s){
-  return String(s==null?"":s)
-    .replace(/&/g,"&amp;")
-    .replace(/</g,"&lt;")
-    .replace(/>/g,"&gt;")
-    .replace(/"/g,"&quot;")
-    .replace(/'/g,"&#39;");
-}
-function escAttr(s){return escHtml(s);}
+// escHtml, escAttr, sc, uc live in src/client/render/escape.ts now
+// (Stop 5 pass 2). They're compiled as a separate script file and
+// concatenated into the same inline <script> before this one, so
+// the top-level function declarations are already in scope.
 
 function toggleTheme(){
   var cur=document.documentElement.getAttribute('data-theme')||'dark';
@@ -170,7 +165,7 @@ document.addEventListener('input', function(e){
   }
 });
 
-function uc(n){return n===0?"zero":n<=1?"low":"good"}
+// uc — see src/client/render/escape.ts
 
 function renderSummary(){
   const t=DATA.totals;
@@ -255,7 +250,7 @@ function switchTab(id){
   if(id==="functions"||id==="calcgroups"||id==="lineage")addCopyButtons();
 }
 
-function sc(s){return s==='unused'?'unused':s==='indirect'?'indirect':''}
+// sc — see src/client/render/escape.ts
 function renderMeasures(){
   let items=[...DATA.measures];const s=sortState.measures;
   items.sort((a,b)=>{let av=a[s.key],bv=b[s.key];if(typeof av==='string')return s.desc?bv.localeCompare(av):av.localeCompare(bv);return s.desc?bv-av:av-bv;});

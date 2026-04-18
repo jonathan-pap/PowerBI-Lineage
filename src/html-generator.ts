@@ -148,8 +148,9 @@ function readCompiledClientFile(rel: string): string {
  */
 function readCompiledClient(): string {
   const modules = [
-    "render/md.js",   // Stop 5 pass 2 — markdown renderer
-    "main.js",        // still the big one; gets smaller every pass
+    "render/escape.js",  // Stop 5 pass 2 — escHtml, escAttr, sc, uc (no deps)
+    "render/md.js",      // Stop 5 pass 2 — markdown renderer (uses escHtml)
+    "main.js",           // still the big one; gets smaller every pass
   ];
   return modules.map(readCompiledClientFile).join("\n");
 }
