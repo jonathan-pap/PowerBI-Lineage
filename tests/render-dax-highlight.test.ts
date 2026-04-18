@@ -104,12 +104,12 @@ test("DAX highlighter — client wiring calls highlightDaxBlocks at the right mo
     "highlightDaxBlocks client helper missing"
   );
   assert.ok(
-    /function addCopyButtons\(\)\{[\s\S]*highlightDaxBlocks\(\)/m.test(html),
+    /function addCopyButtons\(\)\s*\{[\s\S]{0,200}highlightDaxBlocks\(\)/m.test(html),
     "addCopyButtons does not call highlightDaxBlocks first"
   );
   // renderDocs should highlight after mdRender to pick up ```dax fences.
   assert.ok(
-    /rendered\.innerHTML\s*=[\s\S]*highlightDaxBlocks\(\);/m.test(html),
+    /rendered\.innerHTML\s*=[\s\S]*?highlightDaxBlocks\(\);/m.test(html),
     "renderDocs does not highlight after markdown render"
   );
 });
