@@ -227,8 +227,15 @@ export function buildFullData(reportPath: string): FullData {
   // so every downstream consumer (dashboard lineage card, MD export,
   // Quality rules) can read a structured `externalProxy` field
   // instead of regexing `daxExpression` each time.
+  //
+  // DAX string literals escape an embedded double-quote by doubling
+  // it (`"foo""bar"` = the string `foo"bar`), so the captured groups
+  // allow `""` inside the match and we un-double at the end. The
+  // previous [^"]* pattern silently truncated any measure whose
+  // remote name contained a quoted character.
   const EXTERNAL_MEASURE_RX =
-    /EXTERNALMEASURE\s*\(\s*"([^"]*)"\s*,\s*(\w+)\s*,\s*"DirectQuery to AS - ([^"]+)"\s*\)/i;
+    /EXTERNALMEASURE\s*\(\s*"((?:[^"]|"")*)"\s*,\s*(\w+)\s*,\s*"DirectQuery to AS - ((?:[^"]|"")+)"\s*\)/i;
+  const undoubleDaxQuotes = (s: string): string => s.replace(/""/g, '"');
 
   // Build measures
   const measures: ModelMeasure[] = rawModel.measures.map(m => {
@@ -250,10 +257,13 @@ export function buildFullData(reportPath: string): FullData {
     const extMatch = m.daxExpression.match(EXTERNAL_MEASURE_RX);
     const externalProxy = extMatch
       ? {
-          remoteName: extMatch[1],
+          remoteName: undoubleDaxQuotes(extMatch[1]),
           type: extMatch[2].toUpperCase(),
-          externalModel: extMatch[3],
-          cluster: expressionClusterByName.get(`DirectQuery to AS - ${extMatch[3]}`) ?? null,
+          externalModel: undoubleDaxQuotes(extMatch[3]),
+          cluster:
+            expressionClusterByName.get(
+              `DirectQuery to AS - ${undoubleDaxQuotes(extMatch[3])}`,
+            ) ?? null,
         }
       : null;
 
