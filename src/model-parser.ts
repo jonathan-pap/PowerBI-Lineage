@@ -46,10 +46,23 @@ export interface RawPartition {
   sourceLocation: string;
 }
 
+export interface RawHierarchyLevel {
+  name: string;
+  column: string;
+  description: string;
+}
+
+export interface RawHierarchy {
+  name: string;
+  description: string;
+  levels: RawHierarchyLevel[];
+}
+
 export interface RawTable {
   name: string;
   description: string;
   partitions: RawPartition[];
+  hierarchies: RawHierarchy[];
 }
 
 /** Top-level M expressions in expressions.tmdl — typically parameters. */
@@ -91,7 +104,7 @@ export interface ModelProperties {
 export interface RawModel {
   tables: RawTable[];
   measures: Array<{ name: string; table: string; daxExpression: string; formatString: string; description: string; displayFolder: string }>;
-  columns: Array<{ name: string; table: string; dataType: string; isKey: boolean; isHidden: boolean; isCalculated: boolean; description: string; displayFolder: string }>;
+  columns: Array<{ name: string; table: string; dataType: string; isKey: boolean; isHidden: boolean; isCalculated: boolean; description: string; displayFolder: string; summarizeBy: string; sortByColumn: string; dataCategory: string; formatString: string }>;
   relationships: ModelRelationship[];
   functions: ModelFunction[];
   calcGroups: ModelCalcGroup[];
@@ -383,6 +396,83 @@ function extractTmdlPartitions(content: string): RawPartition[] {
  * Captures preceding /// doc comments, the value (literal or first M line),
  * and any `meta [...]` block on the declaration line.
  */
+/**
+ * Pull all hierarchy definitions out of a single table TMDL file.
+ * Example:
+ *   hierarchy Year-Quarter-Month
+ *     lineageTag: ...
+ *     /// Top level. Calendar year.
+ *     level Year
+ *       lineageTag: ...
+ *       column: Year
+ *     ...
+ */
+function extractTmdlHierarchies(content: string): RawHierarchy[] {
+  const lines = content.split("\n");
+  const out: RawHierarchy[] = [];
+  let pendingDoc = "";     // /// comments waiting to be claimed by the next hierarchy or level
+  let current: RawHierarchy | null = null;
+  let currentLevel: RawHierarchyLevel | null = null;
+
+  const flushLevel = () => {
+    if (current && currentLevel) current.levels.push(currentLevel);
+    currentLevel = null;
+  };
+  const flushHierarchy = () => {
+    flushLevel();
+    if (current) out.push(current);
+    current = null;
+  };
+
+  for (const line of lines) {
+    const tabCount = line.search(/[^\t]/);
+    const trimmed = line.trim();
+
+    // Doc comments always go to `pendingDoc` — consumed by whatever declaration follows.
+    if (trimmed.startsWith("///")) {
+      pendingDoc += (pendingDoc ? " " : "") + trimmed.replace(/^\/\/\/\s*/, "");
+      continue;
+    }
+
+    // Start of hierarchy at depth 1.
+    if (tabCount === 1 && /^hierarchy\s+/.test(trimmed)) {
+      flushHierarchy();
+      const name = trimmed.replace(/^hierarchy\s+/, "").replace(/^'(.*)'$/, "$1").trim();
+      current = { name, description: pendingDoc, levels: [] };
+      pendingDoc = "";
+      continue;
+    }
+
+    // Anything else at depth <= 1 ends the current hierarchy block (next sibling).
+    if (tabCount <= 1 && trimmed.length > 0) {
+      flushHierarchy();
+      pendingDoc = "";
+      continue;
+    }
+
+    if (!current) continue;
+
+    // Level declaration at depth 2 — start new level, close previous.
+    if (tabCount === 2 && /^level\s+/.test(trimmed)) {
+      flushLevel();
+      const name = trimmed.replace(/^level\s+/, "").replace(/^'(.*)'$/, "$1").trim();
+      currentLevel = { name, column: "", description: pendingDoc };
+      pendingDoc = "";
+      continue;
+    }
+
+    // Depth-3 properties on the current level.
+    if (tabCount === 3 && currentLevel && trimmed.startsWith("column:")) {
+      currentLevel.column = trimmed.replace("column:", "").trim().replace(/^'(.*)'$/, "$1");
+      continue;
+    }
+
+    // Ignore annotations / lineageTag etc. — they don't contribute to the public shape.
+  }
+  flushHierarchy();
+  return out;
+}
+
 function parseTmdlExpressions(modelPath: string): RawExpression[] {
   const file = path.join(modelPath, "definition", "expressions.tmdl");
   if (!fs.existsSync(file)) return [];
@@ -564,12 +654,13 @@ function parseTmdlModel(modelPath: string): RawModel {
   for (const file of fs.readdirSync(tablesDir).filter(f => f.endsWith(".tmdl"))) {
     const content = fs.readFileSync(path.join(tablesDir, file), "utf8");
     const lines = content.split("\n");
-    // Extract partition (datasource) info up-front from the same file content.
+    // Extract partition (datasource) info and hierarchy definitions up-front.
     const filePartitions = extractTmdlPartitions(content);
+    const fileHierarchies = extractTmdlHierarchies(content);
     let tableName = "";
     let pendingDocComment = "";  // Accumulates /// lines to claim as description of the next table/column/measure
     let currentMeasure: { name: string; table: string; daxExpression: string; formatString: string; description: string; displayFolder: string } | null = null;
-    let currentColumn: { name: string; table: string; dataType: string; isKey: boolean; isHidden: boolean; isCalculated: boolean; description: string; displayFolder: string } | null = null;
+    let currentColumn: { name: string; table: string; dataType: string; isKey: boolean; isHidden: boolean; isCalculated: boolean; description: string; displayFolder: string; summarizeBy: string; sortByColumn: string; dataCategory: string; formatString: string } | null = null;
     let collectingExpression = false;
     let expressionLines: string[] = [];
 
@@ -603,7 +694,7 @@ function parseTmdlModel(modelPath: string): RawModel {
       // Table name (no leading tabs)
       if (/^table\s+/.test(trimmed)) {
         tableName = trimmed.replace(/^table\s+/, "").replace(/^'(.*)'$/, "$1").trim();
-        tables.push({ name: tableName, description: pendingDocComment, partitions: filePartitions });
+        tables.push({ name: tableName, description: pendingDocComment, partitions: filePartitions, hierarchies: fileHierarchies });
         pendingDocComment = "";
         continue;
       }
@@ -646,7 +737,7 @@ function parseTmdlModel(modelPath: string): RawModel {
         const colEq = colRest.indexOf("=");
         const colName = (colEq > 0 ? colRest.substring(0, colEq) : colRest).trim().replace(/^'(.*)'$/, "$1");
         const isCalculated = colEq > 0;
-        currentColumn = { name: colName, table: tableName, dataType: "string", isKey: false, isHidden: false, isCalculated, description: pendingDocComment, displayFolder: "" };
+        currentColumn = { name: colName, table: tableName, dataType: "string", isKey: false, isHidden: false, isCalculated, description: pendingDocComment, displayFolder: "", summarizeBy: "", sortByColumn: "", dataCategory: "", formatString: "" };
         columns.push(currentColumn);
         pendingDocComment = "";
         continue;
@@ -767,7 +858,7 @@ function parseTmdlModel(modelPath: string): RawModel {
         const propLine = trimmed.trim();
 
         // Known TMDL property keywords that terminate expression collection
-        const tmdlProps = ["formatString:", "lineageTag:", "summarizeBy:", "dataType:", "sourceColumn:", "displayFolder:", "description:", "isHidden:", "isKey:", "sortByColumn:", "isNameInferred:", "isDataTypeInferred:"];
+        const tmdlProps = ["formatString:", "lineageTag:", "summarizeBy:", "dataType:", "sourceColumn:", "displayFolder:", "description:", "isHidden:", "isKey:", "sortByColumn:", "dataCategory:", "isNameInferred:", "isDataTypeInferred:"];
         const isProp = tmdlProps.some(p => propLine.startsWith(p));
 
         if (isProp) {
@@ -778,8 +869,10 @@ function parseTmdlModel(modelPath: string): RawModel {
             expressionLines = [];
           }
 
-          if (propLine.startsWith("formatString:") && currentMeasure) {
-            currentMeasure.formatString = propLine.replace("formatString:", "").trim();
+          if (propLine.startsWith("formatString:")) {
+            const fmt = propLine.replace("formatString:", "").trim().replace(/^['"]|['"]$/g, "");
+            if (currentMeasure) currentMeasure.formatString = fmt;
+            else if (currentColumn) currentColumn.formatString = fmt;
           }
           if (propLine.startsWith("dataType:") && currentColumn) {
             currentColumn.dataType = propLine.replace("dataType:", "").trim();
@@ -789,6 +882,15 @@ function parseTmdlModel(modelPath: string): RawModel {
           }
           if (propLine.startsWith("isHidden:") && currentColumn) {
             currentColumn.isHidden = propLine.replace("isHidden:", "").trim().toLowerCase() === "true";
+          }
+          if (propLine.startsWith("summarizeBy:") && currentColumn) {
+            currentColumn.summarizeBy = propLine.replace("summarizeBy:", "").trim().replace(/^['"]|['"]$/g, "");
+          }
+          if (propLine.startsWith("sortByColumn:") && currentColumn) {
+            currentColumn.sortByColumn = propLine.replace("sortByColumn:", "").trim().replace(/^['"]|['"]$/g, "");
+          }
+          if (propLine.startsWith("dataCategory:") && currentColumn) {
+            currentColumn.dataCategory = propLine.replace("dataCategory:", "").trim().replace(/^['"]|['"]$/g, "");
           }
           if (propLine.startsWith("description:")) {
             const desc = propLine.replace("description:", "").trim().replace(/^['"]|['"]$/g, "");
@@ -862,7 +964,17 @@ function parseBimFile(bimPath: string): RawModel {
         sourceLocation,
       };
     });
-    tables.push({ name: tableName, description: joinDesc(table.description), partitions: tablePartitions });
+    // Hierarchies defined on the table.
+    const tableHierarchies: RawHierarchy[] = (table.hierarchies || []).map((h: any) => ({
+      name: h.name || "",
+      description: joinDesc(h.description),
+      levels: (h.levels || []).map((lv: any) => ({
+        name: lv.name || "",
+        column: lv.column || "",
+        description: joinDesc(lv.description),
+      })),
+    }));
+    tables.push({ name: tableName, description: joinDesc(table.description), partitions: tablePartitions, hierarchies: tableHierarchies });
     for (const m of table.measures || []) {
       measures.push({
         name: m.name,
@@ -884,6 +996,10 @@ function parseBimFile(bimPath: string): RawModel {
         isCalculated: c.type === "calculated",
         description: joinDesc(c.description),
         displayFolder: typeof c.displayFolder === "string" ? c.displayFolder : "",
+        summarizeBy: typeof c.summarizeBy === "string" ? c.summarizeBy : "",
+        sortByColumn: typeof c.sortByColumn === "string" ? c.sortByColumn : "",
+        dataCategory: typeof c.dataCategory === "string" ? c.dataCategory : "",
+        formatString: typeof c.formatString === "string" ? c.formatString : "",
       });
     }
   }

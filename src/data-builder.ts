@@ -1,8 +1,9 @@
-import { findSemanticModelPath, parseModel, ModelRelationship, ModelFunction, ModelCalcGroup, RawExpression, RawPartition, ModelProperties } from "./model-parser.js";
+import { findSemanticModelPath, parseModel, ModelRelationship, ModelFunction, ModelCalcGroup, RawExpression, RawPartition, ModelProperties, RawHierarchy } from "./model-parser.js";
 import { scanReportBindings } from "./report-scanner.js";
 
 export type ModelExpression = RawExpression;
 export type PartitionInfo = RawPartition;
+export type TableHierarchy = RawHierarchy;
 export type { ModelProperties } from "./model-parser.js";
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -38,6 +39,16 @@ export interface ModelColumn {
   table: string;
   dataType: string;
   description: string;
+  /** Per-column `displayFolder:` — empty string when not set. */
+  displayFolder: string;
+  /** Default aggregation: "none" | "sum" | "average" | "min" | "max" | "count" | "countRows" | "" (unset). */
+  summarizeBy: string;
+  /** Column referenced via `sortByColumn:` — empty when not set. */
+  sortByColumn: string;
+  /** Semantic category — "ImageUrl" | "WebUrl" | "StateOrProvince" | "City" | "Country" | …  Empty when not set. */
+  dataCategory: string;
+  /** Column-level format string (for numeric / date columns). Empty when not set. */
+  formatString: string;
   isSlicerField: boolean;
   isKey: boolean;
   isHidden: boolean;
@@ -52,6 +63,11 @@ export interface TableColumnData {
   name: string;
   dataType: string;
   description: string;
+  summarizeBy: string;
+  sortByColumn: string;
+  dataCategory: string;
+  formatString: string;
+  displayFolder: string;
   isKey: boolean;
   isInferredPK: boolean;
   isHidden: boolean;
@@ -86,6 +102,8 @@ export interface TableData {
   relationships: TableRelationshipRef[];
   /** Datasource partitions for this table — usually one. Empty for calc tables. */
   partitions: PartitionInfo[];
+  /** Hierarchies declared on this table. */
+  hierarchies: TableHierarchy[];
 }
 
 export interface PageData {
@@ -110,6 +128,10 @@ export interface FullData {
   tables: TableData[];
   pages: PageData[];
   hiddenPages: string[];
+  /** All pages in the report, including those with no data-field bindings
+   *  (e.g., text-only pages, blank pages, tooltip/drillthrough pages that
+   *  weren't populated yet). Needed so the Pages tab can show the full list. */
+  allPages: { name: string; hidden: boolean; visualCount: number }[];
   /** Top-level M expressions / parameters from expressions.tmdl or model.bim. */
   expressions: ModelExpression[];
   /** Compatibility level read from database.tmdl / model.bim, when available. */
@@ -157,7 +179,7 @@ export function buildFullData(reportPath: string): FullData {
   const modelPath = findSemanticModelPath(reportPath);
   const rawModel = parseModel(modelPath);
   const allMeasureNames = rawModel.measures.map(m => m.name);
-  const { bindings, pageCount, visualCount, hiddenPages } = scanReportBindings(reportPath);
+  const { bindings, pageCount, visualCount, hiddenPages, allPages } = scanReportBindings(reportPath);
 
   // Build measures
   const measures: ModelMeasure[] = rawModel.measures.map(m => {
@@ -212,6 +234,11 @@ export function buildFullData(reportPath: string): FullData {
       table: c.table,
       dataType: c.dataType,
       description: c.description,
+      displayFolder: c.displayFolder || "",
+      summarizeBy: c.summarizeBy || "",
+      sortByColumn: c.sortByColumn || "",
+      dataCategory: c.dataCategory || "",
+      formatString: c.formatString || "",
       isSlicerField: dedupedUsedIn.some(u => SLICER_TYPES.has(u.visualType)),
       isKey: c.isKey,
       isHidden: c.isHidden,
@@ -314,9 +341,11 @@ export function buildFullData(reportPath: string): FullData {
   // Build quick lookups: table description and table partitions.
   const tableDescByName = new Map<string, string>();
   const tablePartitionsByName = new Map<string, PartitionInfo[]>();
+  const tableHierarchiesByName = new Map<string, TableHierarchy[]>();
   for (const rt of rawModel.tables) {
     tableDescByName.set(rt.name, rt.description || "");
     tablePartitionsByName.set(rt.name, rt.partitions || []);
+    tableHierarchiesByName.set(rt.name, rt.hierarchies || []);
   }
   // Calc groups also expose descriptions on their own entity.
   for (const cg of rawModel.calcGroups) {
@@ -348,6 +377,11 @@ export function buildFullData(reportPath: string): FullData {
           name: c.name,
           dataType: c.dataType || "string",
           description: c.description || "",
+          summarizeBy: c.summarizeBy,
+          sortByColumn: c.sortByColumn,
+          dataCategory: c.dataCategory,
+          formatString: c.formatString,
+          displayFolder: c.displayFolder,
           isKey: c.isKey,
           isInferredPK: incomingRefs.length > 0,
           isHidden: c.isHidden,
@@ -391,24 +425,49 @@ export function buildFullData(reportPath: string): FullData {
       measures: tableMeasures,
       relationships: tableRels,
       partitions: tablePartitionsByName.get(tableName) || [],
+      hierarchies: tableHierarchiesByName.get(tableName) || [],
     };
   });
 
-  const pages: PageData[] = [...pageMap.values()].map(p => {
-    const visuals = [...p.visuals.values()];
-    const typeCounts: Record<string, number> = {};
-    visuals.forEach(v => { typeCounts[v.type] = (typeCounts[v.type] || 0) + 1; });
+  // Build a PageData entry for every page in the report — including pages
+  // with zero data-field bindings (pure text/shape/image pages, empty
+  // tooltip/drillthrough scaffolds, etc.). Pages with bindings come from
+  // `pageMap`; pages without bindings get a zero-binding stub from `allPages`
+  // so they still appear in the Pages tab with the correct visualCount.
+  const pages: PageData[] = allPages.map(meta => {
+    const p = pageMap.get(meta.name);
+    if (p) {
+      const visuals = [...p.visuals.values()];
+      const typeCounts: Record<string, number> = {};
+      visuals.forEach(v => { typeCounts[v.type] = (typeCounts[v.type] || 0) + 1; });
+      return {
+        name: p.name,
+        // Prefer the true visual count from the report scanner — the binding
+        // pass only sees visuals with data refs, which undercounts text/shape
+        // visuals on otherwise-populated pages.
+        visualCount: meta.visualCount,
+        measures: [...p.measures],
+        columns: [...p.columns],
+        measureCount: p.measures.size,
+        columnCount: p.columns.size,
+        slicerCount: typeCounts["slicer"] || 0,
+        typeCounts,
+        coverage: rawModel.measures.length > 0 ? Math.round(p.measures.size / rawModel.measures.length * 100) : 0,
+        visuals,
+      };
+    }
+    // Page has no data-bound visuals — emit an empty stub so it still lists.
     return {
-      name: p.name,
-      visualCount: visuals.length,
-      measures: [...p.measures],
-      columns: [...p.columns],
-      measureCount: p.measures.size,
-      columnCount: p.columns.size,
-      slicerCount: typeCounts["slicer"] || 0,
-      typeCounts,
-      coverage: rawModel.measures.length > 0 ? Math.round(p.measures.size / rawModel.measures.length * 100) : 0,
-      visuals,
+      name: meta.name,
+      visualCount: meta.visualCount,
+      measures: [],
+      columns: [],
+      measureCount: 0,
+      columnCount: 0,
+      slicerCount: 0,
+      typeCounts: {},
+      coverage: 0,
+      visuals: [],
     };
   });
 
@@ -421,6 +480,7 @@ export function buildFullData(reportPath: string): FullData {
     tables,
     pages,
     hiddenPages,
+    allPages,
     expressions: rawModel.expressions,
     compatibilityLevel: rawModel.compatibilityLevel,
     modelProperties: rawModel.modelProperties,
