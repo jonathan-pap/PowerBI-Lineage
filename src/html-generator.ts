@@ -72,26 +72,47 @@ const DASHBOARD_CSS = readStyles();
 //   dist/html-generator.js        -> ./client/main.js
 //   dist-test/src/html-generator.js -> ./client/main.js  (same layout)
 // ─────────────────────────────────────────────────────────────────────
-function readCompiledClient(): string {
+/**
+ * Read one compiled client file (relative path under dist/client/)
+ * and return its body with the tsc-inserted `export {};` stripped.
+ *
+ * TypeScript auto-adds the export when a .ts file references ambient
+ * declarations (our src/client/globals.d.ts) or stdlib types — this
+ * would be a syntax error inside a classic `<script>` block so we
+ * strip it unconditionally.
+ */
+function readCompiledClientFile(rel: string): string {
   const candidates = [
-    path.resolve(__dirname_html, "client", "main.js"),
-    path.resolve(__dirname_html, "..", "client", "main.js"),
+    path.resolve(__dirname_html, "client", rel),
+    path.resolve(__dirname_html, "..", "client", rel),
   ];
   for (const p of candidates) {
     try {
-      let body = fs.readFileSync(p, "utf8");
-      // TypeScript auto-adds `export {};` when a .ts file has only
-      // ambient refs (which our globals.d.ts triggers). Strip it —
-      // the inlined `<script>` is a classic script, not a module,
-      // and `export` there is a syntax error.
-      body = body.replace(/\nexport\s*\{\s*\};?\s*$/s, "\n");
-      return body;
+      return fs.readFileSync(p, "utf8").replace(/\nexport\s*\{\s*\};?\s*$/s, "\n");
     } catch { /* try next */ }
   }
   throw new Error(
-    "compiled client bundle not found — run `npm run build` first. " +
-    "Searched: " + candidates.join(", ")
+    `compiled client file not found: ${rel} — run \`npm run build\` first. ` +
+    `Searched: ${candidates.join(", ")}`,
   );
+}
+
+/**
+ * Concatenate every compiled client module into the single inline
+ * <script> body. Order matters: leaf modules (no dependencies) come
+ * first so their top-level function declarations are available when
+ * main.js's code runs.
+ *
+ * Each entry here is a mini-module carved out of the monolithic
+ * main.ts during Stop 5 pass 2+. The list grows as more carves land;
+ * the list is the manifest.
+ */
+function readCompiledClient(): string {
+  const modules = [
+    "render/md.js",   // Stop 5 pass 2 — markdown renderer
+    "main.js",        // still the big one; gets smaller every pass
+  ];
+  return modules.map(readCompiledClientFile).join("\n");
 }
 const CLIENT_JS = readCompiledClient();
 
