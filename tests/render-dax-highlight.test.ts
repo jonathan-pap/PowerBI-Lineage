@@ -68,6 +68,32 @@ test("DAX highlighter — theme bridge maps --dax-* onto our --clr-* palette", (
   );
 });
 
+test("DAX highlighter — named variables and measure refs use DISTINCT tokens", () => {
+  const html = generateHTML(minimalData(), "t", "", "", "", "", "", "", "0");
+  // VAR _rows = … RETURN _rows should render in a different colour
+  // from [Measure Name]. Collapsing them back onto the same --clr-*
+  // slot makes DAX harder to read. The design system has a dedicated
+  // --clr-variable token (orange) specifically for this.
+  assert.ok(
+    /--dax-variable:\s*var\(--clr-variable\)/.test(html),
+    "--dax-variable is not wired to --clr-variable"
+  );
+  assert.ok(
+    /--dax-measure:\s*var\(--clr-measure\)/.test(html),
+    "--dax-measure is not wired to --clr-measure"
+  );
+  // And the underlying --clr-* tokens must themselves be different.
+  const varMatch = html.match(/--clr-variable:\s*(#[0-9A-Fa-f]+)/);
+  const measureMatch = html.match(/--clr-measure:\s*(#[0-9A-Fa-f]+)/);
+  assert.ok(varMatch, "--clr-variable not declared");
+  assert.ok(measureMatch, "--clr-measure not declared");
+  assert.notEqual(
+    varMatch![1].toLowerCase(),
+    measureMatch![1].toLowerCase(),
+    "--clr-variable and --clr-measure resolved to the same colour"
+  );
+});
+
 test("DAX highlighter — client wiring calls highlightDaxBlocks at the right moments", () => {
   const html = generateHTML(minimalData(), "t", "", "", "", "", "", "", "0");
   // addCopyButtons() should delegate to highlightDaxBlocks so the

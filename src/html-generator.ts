@@ -92,6 +92,7 @@ export function generateHTML(
     --clr-slicer:     #EC4899;  /* pink    — slicer fields           */
     --clr-unused:     #EF4444;  /* red     — unused / danger         */
     --clr-indirect:   #94A3B8;  /* slate   — indirect (neutral)      */
+    --clr-variable:   #F97316;  /* orange  — DAX named variables     */
 
     /* Soft (≈12%) and mid (≈30%) alphas paired with each category colour.
        Kept as rgba literals because var() can't participate in channel-level
@@ -107,6 +108,7 @@ export function generateHTML(
     --clr-slicer-soft:    rgba(236,72,153,.12);  --clr-slicer-mid:    rgba(236,72,153,.30);
     --clr-unused-soft:    rgba(239,68,68,.12);   --clr-unused-mid:    rgba(239,68,68,.30);
     --clr-indirect-soft:  rgba(148,163,184,.12); --clr-indirect-mid:  rgba(148,163,184,.30);
+    --clr-variable-soft:  rgba(249,115,22,.12);  --clr-variable-mid:  rgba(249,115,22,.30);
 
     /* ─── Typography scale ──────────────────────────────────────────────── */
     --fs-xs:10px;  --fs-sm:11px;  --fs-md:13px;  --fs-lg:14px;
@@ -148,6 +150,7 @@ export function generateHTML(
     --clr-slicer:     #BE185D;
     --clr-unused:     #B91C1C;
     --clr-indirect:   #475569;
+    --clr-variable:   #C2410C;  /* orange-700 — AA contrast on light canvas */
     --clr-measure-soft:   rgba(180,83,9,.10);    --clr-measure-mid:   rgba(180,83,9,.30);
     --clr-column-soft:    rgba(29,78,216,.08);   --clr-column-mid:    rgba(29,78,216,.28);
     --clr-source-soft:    rgba(4,120,87,.10);    --clr-source-mid:    rgba(4,120,87,.28);
@@ -159,6 +162,7 @@ export function generateHTML(
     --clr-slicer-soft:    rgba(190,24,93,.08);   --clr-slicer-mid:    rgba(190,24,93,.28);
     --clr-unused-soft:    rgba(185,28,28,.10);   --clr-unused-mid:    rgba(185,28,28,.30);
     --clr-indirect-soft:  rgba(71,85,105,.10);   --clr-indirect-mid:  rgba(71,85,105,.25);
+    --clr-variable-soft:  rgba(194,65,12,.10);   --clr-variable-mid:  rgba(194,65,12,.28);
   }
   body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(--text-body);min-height:100vh;padding-bottom:48px;position:relative;overflow-x:hidden;transition:background .2s,color .2s}
 
@@ -497,7 +501,7 @@ export function generateHTML(
     --dax-comment:   var(--text-fainter);
     --dax-keyword:   var(--clr-upstream);
     --dax-function:  var(--clr-function);
-    --dax-variable:  var(--clr-measure);
+    --dax-variable:  var(--clr-variable);  /* orange — named VARs + _prefixed idents */
     --dax-measure:   var(--clr-measure);
     --dax-ref:       var(--clr-source);
     --dax-string:    var(--clr-success);
