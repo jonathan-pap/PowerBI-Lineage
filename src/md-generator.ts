@@ -106,6 +106,80 @@ function adoSlug(heading: string): string {
 }
 export { adoSlug };
 
+/**
+ * Escape a string for use as a Mermaid node LABEL (inside "quotes").
+ * Mermaid is stricter than Markdown — double quotes and backticks
+ * inside labels break parsing even when they'd be fine in MD.
+ */
+function mmLabel(s: string): string {
+  return String(s).replace(/"/g, "\\\"").replace(/\n/g, " ").replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Truncate a Mermaid node label so a long visual title or DAX
+ * expression doesn't distort the whole graph. Mermaid auto-wraps
+ * long labels but layouts get weird past ~40 chars.
+ */
+function mmTrunc(s: string, max = 40): string {
+  const t = String(s);
+  return t.length > max ? t.substring(0, max - 1) + "…" : t;
+}
+
+/**
+ * Render a Mermaid lineage graph for one measure: upstream measures
+ * on the left, the measure itself in the centre, downstream visuals
+ * on the right. Returns an empty string when there's nothing to draw
+ * (no deps either way and no usage) — caller should skip emission.
+ *
+ * Node ID scheme is local to this block (m0 for current, m1..mN for
+ * upstream, v1..vN for downstream visuals) so multiple graphs in the
+ * same doc don't collide.
+ *
+ * Downstream visuals are de-duplicated by title and capped at 12 with
+ * a "+N more" node so the graph stays readable on dense reports.
+ */
+function mermaidMeasureLineage(m: ModelMeasure): string {
+  const upstream = m.daxDependencies ?? [];
+  const downstream = m.usedIn ?? [];
+  const downByTitle = new Map<string, { title: string; type: string }>();
+  for (const u of downstream) {
+    const key = u.visualTitle || u.visualType || u.visualId;
+    if (!downByTitle.has(key)) downByTitle.set(key, { title: key, type: u.visualType });
+  }
+  const downVisuals = [...downByTitle.values()];
+  if (upstream.length === 0 && downVisuals.length === 0) return "";
+
+  const MAX_VISUALS = 12;
+  const shown = downVisuals.slice(0, MAX_VISUALS);
+  const overflow = downVisuals.length - shown.length;
+
+  const lines: string[] = [];
+  lines.push("```mermaid");
+  lines.push("graph LR");
+  // Upstream measures
+  upstream.forEach((dep, i) => {
+    lines.push(`  m${i + 1}["${mmLabel(dep)}"]:::measure --> m0`);
+  });
+  // Current measure (always centre)
+  lines.push(`  m0("${mmLabel(m.name)}"):::current`);
+  // Downstream visuals
+  shown.forEach((v, i) => {
+    const label = mmTrunc(`${v.title}${v.type && v.type !== v.title ? " · " + v.type : ""}`);
+    lines.push(`  m0 --> v${i + 1}["${mmLabel(label)}"]:::visual`);
+  });
+  if (overflow > 0) {
+    lines.push(`  m0 --> vMore["+${overflow} more visual${overflow === 1 ? "" : "s"}"]:::more`);
+  }
+  // Styling — muted pastel fills so the graph stays subtle in both
+  // dashboard + ADO Wiki themes.
+  lines.push("  classDef current fill:#fff3b3,stroke:#b38f00,stroke-width:2px");
+  lines.push("  classDef measure fill:#fde4c0,stroke:#b36200");
+  lines.push("  classDef visual  fill:#d1e7dd,stroke:#0a7a3b");
+  lines.push("  classDef more    fill:#eee,stroke:#888,color:#555");
+  lines.push("```");
+  return lines.join("\n");
+}
+
 /** Bucket letter used for A–Z grouping. Non-letter starts go to "#". */
 function bucketLetter(name: string): string {
   const ch = (name.trim().charAt(0) || "").toUpperCase();
@@ -804,6 +878,19 @@ export function generateMeasuresMd(data: FullData, reportName: string): string {
       }
       if (m.description) {
         lines.push(`> ${m.description.replace(/\n/g, " ")}`);
+        lines.push("");
+      }
+      // Lineage graph: upstream measures → this measure → downstream
+      // visuals. Emits a mermaid code block when the measure has
+      // either dependencies or usage; otherwise skipped (no signal
+      // to render). Mermaid renders natively in ADO Wiki + GitHub;
+      // the dashboard falls back to rendering the source as a code
+      // block (acceptable — the text lists below cover the same data).
+      const mermaid = mermaidMeasureLineage(m);
+      if (mermaid) {
+        lines.push(`**Lineage**`);
+        lines.push("");
+        lines.push(mermaid);
         lines.push("");
       }
       if (m.daxDependencies.length > 0) {
