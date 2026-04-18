@@ -154,6 +154,22 @@ document.addEventListener('click', function(e){
   }
 });
 
+// Parallel delegator for input events — the Measures and Columns tab
+// search boxes used to carry inline `oninput="filterTable(...)"`
+// attributes. Stop 4 migrated every click handler to data-action but
+// missed the oninput ones; this closes the "no inline handlers"
+// invariant. Same structural guarantee: user text reaches
+// filterTable via HTMLInputElement.value (browser-decoded, safe).
+document.addEventListener('input', function(e){
+  var el = e.target.closest && e.target.closest('[data-action]');
+  if (!el) return;
+  var a = el.getAttribute('data-action');
+  var d = el.dataset;
+  switch (a) {
+    case 'filter': filterTable(d.entity, el.value); break;
+  }
+});
+
 function uc(n){return n===0?"zero":n<=1?"low":"good"}
 
 function renderSummary(){
