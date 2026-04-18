@@ -11,6 +11,34 @@ Sections in each release follow the Keep-a-Changelog vocabulary: **Added**, **Ch
 
 ---
 
+## [0.4.0] — 2026-04-18 · Stop 5 pass 1 — client code extracted to `src/client/` (branch `stop-5/client-split`)
+
+Architectural refactor. Client runtime is no longer embedded inside a template literal inside `src/html-generator.ts`; it now lives as a real TypeScript file that's compiled alongside the server and inlined at generation time. No user-visible behaviour change.
+
+This is **pass 1** of the workflow's Stop 5 — a mechanical extraction that moves the whole ~1,100-line embedded script out in one go. Pass 2+ will carve `main.ts` into smaller `panels/`, `components/`, `render/`, and `state/` modules without needing another bulk-extraction turn.
+
+### Added
+- **`src/client/main.ts`** (1,134 lines) — every function, state variable, and bootstrap call that used to live inside the generator's embedded `<script>`. Written intentionally as a *script* (no imports, no exports) so tsc emits a plain browser-ready `.js` runs top-to-bottom.
+- **`src/client/globals.d.ts`** — ambient declarations for the server-injected globals (`DATA`, `MARKDOWN*`, `REPORT_NAME`, `APP_VERSION`, `GENERATED_AT`, `DaxHighlight`) so the extracted code type-checks without pulling server-only types into the client tree.
+- **`readCompiledClient()`** helper in `html-generator.ts` — reads `dist/client/main.js` at generation time (same three-candidate-path pattern as the DAX vendor files), strips the tsc-inserted `export {};` so the inline lands cleanly inside a classic `<script>`.
+
+### Changed
+- **`src/html-generator.ts`: 1,740 → 667 lines (−62%).** The generator now contains the HTML shell, the inline CSS, the data-injection block (`const DATA = …; const MARKDOWN = …;` etc.), and a single `${CLIENT_JS}` inline for the compiled client bundle. Remaining weight is mostly CSS — a follow-up PR can extract it to `src/styles/` and get us to the workflow's ≤ 250-line target.
+- **No build-pipeline changes.** The existing root `tsconfig.json` already compiles `src/client/main.ts` → `dist/client/main.js` because `rootDir` is `./src`. Zero new scripts, zero new config files.
+
+### Not included in this PR (deliberate)
+- Carving `main.ts` into 16 smaller modules (panels, components, render, state). That's mechanically independent of the extraction itself and reviews more cleanly as a sequence of smaller PRs. The file has a `// @ts-nocheck` header so TypeScript doesn't flag the untyped client code — each future carve turns that off for the slice being extracted.
+- CSS extraction (would drop `html-generator.ts` to ~250 lines).
+- A dedicated `src/client/tsconfig.json` — not needed because the root config already handles it.
+
+### Test results
+49 / 49 green (unchanged; the existing suite already covered what this refactor could break). Build and typecheck clean. Live smoke against `test/Health_and_Safety.Report`: HTTP 200, dashboard size 752 KB, all 6 key functions (`renderMeasures`, `addCopyButtons`, `navigateLineage`, `highlightDaxBlocks`, `switchTab`, bootstrap) present exactly once, no stray `export {};` in the output.
+
+### Regex regression during development
+- `tests/render-dax-highlight.test.ts` test 21 (`addCopyButtons does not call highlightDaxBlocks first`) broke because tsc's emitted formatting adds whitespace between `)` and `{` that the inline version didn't have. Relaxed the regex to tolerate whitespace.
+
+---
+
 ## [0.3.1] — 2026-04-18 · DAX syntax highlighting (branch `feat/dax-syntax-highlighting`)
 
 User-visible polish release. Every DAX block in the dashboard now renders with syntax highlighting — keywords, functions, variables, `[measure]` / `'table'[column]` references, strings, numbers and comments each get their own colour from the design-token palette.
@@ -196,5 +224,6 @@ First release to properly support Power BI **composite models** (mixed-storage w
 | 0.1.0 – 0.2.1 | `main` (merged) | v0.2 security track |
 | 0.3.0 | `stop-4/event-delegation` (open) | Structural XSS fix |
 | 0.3.1 | `feat/dax-syntax-highlighting` (open) | DAX syntax highlighting |
+| 0.4.0 | `stop-5/client-split` (open) | Client code extracted to `src/client/main.ts` |
 
 The v0.2 track was merged to `main` via cherry-pick on 2026-04-18 after the stacked PRs #4–#6 each landed on their feature-branch base rather than main. See the Stop-3 commit message for the reconciliation detail. v0.3.0 is on its own branch awaiting merge.
