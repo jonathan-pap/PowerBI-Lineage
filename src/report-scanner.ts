@@ -44,18 +44,27 @@ function extractVisualTitle(visual: any): string {
   return "";
 }
 
-export function scanReportBindings(reportPath: string): { bindings: RawBinding[]; pageCount: number; visualCount: number; hiddenPages: string[] } {
+export interface PageMeta {
+  name: string;
+  hidden: boolean;
+  visualCount: number;
+}
+
+export function scanReportBindings(reportPath: string): { bindings: RawBinding[]; pageCount: number; visualCount: number; hiddenPages: string[]; allPages: PageMeta[] } {
   const project = new PbirProject(reportPath);
   const pageIds = project.listPageIds();
   const bindings: RawBinding[] = [];
   const hiddenPages: string[] = [];
+  const allPages: PageMeta[] = [];
   let totalVisuals = 0;
 
   for (const pageId of pageIds) {
     const page = project.getPage(pageId);
     const pageName = page.displayName || pageId;
-    if (page.visibility === "HiddenInViewMode") hiddenPages.push(pageName);
+    const isHidden = page.visibility === "HiddenInViewMode";
+    if (isHidden) hiddenPages.push(pageName);
     const visualIds = project.listVisualIds(pageId);
+    allPages.push({ name: pageName, hidden: isHidden, visualCount: visualIds.length });
 
     for (const visualId of visualIds) {
       totalVisuals++;
@@ -110,5 +119,5 @@ export function scanReportBindings(reportPath: string): { bindings: RawBinding[]
     }
   }
 
-  return { bindings, pageCount: pageIds.length, visualCount: totalVisuals, hiddenPages };
+  return { bindings, pageCount: pageIds.length, visualCount: totalVisuals, hiddenPages, allPages };
 }

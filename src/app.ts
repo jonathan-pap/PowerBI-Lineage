@@ -6,11 +6,21 @@
 import * as http from "http";
 import * as path from "path";
 import * as fs from "fs";
+import { fileURLToPath } from "url";
 import { exec } from "child_process";
 import { buildFullData } from "./data-builder.js";
 import { generateHTML } from "./html-generator.js";
-import { generateMarkdown, generateMeasuresMd, generateFunctionsMd, generateCalcGroupsMd, generateQualityMd } from "./md-generator.js";
+import { generateMarkdown, generateMeasuresMd, generateFunctionsMd, generateCalcGroupsMd, generateQualityMd, generateDataDictionaryMd } from "./md-generator.js";
 import { findSemanticModelPath } from "./model-parser.js";
+
+// Resolve the package version once at module load (falls back if unavailable).
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const APP_VERSION: string = (() => {
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.resolve(__dirname, "..", "package.json"), "utf8"));
+    return typeof pkg.version === "string" && pkg.version ? pkg.version : "0.1.0";
+  } catch { return "0.1.0"; }
+})();
 
 // ---------------------------------------------------------------------------
 // Recent paths storage
@@ -58,38 +68,155 @@ function landingHTML(recents: string[], error?: string): string {
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>Power BI Lineage</title>
+<title>Power BI Lineage — Model Inspector</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body { min-height: 100vh; }
   body {
-    font-family: 'Segoe UI', system-ui, sans-serif;
-    background: #111827;
+    font-family: 'DM Sans', system-ui, -apple-system, Segoe UI, sans-serif;
     color: #F9FAFB;
-    min-height: 100vh;
+    background: #0B0D11;
+    position: relative;
+    overflow-x: hidden;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
+    padding: 48px 16px;
   }
+
+  /* ── Aurora mesh background (three drifting blobs) ─────────────────────── */
+  .aurora {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    overflow: hidden;
+  }
+  .blob {
+    position: absolute;
+    width: 800px;
+    height: 800px;
+    border-radius: 50%;
+    filter: blur(120px);
+    will-change: transform;
+  }
+  .blob-amber  {
+    background: radial-gradient(circle at center, #F59E0B 0%, transparent 60%);
+    top: -20%;
+    left: -15%;
+    opacity: 0.14;
+    animation: drift1 20s ease-in-out infinite alternate;
+  }
+  .blob-blue   {
+    background: radial-gradient(circle at center, #3B82F6 0%, transparent 60%);
+    top: 20%;
+    right: -20%;
+    opacity: 0.12;
+    animation: drift2 22s ease-in-out infinite alternate;
+  }
+  .blob-purple {
+    background: radial-gradient(circle at center, #8B5CF6 0%, transparent 60%);
+    bottom: -25%;
+    left: 25%;
+    opacity: 0.10;
+    animation: drift3 24s ease-in-out infinite alternate;
+  }
+  @keyframes drift1 { from { transform: translate(0, 0); }     to { transform: translate(4%, -3%); } }
+  @keyframes drift2 { from { transform: translate(0, 0); }     to { transform: translate(-3%, 4%); } }
+  @keyframes drift3 { from { transform: translate(0, 0); }     to { transform: translate(3%, 3%); } }
+
+  /* ── Blueprint grid (CSS-only, fades at the edges) ─────────────────────── */
+  .grid {
+    position: fixed;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+    background-size: 40px 40px;
+    -webkit-mask-image: radial-gradient(ellipse at center, black 20%, transparent 75%);
+            mask-image: radial-gradient(ellipse at center, black 20%, transparent 75%);
+  }
+
+  /* ── Content stacking above background layers ─────────────────────────── */
+  .stage {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+  }
+
+  /* ── Frosted-glass card ───────────────────────────────────────────────── */
   .container {
     width: 560px;
-    padding: 48px 40px;
+    max-width: calc(100vw - 32px);
+    padding: 56px 48px;
+    background: rgba(17, 24, 39, 0.65);
+    -webkit-backdrop-filter: blur(20px) saturate(140%);
+            backdrop-filter: blur(20px) saturate(140%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    box-shadow:
+      0 20px 60px rgba(0, 0, 0, 0.5),
+      0 1px 0 rgba(255, 255, 255, 0.05) inset;
   }
+
+  /* ── Hero badge ───────────────────────────────────────────────────────── */
+  /* Shared "Usage Map" pill — see matching rule in html-generator.ts. */
+  .usage-map-badge {
+    display: inline-block;
+    font: 10px/1 'JetBrains Mono', ui-monospace, monospace;
+    font-weight: 600;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: #F59E0B;
+    background: rgba(245, 158, 11, 0.05);
+    border: 1px solid rgba(245, 158, 11, 0.18);
+    -webkit-backdrop-filter: blur(6px);
+            backdrop-filter: blur(6px);
+    padding: 4px 10px;
+    border-radius: 999px;
+    margin-bottom: 18px;
+  }
+
+  /* ── Title + subtitle ─────────────────────────────────────────────────── */
   h1 {
-    font-size: 24px;
+    font-size: 32px;
     font-weight: 700;
-    margin-bottom: 6px;
+    letter-spacing: -0.02em;
+    line-height: 1.15;
+    margin-bottom: 12px;
+    background: linear-gradient(180deg, #F9FAFB 0%, #9CA3AF 100%);
+    -webkit-background-clip: text;
+            background-clip: text;
+    color: transparent;
   }
   .subtitle {
-    color: #9CA3AF;
+    color: #D1D5DB;
     font-size: 14px;
-    margin-bottom: 36px;
+    line-height: 1.6;
+    max-width: 460px;
+    margin-bottom: 34px;
   }
+
+  /* ── Form ─────────────────────────────────────────────────────────────── */
   label {
     display: block;
-    font-size: 13px;
-    font-weight: 500;
+    font-size: 11px;
+    font-weight: 600;
     color: #D1D5DB;
-    margin-bottom: 8px;
+    margin-bottom: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
   }
   .input-row {
     display: flex;
@@ -98,54 +225,113 @@ function landingHTML(recents: string[], error?: string): string {
   }
   input[type="text"] {
     flex: 1;
-    background: #1F2937;
-    border: 1px solid #374151;
-    border-radius: 8px;
-    padding: 10px 14px;
-    font-size: 14px;
+    background: rgba(0, 0, 0, 0.28);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    padding: 14px 16px;
+    font-size: 15px;
     color: #F9FAFB;
-    font-family: 'Consolas', 'Cascadia Code', monospace;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
     outline: none;
-    transition: border-color 0.15s;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
+    transition: border-color 0.18s, box-shadow 0.18s, background 0.18s;
   }
-  input:focus { border-color: #F59E0B; }
+  input[type="text"]::placeholder { color: #6B7280; }
+  input[type="text"]:focus {
+    border-color: rgba(245, 158, 11, 0.5);
+    background: rgba(0, 0, 0, 0.35);
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.4),
+                0 0 0 3px rgba(245, 158, 11, 0.15);
+  }
+
   button.go {
-    background: #F59E0B;
+    background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);
     color: #111827;
     border: none;
-    border-radius: 8px;
-    padding: 10px 24px;
+    border-radius: 10px;
+    padding: 14px 24px;
     font-size: 14px;
-    font-weight: 600;
+    font-weight: 700;
+    font-family: inherit;
+    letter-spacing: 0.02em;
     cursor: pointer;
     white-space: nowrap;
-    transition: background 0.15s;
+    box-shadow:
+      0 8px 24px rgba(245, 158, 11, 0.25),
+      0 1px 0 rgba(255, 255, 255, 0.2) inset;
+    transition: transform 0.15s, box-shadow 0.15s, filter 0.15s;
   }
-  button.go:hover { background: #D97706; }
-  button.go:disabled { opacity: 0.5; cursor: not-allowed; }
+  button.go:hover {
+    transform: translateY(-1px);
+    box-shadow:
+      0 12px 32px rgba(245, 158, 11, 0.35),
+      0 1px 0 rgba(255, 255, 255, 0.25) inset;
+    filter: brightness(1.05);
+  }
+  button.go:active { transform: translateY(0); }
+  button.go:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.15);
+  }
+
+  .browse-btn {
+    background: rgba(255, 255, 255, 0.04);
+    color: #D1D5DB;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    padding: 14px 18px;
+    font-size: 14px;
+    font-family: inherit;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+  }
+  .browse-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.16);
+    color: #F9FAFB;
+  }
+  .browse-btn:disabled { opacity: 0.6; cursor: wait; }
+
   .hint {
-    font-size: 12px;
+    font-size: 11px;
     color: #6B7280;
-    margin-bottom: 32px;
+    margin-top: 4px;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    letter-spacing: 0.02em;
   }
+
+  /* ── Error banner (glass + red accent) ────────────────────────────────── */
   .error {
-    background: #7F1D1D;
-    border: 1px solid #991B1B;
-    border-radius: 8px;
-    padding: 10px 14px;
+    background: rgba(127, 29, 29, 0.35);
+    -webkit-backdrop-filter: blur(10px);
+            backdrop-filter: blur(10px);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-left: 3px solid #EF4444;
+    border-radius: 10px;
+    padding: 12px 16px;
     font-size: 13px;
+    line-height: 1.5;
     color: #FCA5A5;
     margin-bottom: 20px;
   }
+
+  /* ── Divider + recents list ───────────────────────────────────────────── */
   .divider {
-    border-top: 1px solid #1F2937;
-    margin: 32px 0 24px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    margin: 36px 0 22px;
   }
   h2 {
-    font-size: 14px;
-    font-weight: 500;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 11px;
+    font-weight: 600;
     color: #9CA3AF;
-    margin-bottom: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 14px;
   }
   .recents {
     display: flex;
@@ -153,75 +339,127 @@ function landingHTML(recents: string[], error?: string): string {
     gap: 6px;
   }
   .recent {
+    position: relative;
+    overflow: hidden;
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    background: #1F2937;
-    border: 1px solid #374151;
-    border-radius: 8px;
-    padding: 10px 14px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 10px;
+    padding: 12px 14px 12px 18px;
     cursor: pointer;
     text-align: left;
     color: inherit;
-    transition: border-color 0.15s;
     width: 100%;
+    font-family: inherit;
+    transition: transform 0.15s, border-color 0.15s, background 0.15s;
   }
-  .recent:hover { border-color: #F59E0B; }
-  .recent-name { font-size: 14px; font-weight: 600; }
-  .recent-path { font-size: 12px; color: #6B7280; margin-top: 2px; font-family: 'Consolas', monospace; }
+  .recent::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: #F59E0B;
+    transform: scaleY(0);
+    transform-origin: center;
+    transition: transform 0.2s;
+  }
+  .recent:hover {
+    transform: translateX(2px);
+    border-color: rgba(245, 158, 11, 0.4);
+    background: rgba(255, 255, 255, 0.05);
+  }
+  .recent:hover::before { transform: scaleY(1); }
+  .recent-name { font-size: 14px; font-weight: 600; color: #F9FAFB; }
+  .recent-path { font-size: 11px; color: #6B7280; margin-top: 3px; font-family: 'JetBrains Mono', ui-monospace, monospace; letter-spacing: 0.02em; }
+
+  /* ── Spinner ──────────────────────────────────────────────────────────── */
   .spinner {
     display: none;
-    margin: 20px auto;
-    width: 32px;
-    height: 32px;
-    border: 3px solid #374151;
+    margin: 24px auto 0;
+    width: 34px;
+    height: 34px;
+    border: 3px solid rgba(255, 255, 255, 0.08);
     border-top-color: #F59E0B;
     border-radius: 50%;
-    animation: spin 0.6s linear infinite;
+    animation: spin 0.7s linear infinite;
+    box-shadow: 0 0 24px rgba(245, 158, 11, 0.2);
   }
   .spinner.active { display: block; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  .browse-btn {
-    background: #374151;
-    color: #D1D5DB;
-    border: 1px solid #4B5563;
-    border-radius: 8px;
-    padding: 10px 14px;
-    font-size: 13px;
-    cursor: pointer;
-    white-space: nowrap;
-    transition: background 0.15s, border-color 0.15s;
+  /* ── Footer ───────────────────────────────────────────────────────────── */
+  .footer-line {
+    margin-top: 22px;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 11px;
+    color: #4B5563;
+    letter-spacing: 0.03em;
+    text-align: center;
   }
-  .browse-btn:hover { background: #4B5563; border-color: #6B7280; }
-  .browse-btn:disabled { opacity: 0.5; cursor: wait; }
+  .footer-line .dot { color: #374151; margin: 0 6px; }
+
+  /* ── Reduced-motion: kill background drift + button lift + spinner ─── */
+  @media (prefers-reduced-motion: reduce) {
+    .blob,
+    .spinner { animation: none !important; }
+    button.go:hover,
+    .recent:hover { transform: none; }
+  }
+
+  /* ── Narrow screens: soften padding ───────────────────────────────────── */
+  @media (max-width: 560px) {
+    .container { padding: 40px 28px; }
+    h1 { font-size: 26px; }
+    .input-row { flex-direction: column; }
+  }
 </style>
 </head>
 <body>
-<div class="container">
-  <h1>Power BI Lineage</h1>
-  <p class="subtitle">Analyse which measures, columns, and visuals are used in your Power BI report.</p>
 
-  ${error ? `<div class="error">${error}</div>` : ""}
-
-  <label for="rpath">Report path</label>
-  <form id="form" action="/generate" method="GET">
-    <div class="input-row">
-      <input type="text" id="rpath" name="path" placeholder="C:\\Projects\\Sales.Report" value="" autocomplete="off" spellcheck="false"/>
-      <button type="button" class="browse-btn" id="browse-btn" onclick="pickFolder()">Browse</button>
-      <button type="submit" class="go" id="btn">Analyse</button>
-    </div>
-  </form>
-  <p class="hint">Paste the full path or browse to your .Report folder</p>
-
-  <div class="spinner" id="spinner"></div>
-
-  ${recents.length > 0 ? `
-  <div class="divider"></div>
-  <h2>Recent reports</h2>
-  <div class="recents">${recentItems}</div>
-  ` : ""}
+<!-- Aurora mesh: three drifting coloured blobs (hidden from assistive tech) -->
+<div class="aurora" aria-hidden="true">
+  <div class="blob blob-amber"></div>
+  <div class="blob blob-blue"></div>
+  <div class="blob blob-purple"></div>
 </div>
+
+<!-- Blueprint grid overlay, masked so it fades towards the edges -->
+<div class="grid" aria-hidden="true"></div>
+
+<div class="stage">
+  <div class="container">
+    <span class="usage-map-badge">Usage Map</span>
+    <h1>Power BI Lineage</h1>
+    <p class="subtitle">Point it at a <code style="font-family:'JetBrains Mono',ui-monospace,monospace;color:#E5E7EB;background:rgba(255,255,255,0.06);padding:1px 6px;border-radius:4px;font-size:12px">.Report</code> folder and get a live map of every measure, column, table, relationship, and page &mdash; plus exportable documentation.</p>
+
+    ${error ? `<div class="error">${error}</div>` : ""}
+
+    <label for="rpath">Report path</label>
+    <form id="form" action="/generate" method="GET">
+      <div class="input-row">
+        <input type="text" id="rpath" name="path" placeholder="C:\\Projects\\Sales.Report" value="" autocomplete="off" spellcheck="false"/>
+        <button type="button" class="browse-btn" id="browse-btn" onclick="pickFolder()">Browse</button>
+        <button type="submit" class="go" id="btn">Analyse</button>
+      </div>
+    </form>
+    <p class="hint">Paste the full path or browse to your .Report folder</p>
+
+    <div class="spinner" id="spinner"></div>
+
+    ${recents.length > 0 ? `
+    <div class="divider"></div>
+    <h2>Recent reports</h2>
+    <div class="recents">${recentItems}</div>
+    ` : ""}
+  </div>
+
+  <div class="footer-line">v${APP_VERSION} <span class="dot">·</span> local <span class="dot">·</span> no data leaves your machine</div>
+</div>
+
 <script>
 function go(p) {
   document.getElementById('rpath').value = p;
@@ -334,7 +572,8 @@ const server = http.createServer((req, res) => {
       const functionsMd = generateFunctionsMd(data, reportName);
       const calcGroupsMd = generateCalcGroupsMd(data, reportName);
       const qualityMd = generateQualityMd(data, reportName);
-      const html = generateHTML(data, reportName, modelMd, measuresMd, functionsMd, calcGroupsMd, qualityMd);
+      const dataDictionaryMd = generateDataDictionaryMd(data, reportName);
+      const html = generateHTML(data, reportName, modelMd, measuresMd, functionsMd, calcGroupsMd, qualityMd, dataDictionaryMd, APP_VERSION);
       saveRecent(resolved);
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
       res.end(html);

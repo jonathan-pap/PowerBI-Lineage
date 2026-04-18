@@ -17,12 +17,24 @@ function esc(s: string | undefined | null): string {
   return String(s).replace(/\|/g, "\\|").replace(/\r?\n/g, " ");
 }
 
+/**
+ * Render a measure/column status as a coloured <span> badge that the dashboard
+ * MD renderer will style as a pill. In raw MD viewers the span degrades to
+ * plain text, so the doc stays readable in external tools too.
+ */
 function statusLabel(s: "direct" | "indirect" | "unused" | string): string {
-  if (s === "direct") return "Direct";
-  if (s === "indirect") return "Indirect";
-  if (s === "unused") return "Unused";
+  if (s === "direct")   return '<span class="badge badge--success">Direct</span>';
+  if (s === "indirect") return '<span class="badge badge--indirect">Indirect</span>';
+  if (s === "unused")   return '<span class="badge badge--unused">Unused</span>';
   return String(s);
 }
+
+/** Key / column-annotation badges used in the Data Dictionary and Quality notes. */
+const BADGE_PK     = '<span class="badge badge--pk">PK</span>';
+const BADGE_PK_INF = '<span class="badge badge--pk-inf">PK*</span>';
+const BADGE_FK     = '<span class="badge badge--fk">FK</span>';
+const BADGE_CALC   = '<span class="badge badge--calc">CALC</span>';
+const BADGE_HIDDEN = '<span class="badge badge--hidden">HIDDEN</span>';
 
 /** GitHub-compatible slug for in-document anchor links. */
 function slug(s: string): string {
@@ -112,7 +124,7 @@ export function generateMarkdown(data: FullData, reportName: string): string {
   lines.push(`| **Calculation groups** | ${calcGroups.length}${calcGroups.length > 0 ? ` (${cgItemCount} item${cgItemCount === 1 ? "" : "s"})` : ""} |`);
   lines.push(`| **Report surface** | ${data.totals.pages} pages · ${data.totals.visuals} visuals |`);
   lines.push(`| **Scope** | Schema, relationships, usage classification. DAX expressions omitted. |`);
-  lines.push(`| **Companion documents** | Measures Reference · Functions Reference · Calculation Groups Reference · Data Quality Review |`);
+  lines.push(`| **Companion documents** | Data Dictionary Reference · Measures Reference · Functions Reference · Calculation Groups Reference · Data Quality Review |`);
   lines.push("");
   lines.push("---");
   lines.push("");
@@ -132,8 +144,7 @@ export function generateMarkdown(data: FullData, reportName: string): string {
   lines.push("    - 3.1 [Storage modes](#31-storage-modes)");
   lines.push("    - 3.2 [Parameters and expressions](#32-parameters-and-expressions)");
   lines.push("    - 3.3 [Per-table sources](#33-per-table-sources)");
-  lines.push("4. [Data Dictionary](#4-data-dictionary)");
-  for (const t of tables) lines.push(`    - [${t.name}](#${slug(t.name)})`);
+  lines.push("4. [Data Dictionary — Summary](#4-data-dictionary--summary)  _(full inventory: Data Dictionary Reference)_");
   lines.push("5. [Measures — Summary](#5-measures--summary)");
   lines.push("6. [Calculation Groups](#6-calculation-groups)");
   lines.push("7. [User-Defined Functions](#7-user-defined-functions)");
@@ -312,71 +323,32 @@ export function generateMarkdown(data: FullData, reportName: string): string {
   lines.push("---");
   lines.push("");
 
-  // ── 4. Data Dictionary ────────────────────────────────────────────────────
-  lines.push("## 4. Data Dictionary");
+  // ── 4. Data Dictionary — summary only ─────────────────────────────────────
+  // Full per-table column inventories, constraints, and hierarchies live in
+  // the Data Dictionary Reference companion document. The main spec keeps
+  // only a summary so it stays scale-invariant on big models.
+  lines.push("## 4. Data Dictionary — Summary");
   lines.push("");
-  lines.push(`One entry per table. Columns are listed in logical order (keys first, then foreign keys, then the remaining columns alphabetically). See §5 for a measures summary and the companion **Measures Reference** for per-measure detail.`);
-  lines.push("");
-
   if (tables.length === 0) {
     lines.push("_No tables found._");
     lines.push("");
   } else {
-    tables.forEach((tbl, idx) => {
+    lines.push(`**${tables.length}** table${tables.length === 1 ? "" : "s"} · **${data.totals.columnsInModel}** columns · **${tables.reduce((a, t) => a + t.hierarchies.length, 0)}** hierarch${tables.reduce((a, t) => a + t.hierarchies.length, 0) === 1 ? "y" : "ies"}. Per-table column inventories, constraints, hierarchies, and format / aggregation / sort / category metadata live in the companion **Data Dictionary Reference**.`);
+    lines.push("");
+    lines.push("| Table | Role | Columns | Hierarchies | Source | Description |");
+    lines.push("|-------|------|--------:|------------:|--------|-------------|");
+    tables.forEach(tbl => {
       const role = rolesByTable.get(tbl.name) || "Disconnected";
-      lines.push(`### 4.${idx + 1} ${tbl.name}`);
-      lines.push("");
-      lines.push("| | |");
-      lines.push("|---|---|");
-      lines.push(`| **Role** | ${role} |`);
-      lines.push(`| **Columns** | ${tbl.columnCount} (${tbl.keyCount} key${tbl.keyCount === 1 ? "" : "s"}, ${tbl.fkCount} FK${tbl.fkCount === 1 ? "" : "s"}, ${tbl.hiddenColumnCount} hidden) |`);
-      lines.push(`| **Measures** | ${tbl.measureCount} |`);
-      lines.push(`| **Relationships** | ${tbl.relationships.filter(r => r.direction === "outgoing").length} outgoing · ${tbl.relationships.filter(r => r.direction === "incoming").length} incoming |`);
-      if (tbl.partitions.length > 0) {
-        const p = tbl.partitions[0];
-        const loc = p.sourceLocation ? " · `" + esc(p.sourceLocation) + "`" : "";
-        const extra = tbl.partitions.length > 1 ? ` (+${tbl.partitions.length - 1} more partition${tbl.partitions.length - 1 === 1 ? "" : "s"})` : "";
-        lines.push(`| **Source** | ${esc(p.mode)} · ${esc(p.sourceType)}${loc}${extra} |`);
-      }
-      if (tbl.description) {
-        lines.push(`| **Description** | ${esc(tbl.description)} |`);
-      }
-      lines.push("");
-
-      // Columns
-      lines.push(`#### 4.${idx + 1}.1 Columns`);
-      lines.push("");
-      if (tbl.columns.length === 0) {
-        lines.push("_No columns._");
-        lines.push("");
-      } else {
-        lines.push("| # | Name | Data type | Constraints | Description |");
-        lines.push("|--:|------|-----------|-------------|-------------|");
-        tbl.columns.forEach((c, ci) => {
-          const constraints: string[] = [];
-          if (c.isKey) constraints.push("PK");
-          else if (c.isInferredPK) constraints.push("PK\\*");
-          if (c.isFK && c.fkTarget) constraints.push(`FK → ${c.fkTarget.table}[${c.fkTarget.column}]`);
-          if (c.incomingRefs && c.incomingRefs.length > 0) {
-            for (const r of c.incomingRefs) {
-              constraints.push(`Ref ← ${r.table}[${r.column}]${r.isActive ? "" : " (inactive)"}`);
-            }
-          }
-          if (c.isCalculated) constraints.push("Calculated");
-          if (c.isHidden) constraints.push("Hidden");
-          const constraintsStr = constraints.length > 0 ? constraints.join("<br>") : "—";
-          lines.push(`| ${ci + 1} | ${esc(c.name)} | ${esc(c.dataType)} | ${constraintsStr} | ${esc(c.description) || "—"} |`);
-        });
-        lines.push("");
-      }
-
-      // §4.N.2 (Measures on this table) and §4.N.3 (Relationships) intentionally
-      // dropped: per-table measure summaries duplicate §5 + the Measures
-      // Reference doc; the relationships subsection just restates the FK / Ref
-      // info already in the Constraints column of §4.N.1.
+      const src = tbl.partitions.length > 0
+        ? `${esc(tbl.partitions[0].mode)} · ${esc(tbl.partitions[0].sourceType)}`
+        : "—";
+      // Truncate long descriptions for this summary row.
+      let desc = tbl.description ? esc(tbl.description) : "—";
+      if (desc.length > 90) desc = desc.substring(0, 87) + "…";
+      lines.push(`| ${esc(tbl.name)} | ${role} | ${tbl.columnCount} | ${tbl.hierarchies.length} | ${src} | ${desc} |`);
     });
+    lines.push("");
   }
-
   lines.push("---");
   lines.push("");
 
@@ -599,11 +571,15 @@ export function generateMeasuresMd(data: FullData, reportName: string): string {
         lines.push("");
       }
       if (m.daxDependencies.length > 0) {
-        lines.push(`**Depends on:** ${m.daxDependencies.map(d => "`" + d + "`").join(", ")}`);
+        lines.push(`**Depends on**`);
+        lines.push("");
+        lines.push(m.daxDependencies.map(d => `<span class="chip chip--measure">${esc(d)}</span>`).join(" "));
         lines.push("");
       }
       if (m.dependedOnBy && m.dependedOnBy.length > 0) {
-        lines.push(`**Used by:** ${m.dependedOnBy.map(d => "`" + d + "`").join(", ")}`);
+        lines.push(`**Used by**`);
+        lines.push("");
+        lines.push(m.dependedOnBy.map(d => `<span class="chip chip--measure">${esc(d)}</span>`).join(" "));
         lines.push("");
       }
       lines.push(`</details>`);
@@ -625,17 +601,22 @@ export function generateMeasuresMd(data: FullData, reportName: string): string {
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // generateFunctionsMd — Companion functions reference
-//   Front matter, "How to read", A–Z jump nav, collapsible <details> per UDF
-//   with parameters, description, and the function body. The body is included
-//   here (unlike the measures doc) because for a UDF the body IS the
-//   definition; without it the doc would be content-free.
+//   Front matter · how-to-read · one collapsible <details> per UDF with:
+//     - parameters table (name / type)
+//     - description
+//     - measures that reference this function (from DAX expression scan,
+//       same heuristic as the dashboard Functions tab)
+//     - body in a ```dax fenced block (gets proper code-block styling in
+//       the dashboard MD renderer; plain code in external viewers)
+//   A–Z jump nav intentionally dropped — UDF counts are small enough that a
+//   flat alphabetical list is easier to scan.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export function generateFunctionsMd(data: FullData, reportName: string): string {
   const ts = new Date().toISOString().replace("T", " ").substring(0, 16);
   const lines: string[] = [];
   // Same convention as the dashboard: drop Tabular Editor's `.About` shim entries.
-  const fns = data.functions.filter(f => !f.name.endsWith(".About"));
+  const fns = [...data.functions].filter(f => !f.name.endsWith(".About")).sort((a, b) => a.name.localeCompare(b.name));
 
   // ── Front matter ──────────────────────────────────────────────────────────
   lines.push(`# Functions Reference`);
@@ -647,7 +628,7 @@ export function generateFunctionsMd(data: FullData, reportName: string): string 
   lines.push(`| **Document version** | 1.0 (auto-generated) |`);
   lines.push(`| **Generated** | ${ts} |`);
   lines.push(`| **Functions** | ${fns.length} |`);
-  lines.push(`| **Scope** | Per-function description, parameters, and DAX body. |`);
+  lines.push(`| **Scope** | Per-function description, parameters, referencing measures, and DAX body. |`);
   lines.push(`| **Companion document** | Semantic-model specification |`);
   lines.push("");
   lines.push("---");
@@ -655,89 +636,112 @@ export function generateFunctionsMd(data: FullData, reportName: string): string 
 
   lines.push("## How to read this document");
   lines.push("");
-  lines.push("- Functions are user-defined DAX functions declared in the model (Tabular 1702+). The `.About` shim entries Tabular Editor emits are excluded from the count and listing.");
-  lines.push("- Functions are grouped alphabetically by name. Empty letters are shown struck-through in the jump bar.");
+  lines.push("- Functions are user-defined DAX functions declared in the model (Tabular 1702+). The `.About` shim entries Tabular Editor emits are excluded.");
   lines.push("- Each function is collapsible. Click the row to expand / collapse.");
   lines.push("- Inside each block:");
-  lines.push("    - **Parameters** — formal parameters with their declared types.");
+  lines.push("    - **Signature** — inline form `name(Param : TYPE, …)`.");
   lines.push("    - **Description** — captured from the model's `///` doc comments.");
-  lines.push("    - **Body** — the function expression itself.");
+  lines.push("    - **Parameters** — tabular breakdown of each formal parameter and its declared type.");
+  lines.push("    - **Used by** — measures whose DAX expression references the function (by name).");
+  lines.push("    - **Body** — the function expression itself, rendered as a fenced `dax` code block.");
   lines.push("");
   lines.push("---");
   lines.push("");
 
   if (fns.length === 0) {
     lines.push("_No user-defined functions in this model._");
+    lines.push("");
+    lines.push(`_Generated by powerbi-lineage · ${ts}_`);
+    lines.push("");
     return lines.join("\n");
   }
 
-  // Bucket A–Z + Other.
-  const buckets = new Map<string, typeof fns>();
-  const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
-  for (const L of letters) buckets.set(L, []);
-  buckets.set("#", []);
-  for (const f of fns) buckets.get(bucketLetter(f.name))!.push(f);
-  for (const arr of buckets.values()) arr.sort((a, b) => a.name.localeCompare(b.name));
+  // Parse TMDL parameter list into structured { name, type } pairs.
+  // Input shape: "Param : TYPE, Other : TYPE". Missing type → empty string.
+  const parseParams = (paramStr: string): Array<{ name: string; type: string }> => {
+    if (!paramStr) return [];
+    return paramStr.split(",").map(p => {
+      const parts = p.trim().split(/\s*:\s*/);
+      return parts.length >= 2
+        ? { name: parts[0].trim(), type: parts.slice(1).join(":").trim() }
+        : { name: p.trim(), type: "" };
+    }).filter(p => p.name);
+  };
 
-  // Jump nav
-  const navItems: string[] = [];
-  for (const L of letters) {
-    const count = buckets.get(L)!.length;
-    if (count > 0) navItems.push(`[${L}](#${L.toLowerCase()})`);
-    else navItems.push(`~~${L}~~`);
-  }
-  if (buckets.get("#")!.length > 0) navItems.push("[#](#other)");
-  lines.push("## Jump to");
-  lines.push("");
-  lines.push(navItems.join(" · "));
-  lines.push("");
-  lines.push("---");
-  lines.push("");
+  // "Used by" heuristic matches the dashboard Functions tab exactly.
+  const refsFor = (name: string) =>
+    data.measures.filter(m =>
+      m.daxExpression.includes("'" + name + "'") || m.daxExpression.includes(name + "(")
+    );
 
-  const renderSection = (heading: string, anchor: string, items: typeof fns) => {
-    lines.push(`## ${heading}`);
-    lines.push(`<a id="${anchor}"></a>`);
+  for (const f of fns) {
+    const params = parseParams(f.parameters);
+    const refMeasures = refsFor(f.name);
+    // One-line signature reused in the summary and rendered as inline code.
+    const sigText = f.name + "(" + params.map(p => p.type ? `${p.name} : ${p.type}` : p.name).join(", ") + ")";
+    const parts: string[] = [];
+    parts.push(`${params.length} param${params.length === 1 ? "" : "s"}`);
+    parts.push(`used by ${refMeasures.length} measure${refMeasures.length === 1 ? "" : "s"}`);
+
+    lines.push(`<details>`);
+    lines.push(`<summary><strong>${esc(f.name)}</strong> <small>— ${parts.join(" · ")}</small></summary>`);
     lines.push("");
-    if (items.length === 0) {
-      lines.push(`_No functions starting with ${heading}._`);
-      lines.push("");
-      lines.push("[↑ Jump to](#jump-to)");
-      lines.push("");
-      lines.push("---");
-      lines.push("");
-      return;
-    }
-    for (const f of items) {
-      const paramCount = f.parameters ? f.parameters.split(",").filter(s => s.trim()).length : 0;
-      const sig = paramCount === 0 ? "no parameters" : `${paramCount} parameter${paramCount === 1 ? "" : "s"}`;
-      lines.push(`<details>`);
-      lines.push(`<summary><strong>${esc(f.name)}</strong> <small>— ${sig}</small></summary>`);
-      lines.push("");
-      lines.push("**Parameters:** " + (f.parameters ? "`" + f.parameters + "`" : "_none_"));
-      lines.push("");
-      if (f.description) {
-        lines.push(`> ${f.description.replace(/\n/g, " ")}`);
-        lines.push("");
-      }
-      if (f.expression) {
-        lines.push("**Body**");
-        lines.push("");
-        lines.push("```");
-        lines.push(f.expression);
-        lines.push("```");
-        lines.push("");
-      }
-      lines.push(`</details>`);
+    // Signature — a bare inline code line makes the shape scannable before you expand further.
+    lines.push(`\`${sigText}\``);
+    lines.push("");
+
+    if (f.description) {
+      lines.push(`> ${f.description.replace(/\n/g, " ")}`);
       lines.push("");
     }
-    lines.push("[↑ Jump to](#jump-to)");
+
+    // Parameters as a table (each row independently styled, not a wall of purple).
+    lines.push("**Parameters**");
+    lines.push("");
+    if (params.length === 0) {
+      lines.push("_None._");
+      lines.push("");
+    } else {
+      lines.push("| # | Name | Type |");
+      lines.push("|--:|------|------|");
+      params.forEach((p, i) => {
+        lines.push(`| ${i + 1} | ${esc(p.name)} | ${esc(p.type) || "—"} |`);
+      });
+      lines.push("");
+    }
+
+    // Used by — referencing measures rendered as amber chips to match the
+    // dashboard Functions-tab "measures using this function" list. Fits on
+    // a single flow-wrapping line so big lists stay compact.
+    lines.push(`**Used by**` + (refMeasures.length > 0 ? ` (${refMeasures.length})` : ""));
+    lines.push("");
+    if (refMeasures.length === 0) {
+      lines.push("_No measures reference this function._");
+      lines.push("");
+    } else {
+      const chips = [...refMeasures].sort((a, b) => a.name.localeCompare(b.name))
+        .map(m => `<span class="chip chip--measure">${esc(m.name)}</span>`)
+        .join(" ");
+      lines.push(chips);
+      lines.push("");
+    }
+
+    // Body — fenced with a language tag so the MD renderer (and external
+    // viewers that support syntax highlighting) can style it separately from
+    // inline code.
+    if (f.expression) {
+      lines.push("**Body**");
+      lines.push("");
+      lines.push("```dax");
+      lines.push(f.expression);
+      lines.push("```");
+      lines.push("");
+    }
+    lines.push(`</details>`);
     lines.push("");
     lines.push("---");
     lines.push("");
-  };
-
-  for (const L of letters) renderSection(L, L.toLowerCase(), buckets.get(L)!);
-  if (buckets.get("#")!.length > 0) renderSection("Other (non-letter starts)", "other", buckets.get("#")!);
+  }
 
   lines.push(`_Generated by powerbi-lineage · ${ts}_`);
   lines.push("");
@@ -902,7 +906,7 @@ export function generateQualityMd(data: FullData, reportName: string): string {
   lines.push(`| **Indirect entities** | ${indirectM.length} measure${indirectM.length === 1 ? "" : "s"} · ${indirectC.length} column${indirectC.length === 1 ? "" : "s"} |`);
   lines.push(`| **Inactive relationships** | ${inactiveRels.length} |`);
   lines.push(`| **Missing descriptions** | ${undocumentedTables.length} table${undocumentedTables.length === 1 ? "" : "s"} · ${undocumentedColumns.length} column${undocumentedColumns.length === 1 ? "" : "s"} · ${undocumentedMeasures.length} measure${undocumentedMeasures.length === 1 ? "" : "s"} |`);
-  lines.push(`| **Scope** | Coverage, removal candidates, indirect-use entities, inactive relationships, documentation coverage. Action-oriented review of the model. |`);
+  lines.push(`| **Scope** | Coverage, removal candidates, indirect-use entities, inactive relationships, documentation coverage, modelling hygiene. Action-oriented review of the model. |`);
   lines.push(`| **Companion document** | Semantic-model specification |`);
   lines.push("");
   lines.push("---");
@@ -918,6 +922,7 @@ export function generateQualityMd(data: FullData, reportName: string): string {
   lines.push("- **Indirect entities** — not on a visual, but referenced via DAX or relationships. **Keep these.** Removing them silently breaks measures or filter propagation.");
   lines.push("- **Inactive relationships** — defined but dormant unless explicitly activated via `USERELATIONSHIP()` in DAX.");
   lines.push("- **Documentation coverage** — tables, columns, and measures lacking a description (`///` doc comment or `description:` property). Undocumented fields are hard to hand over.");
+  lines.push("- **Modelling hygiene** — low-priority signals: numeric columns without a format string, category / type mismatches.");
   lines.push("");
   lines.push("---");
   lines.push("");
@@ -959,10 +964,10 @@ export function generateQualityMd(data: FullData, reportName: string): string {
       lines.push("|--------|-----------|-----------|-------|");
       [...unusedC].sort((a, b) => a.table.localeCompare(b.table) || a.name.localeCompare(b.name)).forEach(c => {
         const notes: string[] = [];
-        if (c.isHidden) notes.push("Hidden");
-        if (c.isCalculated) notes.push("Calculated");
-        if (c.isKey) notes.push("PK");
-        lines.push(`| ${esc(c.name)} | ${esc(c.table)} | ${esc(c.dataType)} | ${notes.join(", ") || "—"} |`);
+        if (c.isHidden) notes.push(BADGE_HIDDEN);
+        if (c.isCalculated) notes.push(BADGE_CALC);
+        if (c.isKey) notes.push(BADGE_PK);
+        lines.push(`| ${esc(c.name)} | ${esc(c.table)} | ${esc(c.dataType)} | ${notes.join(" ") || "—"} |`);
       });
       lines.push("");
     }
@@ -1103,6 +1108,206 @@ export function generateQualityMd(data: FullData, reportName: string): string {
   }
 
   lines.push("---");
+  lines.push("");
+
+  // ── 6. Modelling hygiene (low-priority signals) ───────────────────────────
+  lines.push("## 6. Modelling hygiene");
+  lines.push("");
+  lines.push("Low-priority signals — not bugs, but potential sources of inconsistency in the field list and visual rendering.");
+  lines.push("");
+
+  // 6.1 Numeric columns without a format string (cosmetic)
+  const numericTypes = new Set(["int64", "decimal", "double", "currency"]);
+  const numericNoFormat = data.tables.flatMap(t => t.columns
+    .filter(c => numericTypes.has((c.dataType || "").toLowerCase()))
+    .filter(c => !c.formatString)
+    .filter(c => !c.isKey && !c.isInferredPK && !c.isFK)    // keys aren't formatted
+    .map(c => ({ table: t.name, column: c.name, type: c.dataType }))
+  );
+  lines.push("### 6.1 Numeric columns without a format string");
+  lines.push("");
+  if (numericNoFormat.length === 0) {
+    lines.push("_All numeric non-key columns have a format string._");
+    lines.push("");
+  } else {
+    lines.push(`${numericNoFormat.length} numeric column${numericNoFormat.length === 1 ? "" : "s"} will use the default format (raw number). Setting a format string makes visuals consistent and avoids "12345.678" rendering.`);
+    lines.push("");
+    lines.push("| Table | Column | Data type |");
+    lines.push("|-------|--------|-----------|");
+    numericNoFormat.forEach(r => lines.push(`| ${esc(r.table)} | ${esc(r.column)} | ${esc(r.type)} |`));
+    lines.push("");
+  }
+
+  // 6.2 Data-category mismatches: URL-type category on a non-string column
+  const urlCategories = new Set(["webUrl", "imageUrl"]);
+  const categoryMismatches = data.tables.flatMap(t => t.columns
+    .filter(c => c.dataCategory && urlCategories.has(c.dataCategory))
+    .filter(c => (c.dataType || "").toLowerCase() !== "string")
+    .map(c => ({ table: t.name, column: c.name, category: c.dataCategory, type: c.dataType }))
+  );
+  lines.push("### 6.2 Data-category / type mismatches");
+  lines.push("");
+  if (categoryMismatches.length === 0) {
+    lines.push("_No data-category / type mismatches detected._");
+    lines.push("");
+  } else {
+    lines.push("Columns tagged with a URL data category should be string-typed. A mismatch usually means the category was set but the underlying column is numeric or date.");
+    lines.push("");
+    lines.push("| Table | Column | Data category | Data type |");
+    lines.push("|-------|--------|---------------|-----------|");
+    categoryMismatches.forEach(r => lines.push(`| ${esc(r.table)} | ${esc(r.column)} | ${esc(r.category)} | ${esc(r.type)} |`));
+    lines.push("");
+  }
+
+  lines.push("---");
+  lines.push(`_Generated by powerbi-lineage · ${ts}_`);
+  lines.push("");
+  return lines.join("\n");
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// generateDataDictionaryMd — Companion data-dictionary document
+//   Per-table column inventories, constraints, hierarchies. Each table sits
+//   in its own <details> so big models stay navigable. The main technical
+//   spec keeps only a summary pointing here.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export function generateDataDictionaryMd(data: FullData, reportName: string): string {
+  const ts = new Date().toISOString().replace("T", " ").substring(0, 16);
+  const lines: string[] = [];
+
+  const tables = [...data.tables].sort((a, b) => a.name.localeCompare(b.name));
+  const totalHierarchies = tables.reduce((acc, t) => acc + t.hierarchies.length, 0);
+
+  // ── Front matter ──────────────────────────────────────────────────────────
+  lines.push(`# Data Dictionary Reference`);
+  lines.push("");
+  lines.push(`## ${reportName}`);
+  lines.push("");
+  lines.push("| | |");
+  lines.push("|---|---|");
+  lines.push(`| **Document version** | 1.0 (auto-generated) |`);
+  lines.push(`| **Generated** | ${ts} |`);
+  lines.push(`| **Tables** | ${tables.length} |`);
+  lines.push(`| **Columns** | ${data.totals.columnsInModel} |`);
+  lines.push(`| **Hierarchies** | ${totalHierarchies} |`);
+  lines.push(`| **Scope** | Per-table column inventories with constraints, aggregation defaults, sort columns, data categories, format strings, and hierarchies. |`);
+  lines.push(`| **Companion document** | Semantic-model specification |`);
+  lines.push("");
+  lines.push("---");
+  lines.push("");
+
+  // ── How to read ───────────────────────────────────────────────────────────
+  lines.push("## How to read this document");
+  lines.push("");
+  lines.push("One entry per table, collapsible so a big model stays scannable. Jump to any table via the nav below.");
+  lines.push("");
+  lines.push("Each column entry surfaces:");
+  lines.push("- **Constraints** — PK / PK\\* (inferred) / FK → target / Ref ← source / Calculated / Hidden.");
+  lines.push("- **Summarize by** — default aggregation (`none` / `sum` / `average` / `count` / …). Drag-to-visual behaviour depends on this.");
+  lines.push("- **Sort by** — column name when this column displays in the order of a different sort column (e.g. `Month` sorted by `Month Number`).");
+  lines.push("- **Data category** — semantic hint (`ImageUrl`, `WebUrl`, `StateOrProvince`, `City`, …) used by map visuals and image cells.");
+  lines.push("- **Format** — column-level format string for numeric / date columns (measure format strings live in the Measures Reference).");
+  lines.push("- **Description** — from `///` doc comments or `description:` properties.");
+  lines.push("");
+  lines.push("Hierarchies, when present, list the ordered levels and the backing column for each level.");
+  lines.push("");
+  lines.push("---");
+  lines.push("");
+
+  if (tables.length === 0) {
+    lines.push("_No tables found._");
+    return lines.join("\n");
+  }
+
+  // ── Jump nav ──────────────────────────────────────────────────────────────
+  lines.push("## Jump to");
+  lines.push("");
+  lines.push(tables.map(t => `[${t.name}](#${slug(t.name)})`).join(" · "));
+  lines.push("");
+  lines.push("---");
+  lines.push("");
+
+  // ── One collapsible section per table ─────────────────────────────────────
+  for (const tbl of tables) {
+    const cgTag = tbl.isCalcGroup ? " · _calculation group_" : "";
+    lines.push(`## ${tbl.name}`);
+    lines.push(`<a id="${slug(tbl.name)}"></a>`);
+    lines.push("");
+
+    // Summary line outside the details so it's always visible.
+    const summary = `${tbl.columnCount} column${tbl.columnCount === 1 ? "" : "s"} · ${tbl.measureCount} measure${tbl.measureCount === 1 ? "" : "s"} · ${tbl.keyCount} key${tbl.keyCount === 1 ? "" : "s"} · ${tbl.fkCount} FK${tbl.fkCount === 1 ? "" : "s"} · ${tbl.hierarchies.length} hierarch${tbl.hierarchies.length === 1 ? "y" : "ies"}${cgTag}`;
+    lines.push(`<details>`);
+    lines.push(`<summary><strong>${esc(tbl.name)}</strong> <small>— ${summary}</small></summary>`);
+    lines.push("");
+
+    if (tbl.description) {
+      lines.push(`> ${tbl.description.replace(/\n/g, " ")}`);
+      lines.push("");
+    }
+
+    // Source (if any)
+    if (tbl.partitions.length > 0) {
+      const p = tbl.partitions[0];
+      const loc = p.sourceLocation ? " · `" + esc(p.sourceLocation) + "`" : "";
+      const extra = tbl.partitions.length > 1 ? ` (+${tbl.partitions.length - 1} more)` : "";
+      lines.push(`**Source:** ${esc(p.mode)} · ${esc(p.sourceType)}${loc}${extra}`);
+      lines.push("");
+    }
+
+    // ── Columns ─────────────────────────────────────────────────────────────
+    if (tbl.columns.length === 0) {
+      lines.push("_No columns._");
+      lines.push("");
+    } else {
+      lines.push("### Columns");
+      lines.push("");
+      lines.push("| # | Name | Type | Constraints | Summarize by | Sort by | Category | Format | Description |");
+      lines.push("|--:|------|------|-------------|--------------|---------|----------|--------|-------------|");
+      tbl.columns.forEach((c, i) => {
+        const constraints: string[] = [];
+        if (c.isKey) constraints.push(BADGE_PK);
+        else if (c.isInferredPK) constraints.push(BADGE_PK_INF);
+        if (c.isFK && c.fkTarget) constraints.push(`${BADGE_FK} → ${c.fkTarget.table}[${c.fkTarget.column}]`);
+        if (c.incomingRefs && c.incomingRefs.length > 0) {
+          for (const r of c.incomingRefs) {
+            constraints.push(`Ref ← ${r.table}[${r.column}]${r.isActive ? "" : " (inactive)"}`);
+          }
+        }
+        if (c.isCalculated) constraints.push(BADGE_CALC);
+        if (c.isHidden) constraints.push(BADGE_HIDDEN);
+        const cstr = constraints.length > 0 ? constraints.join("<br>") : "—";
+        lines.push(`| ${i + 1} | ${esc(c.name)} | ${esc(c.dataType)} | ${cstr} | ${esc(c.summarizeBy) || "—"} | ${esc(c.sortByColumn) || "—"} | ${esc(c.dataCategory) || "—"} | ${esc(c.formatString) || "—"} | ${esc(c.description) || "—"} |`);
+      });
+      lines.push("");
+    }
+
+    // ── Hierarchies ─────────────────────────────────────────────────────────
+    if (tbl.hierarchies.length > 0) {
+      lines.push("### Hierarchies");
+      lines.push("");
+      for (const h of tbl.hierarchies) {
+        lines.push(`**${esc(h.name)}**` + (h.description ? ` — ${esc(h.description)}` : ""));
+        lines.push("");
+        if (h.levels.length > 0) {
+          lines.push("| Order | Level | Column | Description |");
+          lines.push("|------:|-------|--------|-------------|");
+          h.levels.forEach((lv, i) => {
+            lines.push(`| ${i + 1} | ${esc(lv.name)} | ${esc(lv.column)} | ${esc(lv.description) || "—"} |`);
+          });
+          lines.push("");
+        }
+      }
+    }
+
+    lines.push("</details>");
+    lines.push("");
+    lines.push("[↑ Jump to](#jump-to)");
+    lines.push("");
+    lines.push("---");
+    lines.push("");
+  }
+
   lines.push(`_Generated by powerbi-lineage · ${ts}_`);
   lines.push("");
   return lines.join("\n");

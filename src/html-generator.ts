@@ -11,7 +11,9 @@ export function generateHTML(
   measuresMarkdown: string = "",
   functionsMarkdown: string = "",
   calcGroupsMarkdown: string = "",
-  qualityMarkdown: string = ""
+  qualityMarkdown: string = "",
+  dataDictionaryMarkdown: string = "",
+  version: string = "0.1.0"
 ): string {
   const ts = new Date().toISOString().replace("T", " ").substring(0, 16);
   // JSON.stringify safely escapes each markdown body for embedding in JS consts.
@@ -20,6 +22,7 @@ export function generateHTML(
   const functionsMarkdownLiteral = JSON.stringify(functionsMarkdown);
   const calcGroupsMarkdownLiteral = JSON.stringify(calcGroupsMarkdown);
   const qualityMarkdownLiteral = JSON.stringify(qualityMarkdown);
+  const dataDictionaryMarkdownLiteral = JSON.stringify(dataDictionaryMarkdown);
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -34,85 +37,219 @@ export function generateHTML(
     --bg:#0B0D11;--surface:#1A1D27;--surface-alt:#12141A;--surface-deep:#12141C;--surface-center:#14161C;
     --border:#2A2D3A;--border-soft:#1E2028;--border-row:#1A1D27;
     --text:#F8FAFC;--text-body:#E2E8F0;--text-muted:#94A3B8;--text-dim:#7A8595;--text-faint:#5E6A7B;--text-fainter:#4A5566;
-    --row-hover:#1A1D27;--hover-border:#475569;
+    --row-hover:#20242F;--hover-border:#475569;
     --chip-dep-bg:rgba(139,92,246,.1);--chip-dep-bd:rgba(139,92,246,.2);--chip-dep-tx:#A78BFA;--chip-dep-hover:rgba(139,92,246,.2);
     --chip-used-bg:rgba(59,130,246,.1);--chip-used-bd:rgba(59,130,246,.15);--chip-used-tx:#93C5FD;
     --code-name:#93C5FD;--code-type:#A78BFA;--code-punct:#475569;
-    --accent:#3B82F6;
+    --accent:#F59E0B;
+    --glass-bg:rgba(26,29,39,0.72);
+    --glass-border:rgba(255,255,255,0.06);
+    --glass-shadow:0 1px 0 rgba(255,255,255,0.04) inset, 0 10px 30px rgba(0,0,0,0.35);
+    --grid-line:rgba(255,255,255,0.025);
+
+    /* ─── Semantic category colours ─────────────────────────────────────── */
+    --clr-measure:    #F59E0B;  /* amber   — measures                */
+    --clr-column:     #3B82F6;  /* blue    — columns                 */
+    --clr-source:     #10B981;  /* emerald — source tables           */
+    --clr-success:    #22C55E;  /* green   — "good" status, active   */
+    --clr-upstream:   #A78BFA;  /* light purple — upstream / deps    */
+    --clr-downstream: #38BDF8;  /* sky     — downstream (distinct from upstream purple) */
+    --clr-function:   #14B8A6;  /* teal    — UDFs                    */
+    --clr-calc:       #A855F7;  /* violet  — calculated columns      */
+    --clr-slicer:     #EC4899;  /* pink    — slicer fields           */
+    --clr-unused:     #EF4444;  /* red     — unused / danger         */
+    --clr-indirect:   #94A3B8;  /* slate   — indirect (neutral)      */
+
+    /* Soft (≈12%) and mid (≈30%) alphas paired with each category colour.
+       Kept as rgba literals because var() can't participate in channel-level
+       blending — these are the recurring rgb() triples from above. */
+    --clr-measure-soft:   rgba(245,158,11,.12);  --clr-measure-mid:   rgba(245,158,11,.30);
+    --clr-column-soft:    rgba(59,130,246,.12);  --clr-column-mid:    rgba(59,130,246,.30);
+    --clr-source-soft:    rgba(16,185,129,.12);  --clr-source-mid:    rgba(16,185,129,.30);
+    --clr-success-soft:   rgba(34,197,94,.12);   --clr-success-mid:   rgba(34,197,94,.30);
+    --clr-upstream-soft:  rgba(167,139,250,.12); --clr-upstream-mid:  rgba(167,139,250,.30);
+    --clr-downstream-soft:rgba(56,189,248,.12);  --clr-downstream-mid:rgba(56,189,248,.30);
+    --clr-function-soft:  rgba(20,184,166,.12);  --clr-function-mid:  rgba(20,184,166,.30);
+    --clr-calc-soft:      rgba(168,85,247,.12);  --clr-calc-mid:      rgba(168,85,247,.30);
+    --clr-slicer-soft:    rgba(236,72,153,.12);  --clr-slicer-mid:    rgba(236,72,153,.30);
+    --clr-unused-soft:    rgba(239,68,68,.12);   --clr-unused-mid:    rgba(239,68,68,.30);
+    --clr-indirect-soft:  rgba(148,163,184,.12); --clr-indirect-mid:  rgba(148,163,184,.30);
+
+    /* ─── Typography scale ──────────────────────────────────────────────── */
+    --fs-xs:10px;  --fs-sm:11px;  --fs-md:13px;  --fs-lg:14px;
+    --fs-xl:16px;  --fs-2xl:20px; --fs-3xl:26px;
+
+    /* ─── Spacing scale ─────────────────────────────────────────────────── */
+    --space-1:2px;  --space-2:4px;  --space-3:6px;  --space-4:8px;  --space-5:12px;
+    --space-6:16px; --space-7:20px; --space-8:24px; --space-9:32px; --space-10:48px;
+
+    /* ─── Radius scale ──────────────────────────────────────────────────── */
+    --radius-sm:4px;    /* chips, badges, small controls */
+    --radius-md:8px;    /* inputs, buttons, small cards  */
+    --radius-lg:12px;   /* main cards                    */
+    --radius-pill:999px;
   }
   [data-theme="light"]{
-    --bg:#F8FAFC;--surface:#FFFFFF;--surface-alt:#F1F5F9;--surface-deep:#FFFFFF;--surface-center:#FFFBEB;
+    --bg:#F1F5F9;--surface:#FFFFFF;--surface-alt:#F1F5F9;--surface-deep:#FFFFFF;--surface-center:#FFFBEB;
     --border:#E2E8F0;--border-soft:#F1F5F9;--border-row:#F1F5F9;
     --text:#0F172A;--text-body:#1E293B;--text-muted:#475569;--text-dim:#64748B;--text-faint:#94A3B8;--text-fainter:#CBD5E1;
     --row-hover:#F1F5F9;--hover-border:#94A3B8;
     --chip-dep-bg:rgba(139,92,246,.08);--chip-dep-bd:rgba(139,92,246,.3);--chip-dep-tx:#6D28D9;--chip-dep-hover:rgba(139,92,246,.15);
     --chip-used-bg:rgba(59,130,246,.08);--chip-used-bd:rgba(59,130,246,.25);--chip-used-tx:#1D4ED8;
     --code-name:#1D4ED8;--code-type:#6D28D9;--code-punct:#94A3B8;
-    --accent:#2563EB;
+    --accent:#D97706;
+    --glass-bg:rgba(255,255,255,0.80);
+    --glass-border:rgba(15,23,42,0.06);
+    --glass-shadow:0 1px 2px rgba(15,23,42,0.04), 0 8px 24px rgba(15,23,42,0.06);
+    --grid-line:rgba(15,23,42,0.04);
+
+    /* Darker equivalents for AA contrast against the light canvas. */
+    --clr-measure:    #B45309;
+    --clr-column:     #1D4ED8;
+    --clr-source:     #047857;
+    --clr-success:    #15803D;
+    --clr-upstream:   #6D28D9;
+    --clr-downstream: #0284C7;  /* sky-600 — downstream, light-theme */
+    --clr-function:   #0F766E;
+    --clr-calc:       #7E22CE;
+    --clr-slicer:     #BE185D;
+    --clr-unused:     #B91C1C;
+    --clr-indirect:   #475569;
+    --clr-measure-soft:   rgba(180,83,9,.10);    --clr-measure-mid:   rgba(180,83,9,.30);
+    --clr-column-soft:    rgba(29,78,216,.08);   --clr-column-mid:    rgba(29,78,216,.28);
+    --clr-source-soft:    rgba(4,120,87,.10);    --clr-source-mid:    rgba(4,120,87,.28);
+    --clr-success-soft:   rgba(21,128,61,.10);   --clr-success-mid:   rgba(21,128,61,.28);
+    --clr-upstream-soft:  rgba(109,40,217,.08);  --clr-upstream-mid:  rgba(109,40,217,.30);
+    --clr-downstream-soft:rgba(2,132,199,.10);   --clr-downstream-mid:rgba(2,132,199,.28);
+    --clr-function-soft:  rgba(15,118,110,.10);  --clr-function-mid:  rgba(15,118,110,.28);
+    --clr-calc-soft:      rgba(126,34,206,.08);  --clr-calc-mid:      rgba(126,34,206,.28);
+    --clr-slicer-soft:    rgba(190,24,93,.08);   --clr-slicer-mid:    rgba(190,24,93,.28);
+    --clr-unused-soft:    rgba(185,28,28,.10);   --clr-unused-mid:    rgba(185,28,28,.30);
+    --clr-indirect-soft:  rgba(71,85,105,.10);   --clr-indirect-mid:  rgba(71,85,105,.25);
   }
-  body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(--text-body);min-height:100vh;transition:background .2s,color .2s}
+  body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(--text-body);min-height:100vh;padding-bottom:48px;position:relative;overflow-x:hidden;transition:background .2s,color .2s}
+
+  /* Fixed, full-viewport background layers (behind content).
+     body::before = three animated radial "blobs" (drift via background-position).
+     body::after  = blueprint grid, masked so it fades at the edges. */
+  body::before{
+    content:"";
+    position:fixed;inset:0;z-index:-2;pointer-events:none;
+    background:
+      radial-gradient(800px 800px at 15% 20%, rgba(245,158,11,0.05) 0%, transparent 60%),
+      radial-gradient(800px 800px at 85% 60%, rgba(59,130,246,0.05) 0%, transparent 60%),
+      radial-gradient(800px 800px at 40% 110%, rgba(139,92,246,0.05) 0%, transparent 60%);
+    animation:bg-drift 24s ease-in-out infinite alternate;
+    will-change:background-position;
+  }
+  body::after{
+    content:"";
+    position:fixed;inset:0;z-index:-1;pointer-events:none;
+    background-image:
+      linear-gradient(var(--grid-line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+    background-size:40px 40px;
+    -webkit-mask-image:radial-gradient(ellipse at center, black 25%, transparent 80%);
+            mask-image:radial-gradient(ellipse at center, black 25%, transparent 80%);
+  }
+  @keyframes bg-drift{
+    0%   {background-position:0% 0%, 0% 0%, 0% 0%;}
+    100% {background-position:3% -2%, -2% 3%, 2% 2%;}
+  }
+  @media (prefers-reduced-motion: reduce){
+    body::before{animation:none;}
+  }
+
+  /* Global scrollbar + focus ring (applied app-wide, not just MD panes). */
+  ::-webkit-scrollbar{width:10px;height:10px;}
+  ::-webkit-scrollbar-thumb{background:var(--border);border-radius:5px;}
+  ::-webkit-scrollbar-track{background:transparent;}
+  :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px;}
+
   .mono{font-family:'JetBrains Mono',monospace}
-  .container{max-width:1400px;margin:0 auto;padding:20px 24px}
+  .container{max-width:1400px;margin:0 auto;padding:var(--space-7) var(--space-8);position:relative;z-index:1}
   .tab{white-space:nowrap}
   .header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
-  .header-left .top{display:flex;align-items:center;gap:8px}
-  .header-label{font-size:13px;color:var(--accent);font-weight:700;font-family:'JetBrains Mono',monospace}
+  .header-left .top{display:flex;align-items:center;gap:10px}
+  /* Shared "Usage Map" pill — used in the header and the refresh-bar.
+     Matches the launcher badge in app.ts. */
+  .usage-map-badge{display:inline-block;font:10px/1 'JetBrains Mono',monospace;font-weight:600;letter-spacing:.15em;text-transform:uppercase;padding:4px 10px;border-radius:999px;color:var(--accent);background:rgba(245,158,11,0.05);border:1px solid rgba(245,158,11,0.18);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+  [data-theme="light"] .usage-map-badge{background:rgba(245,158,11,0.08);border-color:rgba(245,158,11,0.28)}
+
+  /* ─── Shared in-table badge component ─────────────────────────────────── */
+  /* Single base + one modifier per semantic role. Replaces the ad-hoc
+     .pk-badge / .fk-badge / .calc-col-badge / .hid-col-badge / .hidden-badge
+     / .slicer-badge / .calc-group-pill / .trel-dir.in|.out rules and the
+     inline-styled INDIRECT / UNUSED spans. */
+  .badge{display:inline-block;font:9px/1 'JetBrains Mono',monospace;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:2px 6px;border-radius:var(--radius-sm);border:1px solid transparent;vertical-align:middle;white-space:nowrap;margin-left:var(--space-2)}
+  .badge--pk        {background:var(--clr-measure-soft);   color:var(--clr-measure);   border-color:var(--clr-measure-mid);}
+  .badge--pk-inf    {background:transparent;                color:var(--clr-measure);   border:1px dashed var(--clr-measure-mid);}
+  .badge--fk        {background:var(--clr-column-soft);    color:var(--clr-column);    border-color:var(--clr-column-mid);}
+  .badge--calc      {background:var(--clr-calc-soft);      color:var(--clr-calc);      border-color:var(--clr-calc-mid);}
+  .badge--hidden    {background:var(--clr-upstream-soft);  color:var(--clr-upstream);  border-color:var(--clr-upstream-mid);}
+  .badge--hid-col   {background:rgba(100,116,139,.12);     color:var(--text-dim);      border-color:rgba(100,116,139,.25);}
+  .badge--slicer    {background:var(--clr-slicer-soft);    color:var(--clr-slicer);    border-color:transparent;}
+  .badge--unused    {background:var(--clr-unused-soft);    color:var(--clr-unused);    border-color:transparent;}
+  .badge--success   {background:var(--clr-success-soft);   color:var(--clr-success);   border-color:transparent;}
+  .badge--indirect  {background:rgba(100,116,139,.15);     color:var(--clr-indirect);  border-color:transparent;}
+  .badge--calc-grp  {background:var(--clr-slicer-soft);    color:var(--clr-slicer);    border-color:var(--clr-slicer-mid);}
+  .badge--direction-out{background:var(--clr-success-soft); color:var(--clr-success);  border-color:var(--clr-success-mid);}
+  .badge--direction-in {background:var(--clr-column-soft);  color:var(--clr-column);   border-color:var(--clr-column-mid);}
   .header-sep{font-size:13px;color:var(--text-fainter)}
-  .header-sub{font-size:13px;color:var(--text-dim)}
+  /* Report name — gradient-text title matching the launcher h1. */
+  .header-sub{font-size:18px;font-weight:700;letter-spacing:-0.01em;background:linear-gradient(180deg, var(--text) 0%, var(--text-muted) 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
   .timestamp{font-size:10px;color:var(--text-fainter);font-family:'JetBrains Mono',monospace;margin-top:4px}
   .header-actions{display:flex;gap:6px;align-items:center}
   .theme-btn{padding:6px 10px;font-size:13px;line-height:1;border:1px solid var(--border);border-radius:6px;cursor:pointer;background:var(--surface);color:var(--text-dim);transition:all .15s}
   .theme-btn:hover{background:var(--border);color:var(--text);border-color:var(--accent)}
   .refresh-btn{padding:6px 14px;font-size:11px;font-family:'JetBrains Mono',monospace;border:1px solid var(--border);border-radius:6px;cursor:pointer;background:var(--surface);color:var(--text-dim);transition:all .15s}
   .refresh-btn:hover{background:var(--border);color:var(--text);border-color:var(--accent)}
-  .summary{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:20px}
-  .stat-detail{font-size:10px;color:var(--text-faint);margin-top:2px;font-family:'JetBrains Mono',monospace}
-  .stat{background:var(--surface);border-radius:8px;border:1px solid var(--border);padding:12px 14px;text-align:center}
-  .stat-value{font-size:22px;font-weight:700;color:var(--text)}
-  .stat-value.good{color:#22C55E}.stat-value.warn{color:#F59E0B}.stat-value.danger{color:#EF4444}
-  .stat-label{font-size:10px;color:var(--text-dim);margin-top:2px;text-transform:uppercase;letter-spacing:.06em}
-  .tabs{display:flex;gap:2px;margin-bottom:16px;border-bottom:1px solid var(--border-soft)}
-  .tab{padding:8px 16px;font-size:13px;border:none;border-bottom:2px solid transparent;cursor:pointer;background:none;color:var(--text-dim);font-family:inherit;font-weight:500;transition:all .15s}
-  .tab.active{color:var(--text);border-bottom-color:var(--accent)}
-  .tab:hover:not(.active){color:var(--text-muted)}
-  .tab .badge{font-size:10px;background:var(--border);color:var(--text-muted);padding:1px 6px;border-radius:10px;margin-left:6px;font-family:'JetBrains Mono',monospace}
-  .tab .badge.warn{background:rgba(245,158,11,.15);color:#F59E0B}
+  .summary{display:grid;grid-template-columns:repeat(5,1fr);gap:var(--space-5);margin-bottom:var(--space-7);align-items:stretch}
+  .stat-detail{font-size:var(--fs-sm);color:var(--text-faint);margin-top:var(--space-1);font-family:'JetBrains Mono',monospace}
+  .stat{background:var(--glass-bg);-webkit-backdrop-filter:blur(16px) saturate(130%);backdrop-filter:blur(16px) saturate(130%);border-radius:var(--radius-lg);border:1px solid var(--glass-border);box-shadow:var(--glass-shadow);padding:var(--space-6) var(--space-6);text-align:center;min-height:90px;display:flex;flex-direction:column;justify-content:center}
+  .stat-value{font-size:var(--fs-3xl);line-height:1.1;font-weight:700;color:var(--text);font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums}
+  .stat-value.good{color:var(--clr-success)}.stat-value.warn{color:var(--clr-measure)}.stat-value.danger{color:var(--clr-unused)}
+  .stat-label{font-size:var(--fs-sm);color:var(--text-dim);margin-top:var(--space-2);text-transform:uppercase;letter-spacing:.08em;font-weight:600}
+  /* Sticky tab bar — flushes under the header when scrolling long tabs. */
+  .tabs{display:flex;gap:2px;margin-bottom:var(--space-6);border-bottom:1px solid var(--border-soft);position:sticky;top:0;z-index:10;background:var(--bg);padding-top:var(--space-5);margin-top:calc(var(--space-5) * -1)}
+  .tab{padding:var(--space-4) var(--space-6);font-size:var(--fs-md);border:none;border-top-left-radius:var(--radius-md);border-top-right-radius:var(--radius-md);border-bottom:2px solid transparent;cursor:pointer;background:transparent;color:var(--text-dim);font-family:inherit;font-weight:500;transition:background .15s,color .15s,border-color .15s}
+  .tab.active{background:var(--surface);color:var(--text);border-bottom-color:var(--accent)}
+  .tab:hover:not(.active){background:rgba(255,255,255,0.03);color:var(--text-muted)}
+  [data-theme="light"] .tab:hover:not(.active){background:rgba(15,23,42,0.03)}
+  /* Tab count pill — distinct from the shared .badge component used in table rows. */
+  .tab-count{font:var(--fs-xs)/1 'JetBrains Mono',monospace;background:var(--border);color:var(--text-muted);padding:1px 6px;border-radius:var(--radius-pill);margin-left:var(--space-3);display:inline-block}
+  .tab-count.warn{background:var(--clr-measure-soft);color:var(--clr-measure)}
   .panel{display:none}.panel.active{display:block}
-  .search-row{display:flex;gap:10px;margin-bottom:14px;align-items:center}
-  .search-input{flex:1;padding:7px 12px;font-size:13px;font-family:inherit;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text-body);outline:none;transition:border-color .15s}
+  .search-row{display:flex;gap:var(--space-5);margin-bottom:var(--space-6);align-items:center}
+  .search-input{flex:1;padding:var(--space-4) var(--space-5);font-size:var(--fs-md);font-family:inherit;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);color:var(--text-body);outline:none;transition:border-color .15s}
   .search-input:focus{border-color:var(--accent)}
   .search-input::placeholder{color:var(--text-faint)}
   .filter-btn{padding:6px 12px;font-size:11px;border:1px solid var(--border);border-radius:6px;cursor:pointer;background:var(--surface);color:var(--text-dim);font-family:inherit;transition:all .15s}
   .filter-btn:hover,.filter-btn.active{background:var(--border);color:var(--text)}
   .filter-btn.active{border-color:var(--accent);color:var(--accent)}
+  .table-wrap{overflow-x:auto;width:100%}
   .data-table{width:100%;border-collapse:collapse}
-  .data-table th{text-align:left;padding:8px 12px;font-size:10px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--border);font-weight:600;cursor:pointer;user-select:none;white-space:nowrap}
+  .data-table th{text-align:left;padding:var(--space-5) var(--space-5);font-size:var(--fs-sm);color:var(--text-dim);text-transform:uppercase;letter-spacing:.08em;border-bottom:1px solid var(--border);font-weight:600;cursor:pointer;user-select:none;white-space:nowrap}
   .data-table th:hover{color:var(--text-muted)}
-  .data-table td{padding:8px 12px;font-size:13px;border-bottom:1px solid var(--border-row);vertical-align:top}
+  .data-table td{padding:var(--space-5) var(--space-5);font-size:var(--fs-lg);border-bottom:1px solid var(--border-row);vertical-align:top}
   .data-table tr{transition:background .1s}
   .data-table tr:hover{background:var(--row-hover)}
   .data-table tr.unused{opacity:.5}
-  .data-table tr.unused td:first-child{border-left:3px solid #EF4444;padding-left:9px}
+  .data-table tr.unused td:first-child{border-left:3px solid var(--clr-unused);padding-left:9px}
   .data-table tr.indirect{opacity:.7}
-  .data-table tr.indirect td:first-child{border-left:3px solid #F59E0B;padding-left:9px}
+  .data-table tr.indirect td:first-child{border-left:3px solid var(--clr-indirect);padding-left:9px}
   .field-name{font-weight:600;color:var(--text);cursor:pointer;transition:color .15s;text-decoration:underline;text-decoration-color:var(--border);text-underline-offset:2px}
   .field-name:hover{color:var(--accent);text-decoration-color:var(--accent)}
   .field-table{font-size:11px;color:var(--text-dim);font-family:'JetBrains Mono',monospace}
   .usage-count{font-family:'JetBrains Mono',monospace;font-weight:600}
-  .usage-count.zero{color:#EF4444}.usage-count.low{color:#F59E0B}.usage-count.good{color:#22C55E}
+  .usage-count.zero{color:var(--clr-unused)}.usage-count.low{color:var(--clr-measure)}.usage-count.good{color:var(--clr-success)}
   .dep-chip{display:inline-block;font-size:10px;padding:1px 6px;border-radius:4px;margin:1px 2px;font-family:'JetBrains Mono',monospace;background:var(--chip-dep-bg);color:var(--chip-dep-tx);border:1px solid var(--chip-dep-bd);cursor:pointer;transition:all .15s}
   .dep-chip:hover{background:var(--chip-dep-hover);border-color:var(--chip-dep-tx)}
   .used-chip{display:inline-block;font-size:10px;padding:1px 6px;border-radius:4px;margin:1px 2px;background:var(--chip-used-bg);color:var(--chip-used-tx);border:1px solid var(--chip-used-bd)}
-  .slicer-badge{font-size:9px;padding:1px 5px;border-radius:3px;background:rgba(236,72,153,.12);color:#EC4899;font-weight:600;margin-left:4px}
-  .hidden-badge{font-size:9px;padding:1px 6px;border-radius:3px;background:rgba(139,92,246,.15);color:#A78BFA;border:1px solid rgba(139,92,246,.3);font-weight:600;letter-spacing:.05em;margin-left:8px;vertical-align:middle;cursor:help}
-  [data-theme="light"] .hidden-badge{background:rgba(139,92,246,.1);color:#6D28D9;border-color:rgba(139,92,246,.35)}
-  .pk-badge{font-size:9px;padding:1px 5px;border-radius:3px;background:rgba(245,158,11,.15);color:#F59E0B;border:1px solid rgba(245,158,11,.3);font-weight:700;letter-spacing:.05em;margin-left:6px;vertical-align:middle;font-family:'JetBrains Mono',monospace}
-  .fk-badge{font-size:9px;padding:1px 5px;border-radius:3px;background:rgba(59,130,246,.12);color:#3B82F6;border:1px solid rgba(59,130,246,.28);font-weight:700;letter-spacing:.05em;margin-left:6px;vertical-align:middle;font-family:'JetBrains Mono',monospace}
-  .hid-col-badge{font-size:9px;padding:1px 5px;border-radius:3px;background:rgba(100,116,139,.12);color:var(--text-dim);border:1px solid rgba(100,116,139,.25);font-weight:600;margin-left:6px;vertical-align:middle;font-family:'JetBrains Mono',monospace}
-  .calc-col-badge{font-size:9px;padding:1px 5px;border-radius:3px;background:rgba(168,85,247,.12);color:#A855F7;border:1px solid rgba(168,85,247,.28);font-weight:600;margin-left:6px;vertical-align:middle;font-family:'JetBrains Mono',monospace}
-  [data-theme="light"] .pk-badge{background:rgba(245,158,11,.1);color:#B45309;border-color:rgba(245,158,11,.35)}
-  [data-theme="light"] .fk-badge{background:rgba(59,130,246,.08);color:#1D4ED8;border-color:rgba(59,130,246,.3)}
-  [data-theme="light"] .calc-col-badge{background:rgba(168,85,247,.08);color:#7E22CE;border-color:rgba(168,85,247,.3)}
+  /* Previous .pk-badge / .fk-badge / .hid-col-badge / .calc-col-badge /
+     .hidden-badge / .slicer-badge CSS rules + their [data-theme="light"]
+     overrides have been replaced by the .badge + .badge--* component
+     above. Removed to keep one source of truth. */
 
   .tcol-row{display:grid;grid-template-columns:1fr 140px 220px;gap:12px;padding:6px 10px;border-radius:6px;align-items:center;font-size:12px;border-bottom:1px solid var(--border-row)}
   .tcol-row:last-child{border-bottom:none}
@@ -122,65 +259,65 @@ export function generateHTML(
   .tcol-type{font-size:11px;color:var(--text-dim);font-family:'JetBrains Mono',monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .tcol-fk{font-size:11px;font-family:'JetBrains Mono',monospace;line-height:1.6;white-space:normal;overflow:hidden}
   .tcol-fk .arrow{color:var(--text-faint);margin:0 4px}
-  .tcol-fk .rel-out{color:#22C55E}
+  .tcol-fk .rel-out{color:var(--clr-success)}
   .tcol-fk .rel-in{color:var(--chip-used-tx)}
   .tcol-fk .rel-inactive{opacity:.55;font-style:italic}
-  [data-theme="light"] .tcol-fk .rel-out{color:#15803D}
-  .pk-badge.inferred{background:transparent;color:#F59E0B;border:1px dashed rgba(245,158,11,.5)}
-  [data-theme="light"] .pk-badge.inferred{color:#B45309;border-color:rgba(245,158,11,.55)}
+  /* .pk-badge.inferred replaced by .badge.badge--pk-inf */
   .trel-row{display:flex;align-items:center;gap:10px;padding:6px 10px;border-radius:6px;font-size:12px;font-family:'JetBrains Mono',monospace;color:var(--text-body)}
   .trel-row:hover{background:var(--surface-alt)}
-  .trel-dir{font-size:9px;padding:1px 5px;border-radius:3px;font-weight:600;letter-spacing:.05em;text-transform:uppercase}
-  .trel-dir.out{background:rgba(34,197,94,.12);color:#22C55E;border:1px solid rgba(34,197,94,.3)}
-  .trel-dir.in{background:rgba(59,130,246,.12);color:#3B82F6;border:1px solid rgba(59,130,246,.3)}
+  /* .trel-dir.out / .trel-dir.in replaced by .badge--direction-out / .badge--direction-in */
   .trel-inactive{opacity:.55;font-style:italic}
-  .calc-group-pill{font-size:9px;padding:1px 6px;border-radius:3px;background:rgba(236,72,153,.12);color:#EC4899;border:1px solid rgba(236,72,153,.3);font-weight:600;letter-spacing:.05em;margin-left:8px;vertical-align:middle}
+  /* .calc-group-pill replaced by .badge.badge--calc-grp */
   .format-str{font-size:11px;color:var(--text-faint);font-family:'JetBrains Mono',monospace}
 
   .lineage-back{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-dim);cursor:pointer;margin-bottom:16px;transition:color .15s}
   .lineage-back:hover{color:var(--accent)}
-  .lineage-hero{background:var(--surface);border-radius:10px;border:1px solid var(--border);padding:20px;margin-bottom:16px}
+  .lineage-hero{background:var(--glass-bg);-webkit-backdrop-filter:blur(16px) saturate(130%);backdrop-filter:blur(16px) saturate(130%);border-radius:var(--radius-lg);border:1px solid var(--glass-border);box-shadow:var(--glass-shadow);padding:var(--space-7);margin-bottom:var(--space-6)}
   .lineage-hero-title{font-size:20px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:10px}
   .lineage-hero-title .dot{width:12px;height:12px;border-radius:50%;flex-shrink:0}
   .lineage-hero-meta{font-size:12px;color:var(--text-dim);margin-top:6px;font-family:'JetBrains Mono',monospace}
-  .lineage-dax{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text-muted);background:var(--surface-alt);padding:10px 12px;border-radius:6px;border:1px solid var(--border);margin-top:12px;white-space:pre-wrap;word-break:break-all;line-height:1.6}
+  .lineage-dax{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text-muted);background:var(--surface-alt);padding:10px 12px;border-radius:6px;border:1px solid var(--border);margin-top:12px;white-space:pre-wrap;word-break:normal;overflow-x:auto;line-height:1.6}
 
   .lineage-flow-row{display:flex;gap:0;align-items:flex-start}
   .lineage-flow-col{flex:1;display:flex;flex-direction:column;gap:6px;padding:0 8px}
   .lineage-flow-col-label{font-size:10px;color:var(--text-fainter);text-transform:uppercase;letter-spacing:.08em;text-align:center;margin-bottom:6px;font-weight:600}
-  .lineage-arrow-col{display:flex;align-items:flex-start;justify-content:center;color:var(--text-fainter);font-size:18px;flex-shrink:0;width:32px;padding-top:36px}
+  .lineage-arrow-col{display:flex;align-items:flex-start;justify-content:center;color:var(--accent);opacity:.5;font-size:22px;flex-shrink:0;width:32px;padding-top:36px}
 
-  .lc{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 14px;transition:all .15s}
+  .lc{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);padding:var(--space-5) var(--space-6);transition:all .15s}
   .lc:hover{border-color:var(--hover-border)}
   .lc.clickable{cursor:pointer}
   .lc.clickable:hover{border-color:var(--accent)}
   .lc .lc-name{font-size:13px;font-weight:600;color:var(--text)}
   .lc .lc-sub{font-size:10px;color:var(--text-dim);font-family:'JetBrains Mono',monospace;margin-top:2px}
   .lc .lc-role{font-size:10px;color:var(--text-faint);margin-top:3px}
-  .lc.upstream{border-left:3px solid #A78BFA}
-  .lc.source{border-left:3px solid #10B981}
-  .lc.center{border-left:3px solid #F59E0B;background:var(--surface-center)}
+  .lc.upstream{border-left:3px solid var(--clr-upstream)}
+  .lc.source{border-left:3px solid var(--clr-source)}
+  .lc.center{border-left:3px solid var(--clr-measure);background:var(--surface-center)}
   .lc.center.col-type{border-left-color:var(--accent)}
-  .lc.downstream{border-left:3px solid #8B5CF6}
+  .lc.downstream{border-left:3px solid var(--clr-downstream)}
   .lc.empty{border-style:dashed;opacity:.4}
-  .lc.udf{border-left:3px solid #14B8A6}
-  .lc.feeds{border-left:3px solid #F59E0B;background:rgba(245,158,11,.04)}
+  .lc.udf{border-left:3px solid var(--clr-function)}
+  .lc.feeds{border-left:3px solid var(--clr-measure);background:rgba(245,158,11,.04)}
 
   .feeds-label{font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;margin-top:10px;margin-bottom:4px;font-weight:600}
 
-  .page-card{background:var(--surface);border-radius:10px;border:1px solid var(--border);margin-bottom:12px;overflow:hidden;transition:border-color .15s}
+  .page-card{background:var(--glass-bg);-webkit-backdrop-filter:blur(16px) saturate(130%);backdrop-filter:blur(16px) saturate(130%);border-radius:var(--radius-lg);border:1px solid var(--glass-border);box-shadow:var(--glass-shadow);margin-bottom:var(--space-5);overflow:hidden;transition:border-color .15s}
   .page-card:hover{border-color:var(--hover-border)}
-  .page-header{padding:14px 18px;cursor:pointer;display:flex;align-items:center;gap:14px;user-select:none}
+  .page-header{padding:var(--space-6) var(--space-6);cursor:pointer;display:flex;align-items:center;gap:var(--space-6);user-select:none}
   .page-name{font-size:16px;font-weight:700;color:var(--text);flex:1}
   .page-stats{display:flex;gap:12px;align-items:center}
   .page-stat{text-align:center}
   .page-stat-val{font-size:16px;font-weight:700;font-family:'JetBrains Mono',monospace}
   .page-stat-label{font-size:9px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.05em}
-  .page-expand{color:var(--text-faint);font-size:12px;transition:transform .2s;flex-shrink:0}
-  .page-card.open .page-expand{transform:rotate(180deg)}
+  /* Disclosure triangle — matches the <details>/<summary> pattern used in
+     rendered MD. Arrow supplied via ::before so templates can leave the span
+     empty (no hard-coded arrow chars to maintain). */
+  .page-expand{color:var(--text-faint);font-size:12px;flex-shrink:0;display:inline-block}
+  .page-expand::before{content:"\u25B8";display:inline-block;transition:transform .15s;line-height:1}
+  .page-card.open .page-expand::before{transform:rotate(90deg)}
   .page-body{max-height:0;overflow:hidden;transition:max-height .3s ease}
   .page-card.open .page-body{max-height:2000px}
-  .page-body-inner{padding:0 18px 16px}
+  .page-body-inner{padding:0 var(--space-6) var(--space-6)}
   .page-section{margin-bottom:12px}
   .page-section-title{font-size:10px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.06em;font-weight:600;margin-bottom:6px;display:flex;align-items:center;gap:8px}
   .page-section-title .line{flex:1;height:1px;background:var(--border-soft)}
@@ -211,40 +348,91 @@ export function generateHTML(
   .summary .stat.has-tip:last-child::before{left:auto;right:24px;transform:none}
 
   .lineage-dax{position:relative}
-  .copy-btn{position:absolute;top:6px;right:6px;width:24px;height:24px;padding:0;font-size:12px;line-height:1;border:1px solid var(--border);border-radius:4px;cursor:pointer;background:var(--surface);color:var(--text-dim);opacity:0;transition:all .15s;font-family:'JetBrains Mono',monospace;display:flex;align-items:center;justify-content:center}
-  .lineage-dax:hover .copy-btn{opacity:1}
+  .copy-btn{position:absolute;top:6px;right:6px;width:24px;height:24px;padding:0;font-size:12px;line-height:1;border:1px solid var(--border);border-radius:4px;cursor:pointer;background:var(--surface);color:var(--text-dim);opacity:.4;transition:all .15s;font-family:'JetBrains Mono',monospace;display:flex;align-items:center;justify-content:center}
+  .copy-btn:hover,.lineage-dax:hover .copy-btn{opacity:1}
   .copy-btn:hover{color:var(--text);background:var(--border);border-color:var(--accent)}
-  .copy-btn.copied{color:#22C55E;border-color:#22C55E;opacity:1}
+  .copy-btn.copied{color:var(--clr-success);border-color:var(--clr-success);opacity:1}
 
-  .refresh-bar{position:fixed;bottom:0;left:0;right:0;height:28px;background:var(--surface-deep);border-top:1px solid var(--border);display:flex;align-items:center;justify-content:center;gap:12px;font-size:11px;font-family:'JetBrains Mono',monospace;color:var(--text-dim);z-index:999}
+  /* Footer bar — branding (left) · refresh status (center) · version meta (right). */
+  .refresh-bar{position:fixed;bottom:0;left:0;right:0;min-height:28px;background:var(--surface-deep);border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:var(--space-6);padding:0 var(--space-6);font-size:var(--fs-sm);font-family:'JetBrains Mono',monospace;color:var(--text-dim);z-index:999}
+  .refresh-bar .rb-left,
+  .refresh-bar .rb-center,
+  .refresh-bar .rb-right{display:flex;align-items:center;gap:8px;white-space:nowrap}
+  .refresh-bar .rb-left{justify-content:flex-start}
+  .refresh-bar .rb-center{flex:1;justify-content:center}
+  .refresh-bar .rb-right{justify-content:flex-end;color:var(--text-fainter);font-size:10px;font-variant-numeric:tabular-nums}
+  .refresh-bar .rb-sep{color:var(--text-fainter)}
+  .refresh-bar .rb-report{color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;max-width:28vw}
   .refresh-bar .timer{color:var(--text-muted)}
   .refresh-bar .dot{width:6px;height:6px;border-radius:50%;background:var(--text-fainter);display:inline-block}
-  .refresh-bar .dot.stale{background:#F59E0B}
+  .refresh-bar .dot.stale{background:var(--clr-measure)}
   .refresh-bar button{padding:2px 10px;font-size:10px;font-family:'JetBrains Mono',monospace;border:1px solid var(--border);border-radius:4px;cursor:pointer;background:var(--surface);color:var(--text-dim);transition:all .15s}
   .refresh-bar button:hover{background:var(--border);color:var(--text);border-color:var(--accent)}
+  @media (max-width: 900px){ .refresh-bar .rb-right{display:none} }
+  @media (max-width: 700px){ .refresh-bar .rb-left{display:none} }
 
-  .md-source{font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.55;color:var(--text-body);background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px 18px;white-space:pre-wrap;word-break:break-word;max-height:72vh;overflow:auto;tab-size:2}
-  .md-source::-webkit-scrollbar{width:10px;height:10px}
-  .md-source::-webkit-scrollbar-thumb{background:var(--border);border-radius:5px}
+  /* Panel footer — end-of-list beat under each data panel. */
+  .panel-footer{
+    margin:var(--space-5) 0 var(--space-2);
+    padding:var(--space-5) var(--space-6);
+    font:var(--fs-sm)/1.5 'JetBrains Mono',monospace;
+    color:var(--text-faint);
+    border-top:1px dashed var(--border-soft);
+    display:flex;
+    justify-content:space-between;
+    gap:var(--space-5);
+    flex-wrap:wrap;
+  }
+  .panel-footer .right{color:var(--text-fainter)}
 
-  .md-rendered{font-family:'DM Sans',system-ui,sans-serif;font-size:14px;line-height:1.6;color:var(--text-body);background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:20px 26px;max-height:72vh;overflow:auto}
-  .md-rendered h1{font-size:22px;margin:0 0 10px;color:var(--text);border-bottom:1px solid var(--border);padding-bottom:6px}
-  .md-rendered h2{font-size:18px;margin:22px 0 8px;color:var(--text);border-bottom:1px solid var(--border-soft);padding-bottom:4px}
-  .md-rendered h3{font-size:15px;margin:16px 0 6px;color:var(--text)}
-  .md-rendered h4{font-size:13px;margin:12px 0 4px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em}
-  .md-rendered p{margin:6px 0}
-  .md-rendered ul{padding-left:22px;margin:6px 0}
-  .md-rendered li{margin:2px 0}
-  .md-rendered hr{border:none;border-top:1px solid var(--border-soft);margin:16px 0}
-  .md-rendered blockquote{border-left:3px solid var(--accent);background:var(--surface-alt);padding:6px 12px;margin:8px 0;color:var(--text-muted);font-style:italic;border-radius:0 4px 4px 0}
-  .md-rendered code{font-family:'JetBrains Mono',monospace;font-size:12px;background:var(--surface-alt);color:var(--chip-dep-tx);padding:1px 5px;border-radius:3px;border:1px solid var(--border-soft)}
+  .md-source{font-family:'JetBrains Mono',monospace;font-size:var(--fs-md);line-height:1.55;color:var(--text-body);background:var(--glass-bg);-webkit-backdrop-filter:blur(16px) saturate(130%);backdrop-filter:blur(16px) saturate(130%);border:1px solid var(--glass-border);box-shadow:var(--glass-shadow);border-radius:var(--radius-lg);padding:var(--space-6) var(--space-6);white-space:pre-wrap;word-break:break-word;max-height:72vh;overflow:auto;tab-size:2}
+
+  .md-rendered{font-family:'DM Sans',system-ui,sans-serif;font-size:var(--fs-lg);line-height:1.6;color:var(--text-body);background:var(--glass-bg);-webkit-backdrop-filter:blur(16px) saturate(130%);backdrop-filter:blur(16px) saturate(130%);border:1px solid var(--glass-border);box-shadow:var(--glass-shadow);border-radius:var(--radius-lg);padding:var(--space-7) var(--space-8);max-height:72vh;overflow:auto}
+  /* Heading scale aligned with the shared typography tokens so the MD view
+     matches the dashboard's visual hierarchy. */
+  .md-rendered h1{font-size:var(--fs-3xl);font-weight:700;margin:0 0 var(--space-5);color:var(--text);border-bottom:1px solid var(--border);padding-bottom:var(--space-3)}
+  .md-rendered h2{font-size:var(--fs-2xl);font-weight:700;margin:var(--space-8) 0 var(--space-4);color:var(--text);border-bottom:1px solid var(--border-soft);padding-bottom:var(--space-2)}
+  .md-rendered h3{font-size:var(--fs-xl);font-weight:600;margin:var(--space-6) 0 var(--space-3);color:var(--text)}
+  .md-rendered h4{font-size:var(--fs-lg);font-weight:600;margin:var(--space-5) 0 var(--space-2);color:var(--text-muted)}
+  .md-rendered p{margin:var(--space-3) 0}
+  .md-rendered ul{padding-left:22px;margin:var(--space-3) 0}
+  .md-rendered li{margin:var(--space-1) 0}
+  /* Section dividers — dashed to match .panel-footer / other app breaks. */
+  .md-rendered hr{border:none;border-top:1px dashed var(--border-soft);margin:var(--space-7) 0}
+  .md-rendered blockquote{border-left:3px solid var(--accent);background:var(--surface-alt);padding:var(--space-3) var(--space-5);margin:var(--space-4) 0;color:var(--text-muted);font-style:italic;border-radius:0 var(--radius-sm) var(--radius-sm) 0}
+  /* A blockquote placed directly after an h1/h2 is a "summary paragraph" —
+     drop the italic + muted treatment so the intro reads as plain prose. */
+  .md-rendered h1 + blockquote,
+  .md-rendered h2 + blockquote{font-style:normal;color:var(--text-body)}
+
+  /* Chip component — soft pill used in MD for "Used by" / "Depends on" /
+     entity lists. Matches the dashboard Functions-tab measure chips. */
+  .md-rendered .chip{display:inline-block;font:var(--fs-sm)/1 'JetBrains Mono',monospace;padding:3px 9px;border-radius:var(--radius-pill);border:1px solid transparent;margin:2px 3px 2px 0;white-space:nowrap;vertical-align:middle}
+  .md-rendered .chip--measure{background:var(--clr-measure-soft);color:var(--clr-measure);border-color:var(--clr-measure-mid)}
+  .md-rendered .chip--column {background:var(--clr-column-soft); color:var(--clr-column); border-color:var(--clr-column-mid)}
+  .md-rendered .chip--function{background:var(--clr-function-soft);color:var(--clr-function);border-color:var(--clr-function-mid)}
+  .md-rendered .chip--neutral{background:rgba(100,116,139,.08);color:var(--text-muted);border-color:rgba(100,116,139,.25)}
+  /* Inline code uses the accent colour so it pops against body text. */
+  .md-rendered code{font-family:'JetBrains Mono',monospace;font-size:var(--fs-md);background:var(--surface-alt);color:var(--accent);padding:1px 5px;border-radius:var(--radius-sm);border:1px solid var(--border-soft)}
+  /* Fenced code blocks match the .lineage-dax treatment. */
+  .md-rendered pre{font-family:'JetBrains Mono',monospace;font-size:var(--fs-sm);color:var(--text-muted);background:var(--surface-alt);padding:var(--space-5) var(--space-5);border-radius:var(--radius-md);border:1px solid var(--border);margin:var(--space-4) 0;overflow-x:auto;line-height:1.55;white-space:pre;tab-size:2}
+  .md-rendered pre>code{background:transparent;border:none;padding:0;font-size:inherit;color:inherit;font-family:inherit}
+  .md-rendered pre.md-code[data-lang]{position:relative}
+  .md-rendered pre.md-code[data-lang]::before{content:attr(data-lang);position:absolute;top:6px;right:10px;font-size:9px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--text-fainter)}
   .md-rendered a{color:var(--accent);text-decoration:none}
   .md-rendered a:hover{text-decoration:underline}
   .md-rendered del{opacity:.35}
   .md-rendered strong{color:var(--text)}
-  .md-rendered table{border-collapse:collapse;margin:8px 0;font-size:12px;width:auto}
-  .md-rendered th,.md-rendered td{border:1px solid var(--border);padding:5px 10px;text-align:left;vertical-align:top}
-  .md-rendered th{background:var(--surface-alt);color:var(--text);font-weight:600;text-transform:none;letter-spacing:0}
+  /* Tables in rendered MD now match the .data-table styling used in
+     Measures / Columns / Sources tabs for visual consistency. */
+  .md-rendered table{border-collapse:collapse;margin:var(--space-5) 0;font-size:var(--fs-md);width:100%}
+  .md-rendered th{text-align:left;padding:var(--space-4) var(--space-5);font-size:var(--fs-xs);color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;font-weight:600;border-bottom:1px solid var(--border);background:transparent;white-space:nowrap}
+  .md-rendered td{padding:var(--space-4) var(--space-5);font-size:var(--fs-md);border-bottom:1px solid var(--border-row);vertical-align:top}
+  .md-rendered tr:hover{background:var(--row-hover)}
+  /* Front-matter metadata tables (the two-column "| | |" pattern) have an
+     empty header row — collapse it so the first data row isn't preceded by
+     blank header cells. */
+  .md-rendered th:empty{padding:0;border:0;line-height:0;font-size:0}
   .md-rendered details{border:1px solid var(--border);border-radius:6px;padding:0;margin:6px 0;background:var(--surface-alt)}
   .md-rendered details[open]{background:var(--surface)}
   .md-rendered details>summary{cursor:pointer;padding:8px 12px;font-weight:500;list-style:none;color:var(--text-body);border-radius:6px;user-select:none}
@@ -255,8 +443,6 @@ export function generateHTML(
   .md-rendered details>*:not(summary){margin-left:18px;margin-right:12px}
   .md-rendered details>*:first-of-type:not(summary){margin-top:8px}
   .md-rendered details>*:last-child:not(summary){margin-bottom:10px}
-  .md-rendered::-webkit-scrollbar{width:10px;height:10px}
-  .md-rendered::-webkit-scrollbar-thumb{background:var(--border);border-radius:5px}
   .md-rendered ol{padding-left:22px;margin:6px 0}
   .md-rendered ol>li{margin:2px 0}
   .md-rendered ol ul{margin:2px 0 6px}
@@ -268,7 +454,7 @@ export function generateHTML(
 <div class="container">
   <div class="header">
     <div class="header-left">
-      <div class="top"><span class="header-label">MODEL USAGE</span><span class="header-sep">|</span><span class="header-sub">${reportName}</span></div>
+      <div class="top"><span class="usage-map-badge">Usage Map</span><span class="header-sep">|</span><span class="header-sub">${reportName}</span></div>
       <div class="timestamp">Generated: ${ts}</div>
     </div>
     <div class="header-actions">
@@ -284,11 +470,12 @@ export function generateHTML(
       <input class="search-input" placeholder="Search measures..." oninput="filterTable('measures',this.value)">
       <button class="filter-btn" id="btn-unused-m" onclick="toggleUnused('measures')">Not on visual</button>
     </div>
-    <table class="data-table"><thead><tr>
+    <div class="table-wrap"><table class="data-table"><thead><tr>
       <th onclick="sortTable('measures','name')">Measure ↕</th><th onclick="sortTable('measures','table')">Table ↕</th>
       <th onclick="sortTable('measures','usageCount')">Used ↕</th><th onclick="sortTable('measures','pageCount')">Pages ↕</th>
       <th>Dependencies</th><th>Used In</th><th>Format</th>
-    </tr></thead><tbody id="tbody-measures"></tbody></table>
+    </tr></thead><tbody id="tbody-measures"></tbody></table></div>
+    <div class="panel-footer" id="footer-measures"></div>
   </div>
 
   <div class="panel" id="panel-columns">
@@ -296,11 +483,12 @@ export function generateHTML(
       <input class="search-input" placeholder="Search columns..." oninput="filterTable('columns',this.value)">
       <button class="filter-btn" id="btn-unused-c" onclick="toggleUnused('columns')">Not on visual</button>
     </div>
-    <table class="data-table"><thead><tr>
+    <div class="table-wrap"><table class="data-table"><thead><tr>
       <th onclick="sortTable('columns','name')">Column ↕</th><th onclick="sortTable('columns','table')">Table ↕</th>
       <th onclick="sortTable('columns','dataType')">Type ↕</th><th onclick="sortTable('columns','usageCount')">Used ↕</th>
       <th onclick="sortTable('columns','pageCount')">Pages ↕</th><th>Used In</th>
-    </tr></thead><tbody id="tbody-columns"></tbody></table>
+    </tr></thead><tbody id="tbody-columns"></tbody></table></div>
+    <div class="panel-footer" id="footer-columns"></div>
   </div>
 
   <div class="panel" id="panel-tables"><div id="tables-content"></div></div>
@@ -315,6 +503,7 @@ export function generateHTML(
     <div class="search-row">
       <div style="display:flex;gap:4px;flex-wrap:wrap">
         <button class="filter-btn active" id="md-tab-model" onclick="switchMd('model')">Model</button>
+        <button class="filter-btn" id="md-tab-datadict" onclick="switchMd('datadict')">Data Dictionary</button>
         <button class="filter-btn" id="md-tab-measures" onclick="switchMd('measures')">Measures</button>
         <button class="filter-btn" id="md-tab-functions" onclick="switchMd('functions')">Functions</button>
         <button class="filter-btn" id="md-tab-calcgroups" onclick="switchMd('calcgroups')">Calc Groups</button>
@@ -332,7 +521,23 @@ export function generateHTML(
     </div>
     <div id="md-rendered" class="md-rendered"></div>
     <pre id="md-source" class="md-source" style="display:none"></pre>
+    <div class="panel-footer" id="footer-docs"></div>
   </div>
+</div>
+
+<!-- Footer bar — branding · status · version (CSS hides right on ≤900, left on ≤700). -->
+<div class="refresh-bar" id="refresh-bar">
+  <div class="rb-left">
+    <span class="usage-map-badge">Usage Map</span>
+    <span class="rb-sep">|</span>
+    <span class="rb-report">${reportName}</span>
+  </div>
+  <div class="rb-center">
+    <span class="dot"></span>
+    <span class="timer">Last scan ${ts}</span>
+    <button onclick="location.reload()">Re-scan</button>
+  </div>
+  <div class="rb-right">v${version}<span class="rb-sep">·</span>local<span class="rb-sep">·</span>no data leaves your machine</div>
 </div>
 
 <script>
@@ -342,7 +547,10 @@ const MARKDOWN_MEASURES=${measuresMarkdownLiteral};
 const MARKDOWN_FUNCTIONS=${functionsMarkdownLiteral};
 const MARKDOWN_CALCGROUPS=${calcGroupsMarkdownLiteral};
 const MARKDOWN_QUALITY=${qualityMarkdownLiteral};
+const MARKDOWN_DATADICT=${dataDictionaryMarkdownLiteral};
 const REPORT_NAME=${JSON.stringify(reportName)};
+const APP_VERSION=${JSON.stringify(version)};
+const GENERATED_AT=${JSON.stringify(ts)};
 let activeMd="model";
 let mdViewMode="rendered";
 
@@ -400,34 +608,13 @@ let searchTerms={measures:"",columns:""};
 let openPages=new Set();
 let openTables=new Set();
 
-const pageData=(()=>{
-  const map=new Map();
-  const addToPage=(pageName,visualType,visualTitle,fieldName,fieldTable,fieldType)=>{
-    if(!map.has(pageName))map.set(pageName,{name:pageName,visuals:new Map(),measures:new Set(),columns:new Set()});
-    const p=map.get(pageName);
-    const vKey=visualTitle;
-    if(!p.visuals.has(vKey))p.visuals.set(vKey,{type:visualType,title:visualTitle,bindings:[]});
-    const vb=p.visuals.get(vKey).bindings;
-    if(!vb.some(b=>b.fieldName===fieldName&&b.fieldTable===fieldTable))vb.push({fieldName,fieldTable,fieldType});
-    if(fieldType==="measure")p.measures.add(fieldName);
-    else p.columns.add(fieldName);
-  };
-  DATA.measures.forEach(m=>m.usedIn.forEach(u=>addToPage(u.pageName,u.visualType,u.visualTitle,m.name,m.table,"measure")));
-  DATA.columns.forEach(c=>c.usedIn.forEach(u=>addToPage(u.pageName,u.visualType,u.visualTitle,c.name,c.table,"column")));
-  return [...map.values()].map(p=>{
-    const visuals=[...p.visuals.values()];
-    const typeCounts={};
-    visuals.forEach(v=>{typeCounts[v.type]=(typeCounts[v.type]||0)+1;});
-    const slicerCount=typeCounts["slicer"]||0;
-    const coverage=DATA.totals.measuresInModel>0?Math.round(p.measures.size/DATA.totals.measuresInModel*100):0;
-    return{
-      name:p.name,visualCount:visuals.length,
-      measures:[...p.measures],columns:[...p.columns],
-      measureCount:p.measures.size,columnCount:p.columns.size,
-      slicerCount,typeCounts,coverage,visuals
-    };
-  });
-})();
+// Page data is built server-side now (data-builder.ts) so we get the
+// full page list — including text-only / empty pages that have no
+// data-field bindings. Previously this was recomputed in the client
+// from measure/column usedIn lists, which silently dropped any page
+// whose visuals didn't touch the model (producing -ve "visible" counts
+// when hiddenPages > bound pages).
+const pageData=(DATA.pages||[]).slice();
 
 function uc(n){return n===0?"zero":n<=1?"low":"good"}
 
@@ -471,7 +658,22 @@ function renderTabs(){
     {id:"lineage",l:"Lineage",b:null},
     // Output
     {id:"docs",l:"Docs",b:null}
-  ].map(t=>\`<button class="tab \${activeTab===t.id?'active':''}" onclick="switchTab('\${t.id}')">\${t.l}\${t.b!==null?\`<span class="badge \${t.w?'warn':''}">\${t.b}</span>\`:''}</button>\`).join("");
+  ].map(t=>\`<button class="tab \${activeTab===t.id?'active':''}" onclick="switchTab('\${t.id}')">\${t.l}\${t.b!==null?\`<span class="tab-count \${t.w?'warn':''}">\${t.b}</span>\`:''}</button>\`).join("");
+}
+
+// Shared panel-footer writer. Each render* function calls this at the end
+// with its own count string on the left and (optionally) a sort / meta on
+// the right. Writes into a target element by id; silent if absent.
+function setPanelFooter(id, leftHtml, rightHtml){
+  var el=document.getElementById(id);
+  if(!el)return;
+  var left='<div class="left">'+leftHtml+'</div>';
+  var right=rightHtml?'<div class="right">'+rightHtml+'</div>':'';
+  el.innerHTML=left+right;
+}
+function sortIndicator(state){
+  if(!state||!state.key)return "";
+  return 'Sorted by '+state.key+' '+(state.desc?'↓':'↑');
 }
 
 function switchTab(id){
@@ -493,11 +695,14 @@ function renderMeasures(){
     const deps=m.daxDependencies.map(d=>\`<span class="dep-chip" onclick="openLineage('measure','\${d}')">\${d}</span>\`).join("")||'<span style="color:var(--text-faint)">—</span>';
     const pages=[...new Set(m.usedIn.map(u=>u.pageName))];
     const used=pages.map(p=>\`<span class="used-chip">\${p}</span>\`).join("")||'<span style="color:var(--text-faint)">—</span>';
-    const statusBadge=m.status==='indirect'?'<span style="font-size:9px;padding:1px 5px;border-radius:3px;background:rgba(245,158,11,.12);color:#F59E0B;font-weight:600;margin-left:4px">INDIRECT</span>':m.status==='unused'?'<span style="font-size:9px;padding:1px 5px;border-radius:3px;background:rgba(239,68,68,.12);color:#EF4444;font-weight:600;margin-left:4px">UNUSED</span>':'';
+    const statusBadge=m.status==='indirect'?'<span class="badge badge--indirect">INDIRECT</span>':m.status==='unused'?'<span class="badge badge--unused">UNUSED</span>':'';
     const nameAttr=m.description?' title="'+escAttr(m.description)+'" data-desc="1"':'';
     const descRow=m.description?'<div class="desc-muted" style="margin-top:2px;font-size:11px">'+escHtml(m.description)+'</div>':'';
     return \`<tr class="\${sc(m.status)}"><td><span class="field-name"\${nameAttr} onclick="openLineage('measure','\${m.name}')">\${m.name}</span>\${statusBadge}\${descRow}</td><td><span class="field-table">\${m.table}</span></td><td><span class="usage-count \${uc(m.usageCount)}">\${m.usageCount}</span></td><td><span class="usage-count \${uc(m.pageCount)}">\${m.pageCount}</span></td><td>\${deps}</td><td>\${used}</td><td><span class="format-str">\${m.formatString||'—'}</span></td></tr>\`;
   }).join("");
+  setPanelFooter("footer-measures",
+    "Showing "+items.length+" of "+DATA.measures.length+" measures · "+DATA.totals.measuresUnused+" unused · "+DATA.totals.measuresIndirect+" indirect",
+    sortIndicator(sortState.measures));
 }
 
 function renderColumns(){
@@ -508,12 +713,17 @@ function renderColumns(){
   document.getElementById("tbody-columns").innerHTML=items.map(c=>{
     const pages=[...new Set(c.usedIn.map(u=>u.pageName))];
     const used=pages.map(p=>\`<span class="used-chip">\${p}</span>\`).join("")||'<span style="color:var(--text-faint)">—</span>';
-    const sb=c.isSlicerField?'<span class="slicer-badge">SLICER</span>':'';
-    const statusBadge=c.status==='indirect'?'<span style="font-size:9px;padding:1px 5px;border-radius:3px;background:rgba(245,158,11,.12);color:#F59E0B;font-weight:600;margin-left:4px">INDIRECT</span>':c.status==='unused'?'<span style="font-size:9px;padding:1px 5px;border-radius:3px;background:rgba(239,68,68,.12);color:#EF4444;font-weight:600;margin-left:4px">UNUSED</span>':'';
+    // SLICER badge intentionally omitted here — it now lives on the per-column
+    // row inside the Tables tab, next to PK/FK/CALC/HIDDEN, where it's more
+    // useful in context.
+    const statusBadge=c.status==='indirect'?'<span class="badge badge--indirect">INDIRECT</span>':c.status==='unused'?'<span class="badge badge--unused">UNUSED</span>':'';
     const cNameAttr=c.description?' title="'+escAttr(c.description)+'" data-desc="1"':'';
     const cDescRow=c.description?'<div class="desc-muted" style="margin-top:2px;font-size:11px">'+escHtml(c.description)+'</div>':'';
-    return \`<tr class="\${sc(c.status)}"><td><span class="field-name"\${cNameAttr} onclick="openLineage('column','\${c.name}')">\${c.name}</span>\${sb}\${statusBadge}\${cDescRow}</td><td><span class="field-table">\${c.table}</span></td><td><span class="mono" style="font-size:11px;color:#64748B">\${c.dataType}</span></td><td><span class="usage-count \${uc(c.usageCount)}">\${c.usageCount}</span></td><td><span class="usage-count \${uc(c.pageCount)}">\${c.pageCount}</span></td><td>\${used}</td></tr>\`;
+    return \`<tr class="\${sc(c.status)}"><td><span class="field-name"\${cNameAttr} onclick="openLineage('column','\${c.name}')">\${c.name}</span>\${statusBadge}\${cDescRow}</td><td><span class="field-table">\${c.table}</span></td><td><span class="mono" style="font-size:11px;color:#64748B">\${c.dataType}</span></td><td><span class="usage-count \${uc(c.usageCount)}">\${c.usageCount}</span></td><td><span class="usage-count \${uc(c.pageCount)}">\${c.pageCount}</span></td><td>\${used}</td></tr>\`;
   }).join("");
+  setPanelFooter("footer-columns",
+    "Showing "+items.length+" of "+DATA.columns.length+" columns · "+DATA.totals.columnsUnused+" unused",
+    sortIndicator(sortState.columns));
 }
 
 function openLineage(type,name){
@@ -527,7 +737,7 @@ function openLineage(type,name){
 
   if(type==="measure"){
     const m=DATA.measures.find(x=>x.name===name);
-    if(!m){el.innerHTML='<div style="color:#EF4444;padding:20px">Measure not found</div>';return;}
+    if(!m){el.innerHTML='<div style="color:var(--clr-unused);padding:20px">Measure not found</div>';return;}
 
     const upstream=m.daxDependencies.map(d=>{
       const dep=DATA.measures.find(x=>x.name===d);
@@ -535,36 +745,44 @@ function openLineage(type,name){
     });
     const usedFuncs=DATA.functions.filter(f=>!f.name.endsWith('.About')&&(m.daxExpression.includes("'"+f.name+"'")||m.daxExpression.includes(f.name+'(')));
     const feedsInto=DATA.measures.filter(x=>x.daxDependencies.includes(m.name));
+    const extMatch=(m.daxExpression||'').match(/EXTERNALMEASURE\\s*\\(\\s*"([^"]*)"\\s*,\\s*\\w+\\s*,\\s*"DirectQuery to AS - ([^"]+)"\\s*\\)/i);
+    const extModel=extMatch?extMatch[2]:null;
+    const extRemoteName=extMatch?extMatch[1]:null;
 
     el.innerHTML=\`
       <div class="lineage-back" onclick="switchTab('\${backTab}')">← Back to \${backTab==='measures'?'Measures':'Columns'}</div>
       <div class="lineage-hero">
-        <div class="lineage-hero-title"><span class="dot" style="background:#F59E0B"></span>\${m.name}</div>
+        <div class="lineage-hero-title"><span class="dot" style="background:var(--clr-measure)"></span>\${m.name}</div>
         <div class="lineage-hero-meta">\${m.table} · \${m.formatString||'—'} · \${m.usageCount} visual\${m.usageCount!==1?'s':''} · \${m.pageCount} page\${m.pageCount!==1?'s':''}</div>
         \${m.description?'<div class="desc-line" style="margin-top:8px;font-size:13px">'+escHtml(m.description)+'</div>':''}
         <div class="lineage-dax">\${m.daxExpression}</div>
       </div>
       <div class="lineage-flow-row">
         <div class="lineage-flow-col">
-          <div class="lineage-flow-col-label" style="color:#A78BFA">↑ Upstream</div>
+          <div class="lineage-flow-col-label" style="color:var(--clr-upstream)">↑ Upstream</div>
           \${usedFuncs.map(f=>\`
             <div class="lc udf clickable" style="margin-bottom:4px" onclick="switchTab('functions')">
-              <div class="lc-name" style="color:#14B8A6">ƒ \${f.name}</div>
+              <div class="lc-name" style="color:var(--clr-function)">ƒ \${f.name}</div>
               <div class="lc-sub">Function · \${f.parameters?f.parameters.split(',').length+' param'+(f.parameters.split(',').length!==1?'s':''):'no params'}</div>
             </div>\`).join("")}
+          \${extModel?\`
+          <div class="lc" style="border-left:3px solid var(--clr-function);margin-bottom:4px;background:var(--clr-function-soft)">
+            <div class="lc-name" style="color:var(--clr-function)">⊡ \${extModel}</div>
+            <div class="lc-sub">External semantic model · EXTERNALMEASURE\${extRemoteName&&extRemoteName!==m.name?' · remote name "'+extRemoteName+'"':''}</div>
+          </div>\`:''}
           <div class="lc source" style="margin-bottom:4px">
-            <div class="lc-name" style="color:#10B981">⬡ \${m.table}</div>
+            <div class="lc-name" style="color:var(--clr-source)">⬡ \${m.table}</div>
             <div class="lc-sub">Source table</div>
           </div>
           \${upstream.length?upstream.map(u=>\`
             <div class="lc upstream clickable" onclick="openLineage('measure','\${u.name}')">
               <div class="lc-name">\${u.name}</div>
               <div class="lc-sub">\${u.table} · \${u.formatString||''}</div>
-            </div>\`).join(""):\`\${usedFuncs.length?'':\`<div class="lc upstream empty"><div class="lc-name">No dependencies</div><div class="lc-sub">Base measure</div></div>\`}\`}
+            </div>\`).join(""):\`\${(usedFuncs.length||extModel)?'':\`<div class="lc upstream empty"><div class="lc-name">No dependencies</div><div class="lc-sub">Base measure</div></div>\`}\`}
         </div>
         <div class="lineage-arrow-col">→</div>
         <div class="lineage-flow-col">
-          <div class="lineage-flow-col-label" style="color:#F59E0B">● This Measure</div>
+          <div class="lineage-flow-col-label" style="color:var(--clr-measure)">● This Measure</div>
           <div class="lc center">
             <div class="lc-name">\${m.name}</div>
             <div class="lc-sub">\${m.daxExpression.length>50?m.daxExpression.substring(0,50)+'…':m.daxExpression}</div>
@@ -580,41 +798,41 @@ function openLineage(type,name){
         </div>
         <div class="lineage-arrow-col">→</div>
         <div class="lineage-flow-col">
-          <div class="lineage-flow-col-label" style="color:#8B5CF6">↓ Downstream</div>
+          <div class="lineage-flow-col-label" style="color:var(--clr-downstream)">↓ Downstream</div>
           \${m.usedIn.length?m.usedIn.map(d=>\`
             <div class="lc downstream">
               <div class="lc-name">\${d.visualTitle}</div>
               <div class="lc-sub">\${d.visualType} · \${d.bindingRole}</div>
               <div class="lc-role">\${d.pageName}</div>
-            </div>\`).join(""):\`<div class="lc downstream empty"><div class="lc-name" style="color:#EF4444">Not used</div><div class="lc-sub">Orphaned measure</div></div>\`}
+            </div>\`).join(""):\`<div class="lc downstream empty"><div class="lc-name" style="color:var(--clr-unused)">Not used</div><div class="lc-sub">Orphaned measure</div></div>\`}
         </div>
       </div>\`;
     addCopyButtons();
   }
   else if(type==="column"){
     const c=DATA.columns.find(x=>x.name===name);
-    if(!c){el.innerHTML='<div style="color:#EF4444;padding:20px">Column not found</div>';return;}
+    if(!c){el.innerHTML='<div style="color:var(--clr-unused);padding:20px">Column not found</div>';return;}
     const colRef=c.table+'['+c.name+']';
     const related=DATA.measures.filter(m=>m.daxExpression.includes(colRef)||m.daxExpression.includes('['+c.name+']'));
 
     el.innerHTML=\`
       <div class="lineage-back" onclick="switchTab('columns')">← Back to Columns</div>
       <div class="lineage-hero">
-        <div class="lineage-hero-title"><span class="dot" style="background:#3B82F6"></span>\${c.name}\${c.isSlicerField?'<span class="slicer-badge">SLICER</span>':''}</div>
+        <div class="lineage-hero-title"><span class="dot" style="background:var(--clr-column)"></span>\${c.name}</div>
         <div class="lineage-hero-meta">\${c.table} · \${c.dataType} · \${c.usageCount} visual\${c.usageCount!==1?'s':''} · \${c.pageCount} page\${c.pageCount!==1?'s':''}</div>
         \${c.description?'<div class="desc-line" style="margin-top:8px;font-size:13px">'+escHtml(c.description)+'</div>':''}
       </div>
       <div class="lineage-flow-row">
         <div class="lineage-flow-col">
-          <div class="lineage-flow-col-label" style="color:#10B981">↑ Source</div>
+          <div class="lineage-flow-col-label" style="color:var(--clr-source)">↑ Source</div>
           <div class="lc source">
-            <div class="lc-name" style="color:#10B981">⬡ \${c.table}</div>
+            <div class="lc-name" style="color:var(--clr-source)">⬡ \${c.table}</div>
             <div class="lc-sub">\${c.dataType}</div>
           </div>
         </div>
         <div class="lineage-arrow-col">→</div>
         <div class="lineage-flow-col">
-          <div class="lineage-flow-col-label" style="color:#3B82F6">● This Column</div>
+          <div class="lineage-flow-col-label" style="color:var(--clr-column)">● This Column</div>
           <div class="lc center col-type">
             <div class="lc-name">\${c.name}</div>
             <div class="lc-sub">\${c.table}[\${c.name}]</div>
@@ -630,13 +848,13 @@ function openLineage(type,name){
         </div>
         <div class="lineage-arrow-col">→</div>
         <div class="lineage-flow-col">
-          <div class="lineage-flow-col-label" style="color:#8B5CF6">↓ Downstream</div>
+          <div class="lineage-flow-col-label" style="color:var(--clr-downstream)">↓ Downstream</div>
           \${c.usedIn.length?c.usedIn.map(d=>\`
             <div class="lc downstream">
               <div class="lc-name">\${d.visualTitle}</div>
               <div class="lc-sub">\${d.visualType} · \${d.bindingRole}</div>
               <div class="lc-role">\${d.pageName}</div>
-            </div>\`).join(""):\`<div class="lc downstream empty"><div class="lc-name" style="color:#EF4444">Not used</div><div class="lc-sub">Orphaned column</div></div>\`}
+            </div>\`).join(""):\`<div class="lc downstream empty"><div class="lc-name" style="color:var(--clr-unused)">Not used</div><div class="lc-sub">Orphaned column</div></div>\`}
         </div>
       </div>\`;
   }
@@ -647,7 +865,7 @@ function renderPages(){
   const hiddenSet=new Set(DATA.hiddenPages||[]);
   document.getElementById("pages-content").innerHTML=pageData.map(p=>{
     const isOpen=openPages.has(p.name);
-    const hiddenBadge=hiddenSet.has(p.name)?'<span class="hidden-badge" title="This page is marked HiddenInViewMode — typically a tooltip, drillthrough, or nav-suppressed page">HIDDEN</span>':'';
+    const hiddenBadge=hiddenSet.has(p.name)?'<span class="badge badge--hidden" title="This page is marked HiddenInViewMode — typically a tooltip, drillthrough, or nav-suppressed page">HIDDEN</span>':'';
 
     const typeChips=Object.entries(p.typeCounts).map(([t,c])=>\`<span class="page-type-chip">\${c}× \${t}</span>\`).join("");
 
@@ -663,19 +881,19 @@ function renderPages(){
       </div>\`;
     }).join("");
 
-    const measureChips=p.measures.map(m=>\`<span class="dep-chip" style="background:rgba(245,158,11,.1);color:#F59E0B;border-color:rgba(245,158,11,.2);cursor:pointer" onclick="event.stopPropagation();openLineage('measure','\${m}')">\${m}</span>\`).join("");
-    const columnChips=p.columns.map(c=>\`<span class="dep-chip" style="background:rgba(59,130,246,.1);color:#3B82F6;border-color:rgba(59,130,246,.2);cursor:pointer" onclick="event.stopPropagation();openLineage('column','\${c}')">\${c}</span>\`).join("");
+    const measureChips=p.measures.map(m=>\`<span class="dep-chip" style="background:rgba(245,158,11,.1);color:var(--clr-measure);border-color:rgba(245,158,11,.2);cursor:pointer" onclick="event.stopPropagation();openLineage('measure','\${m}')">\${m}</span>\`).join("");
+    const columnChips=p.columns.map(c=>\`<span class="dep-chip" style="background:rgba(59,130,246,.1);color:var(--clr-column);border-color:rgba(59,130,246,.2);cursor:pointer" onclick="event.stopPropagation();openLineage('column','\${c}')">\${c}</span>\`).join("");
 
     return \`<div class="page-card \${isOpen?'open':''}">
       <div class="page-header" onclick="togglePage('\${p.name}')">
         <div class="page-name">\${p.name}\${hiddenBadge}</div>
         <div class="page-stats">
-          <div class="page-stat"><div class="page-stat-val" style="color:#8B5CF6">\${p.visualCount}</div><div class="page-stat-label">Visuals</div></div>
-          <div class="page-stat"><div class="page-stat-val" style="color:#F59E0B">\${p.measureCount}</div><div class="page-stat-label">Measures</div></div>
-          <div class="page-stat"><div class="page-stat-val" style="color:#3B82F6">\${p.columnCount}</div><div class="page-stat-label">Columns</div></div>
-          <div class="page-stat"><div class="page-stat-val" style="color:#EC4899">\${p.slicerCount}</div><div class="page-stat-label">Slicers</div></div>
+          <div class="page-stat"><div class="page-stat-val" style="color:var(--clr-downstream)">\${p.visualCount}</div><div class="page-stat-label">Visuals</div></div>
+          <div class="page-stat"><div class="page-stat-val" style="color:var(--clr-measure)">\${p.measureCount}</div><div class="page-stat-label">Measures</div></div>
+          <div class="page-stat"><div class="page-stat-val" style="color:var(--clr-column)">\${p.columnCount}</div><div class="page-stat-label">Columns</div></div>
+          <div class="page-stat"><div class="page-stat-val" style="color:var(--clr-slicer)">\${p.slicerCount}</div><div class="page-stat-label">Slicers</div></div>
         </div>
-        <span class="page-expand">▼</span>
+        <span class="page-expand" aria-hidden="true"></span>
       </div>
       <div class="page-body"><div class="page-body-inner">
         <div class="page-section">
@@ -692,11 +910,19 @@ function renderPages(){
         </div>
         <div class="page-section">
           <div class="page-section-title">Visuals (\${p.visualCount})<span class="line"></span></div>
-          \${visualRows}
+          \${visualRows||(p.visualCount>0?'<span style="color:#475569;font-size:12px">No data-bound visuals on this page — text, shape, or image only.</span>':'<span style="color:#475569;font-size:12px">Empty page.</span>')}
         </div>
       </div></div>
     </div>\`;
   }).join("");
+  var hiddenCount=(DATA.hiddenPages||[]).length;
+  var visibleCount=pageData.length-hiddenCount;
+  var totalVisuals=pageData.reduce(function(a,p){return a+(p.visualCount||0);},0);
+  var pf=document.getElementById("pages-content");
+  if(pf)pf.insertAdjacentHTML("beforeend",
+    '<div class="panel-footer"><div class="left">'+
+      pageData.length+' pages · '+visibleCount+' visible · '+hiddenCount+' hidden · '+totalVisuals+' visuals'+
+    '</div></div>');
 }
 
 function togglePage(name){
@@ -711,17 +937,21 @@ function toggleTableCard(name){
 
 function renderTables(){
   const tables=DATA.tables||[];
+  // Precompute slicer lookup once per render so the per-row badge stays cheap.
+  // TableColumnData doesn't carry isSlicerField — it lives on the flat ModelColumn.
+  const slicerSet=new Set((DATA.columns||[]).filter(c=>c.isSlicerField).map(c=>c.table+'|'+c.name));
   document.getElementById("tables-content").innerHTML=tables.map(t=>{
     const isOpen=openTables.has(t.name);
-    const calcGroupPill=t.isCalcGroup?'<span class="calc-group-pill" title="This table is a calculation group">CALC GROUP</span>':'';
+    const calcGroupPill=t.isCalcGroup?'<span class="badge badge--calc-grp" title="This table is a calculation group">CALC GROUP</span>':'';
 
     const colRows=t.columns.map(c=>{
       const badges=[];
-      if(c.isKey)badges.push('<span class="pk-badge" title="Primary key — isKey:true set in the model">PK</span>');
-      else if(c.isInferredPK)badges.push('<span class="pk-badge inferred" title="Inferred primary key — this column is on the one-side of at least one relationship">PK</span>');
-      if(c.isFK)badges.push('<span class="fk-badge" title="Foreign key — used as fromColumn in a relationship">FK</span>');
-      if(c.isCalculated)badges.push('<span class="calc-col-badge" title="Calculated column">CALC</span>');
-      if(c.isHidden)badges.push('<span class="hid-col-badge" title="isHidden:true">HIDDEN</span>');
+      if(c.isKey)badges.push('<span class="badge badge--pk" title="Primary key — isKey:true set in the model">PK</span>');
+      else if(c.isInferredPK)badges.push('<span class="badge badge--pk-inf" title="Inferred primary key — this column is on the one-side of at least one relationship">PK</span>');
+      if(c.isFK)badges.push('<span class="badge badge--fk" title="Foreign key — used as fromColumn in a relationship">FK</span>');
+      if(c.isCalculated)badges.push('<span class="badge badge--calc" title="Calculated column">CALC</span>');
+      if(c.isHidden)badges.push('<span class="badge badge--hid-col" title="isHidden:true">HIDDEN</span>');
+      if(slicerSet.has(t.name+'|'+c.name))badges.push('<span class="badge badge--slicer" title="Bound to at least one slicer visual">SLICER</span>');
       const statusClass=c.status==='unused'?'zero':c.status==='indirect'?'low':'good';
       // Relationship column: FK target (outgoing) or incoming PK refs, or both if the column is a bridge
       const parts=[];
@@ -745,18 +975,18 @@ function renderTables(){
 
     const measureList=t.measures.map(m=>{
       const cls=m.status==='unused'?'zero':m.status==='indirect'?'low':'good';
-      return \`<span class="dep-chip" style="background:rgba(245,158,11,.1);color:#F59E0B;border-color:rgba(245,158,11,.2);cursor:pointer" onclick="event.stopPropagation();openLineage('measure','\${m.name.replace(/'/g,"\\\\'")}')">\${m.name} <span class="usage-count \${cls}" style="margin-left:4px;font-size:9px">\${m.usageCount}</span></span>\`;
+      return \`<span class="dep-chip" style="background:rgba(245,158,11,.1);color:var(--clr-measure);border-color:rgba(245,158,11,.2);cursor:pointer" onclick="event.stopPropagation();openLineage('measure','\${m.name.replace(/'/g,"\\\\'")}')">\${m.name} <span class="usage-count \${cls}" style="margin-left:4px;font-size:9px">\${m.usageCount}</span></span>\`;
     }).join("")||'<span style="color:var(--text-faint);font-size:12px">None</span>';
 
     const relRows=t.relationships.map(r=>{
-      const dirClass=r.direction==='outgoing'?'out':'in';
+      const dirClass=r.direction==='outgoing'?'badge--direction-out':'badge--direction-in';
       const dirLabel=r.direction==='outgoing'?'FK →':'← PK';
       const inactive=r.isActive?'':' trel-inactive';
       const arrow=r.direction==='outgoing'?'→':'←';
       const other=r.direction==='outgoing'?\`\${r.toTable}[\${r.toColumn}]\`:\`\${r.fromTable}[\${r.fromColumn}]\`;
       const self=r.direction==='outgoing'?\`[\${r.fromColumn}]\`:\`[\${r.toColumn}]\`;
       return \`<div class="trel-row\${inactive}">
-        <span class="trel-dir \${dirClass}">\${dirLabel}</span>
+        <span class="badge \${dirClass}">\${dirLabel}</span>
         <span>\${self} <span style="color:var(--text-faint)">\${arrow}</span> \${other}</span>
         \${r.isActive?'':'<span style="font-size:9px;color:var(--text-dim);margin-left:4px">(inactive)</span>'}
       </div>\`;
@@ -770,12 +1000,12 @@ function renderTables(){
           \${tableDesc}
         </div>
         <div class="page-stats">
-          <div class="page-stat"><div class="page-stat-val" style="color:#3B82F6">\${t.columnCount}</div><div class="page-stat-label">Columns</div></div>
-          <div class="page-stat"><div class="page-stat-val" style="color:#F59E0B">\${t.measureCount}</div><div class="page-stat-label">Measures</div></div>
-          <div class="page-stat"><div class="page-stat-val" style="color:#F59E0B">\${t.keyCount}</div><div class="page-stat-label">Keys</div></div>
-          <div class="page-stat"><div class="page-stat-val" style="color:#3B82F6">\${t.fkCount}</div><div class="page-stat-label">FKs</div></div>
+          <div class="page-stat"><div class="page-stat-val" style="color:var(--clr-column)">\${t.columnCount}</div><div class="page-stat-label">Columns</div></div>
+          <div class="page-stat"><div class="page-stat-val" style="color:var(--clr-measure)">\${t.measureCount}</div><div class="page-stat-label">Measures</div></div>
+          <div class="page-stat"><div class="page-stat-val" style="color:var(--clr-measure)">\${t.keyCount}</div><div class="page-stat-label">Keys</div></div>
+          <div class="page-stat"><div class="page-stat-val" style="color:var(--clr-column)">\${t.fkCount}</div><div class="page-stat-label">FKs</div></div>
         </div>
-        <span class="page-expand">▼</span>
+        <span class="page-expand" aria-hidden="true"></span>
       </div>
       <div class="page-body"><div class="page-body-inner">
         <div class="page-section">
@@ -796,6 +1026,13 @@ function renderTables(){
       </div></div>
     </div>\`;
   }).join("")||'<div style="text-align:center;padding:60px 20px;color:var(--text-faint);font-size:13px">No tables found</div>';
+  var totalCols=tables.reduce(function(a,t){return a+(t.columnCount||0);},0);
+  var totalMs=tables.reduce(function(a,t){return a+(t.measureCount||0);},0);
+  var pf=document.getElementById("tables-content");
+  if(pf)pf.insertAdjacentHTML("beforeend",
+    '<div class="panel-footer"><div class="left">'+
+      tables.length+' tables · '+totalCols+' columns · '+totalMs+' measures'+
+    '</div></div>');
 }
 
 var openOrphanSections=new Set();
@@ -812,7 +1049,7 @@ function orphanSection(id,title,subtitle,color,count,countLabel,items){
       <div class="page-stats">
         <div class="page-stat"><div class="page-stat-val" style="color:\${color}">\${count}</div><div class="page-stat-label">\${countLabel}</div></div>
       </div>
-      <span class="page-expand">▼</span>
+      <span class="page-expand" aria-hidden="true"></span>
     </div>
     <div class="page-body"><div class="page-body-inner">
       <div style="display:flex;flex-wrap:wrap;gap:8px">\${items}</div>
@@ -827,22 +1064,26 @@ function renderUnused(){
   const chainOrphanM=unusedM.filter(m=>m.dependedOnBy.length>0);
   let h='';
 
-  if(pureOrphanM.length) h+=orphanSection('pure-m','Unused Measures — Not Referenced Anywhere','No visual uses them and no other measure references them — safe to remove','#EF4444',pureOrphanM.length,'Measures',
-    pureOrphanM.map(m=>\`<div class="lc clickable" style="border-left:3px solid #EF4444;flex:0 0 auto" onclick="event.stopPropagation();openLineage('measure','\${m.name}')"><div class="lc-name">\${m.name}</div><div class="lc-sub">\${m.table} · \${m.formatString||''}</div></div>\`).join(""));
+  if(pureOrphanM.length) h+=orphanSection('pure-m','Unused Measures — Not Referenced Anywhere','No visual uses them and no other measure references them — safe to remove','var(--clr-unused)',pureOrphanM.length,'Measures',
+    pureOrphanM.map(m=>\`<div class="lc clickable" style="border-left:3px solid var(--clr-unused);flex:0 0 auto" onclick="event.stopPropagation();openLineage('measure','\${m.name}')"><div class="lc-name">\${m.name}</div><div class="lc-sub">\${m.table} · \${m.formatString||''}</div></div>\`).join(""));
 
-  if(chainOrphanM.length) h+=orphanSection('chain-m','Unused Measures — Dead Chain','Other measures depend on them, but the full chain never reaches any visual','#EF4444',chainOrphanM.length,'Measures',
-    chainOrphanM.map(m=>\`<div class="lc clickable" style="border-left:3px solid #EF4444;flex:0 0 auto" onclick="event.stopPropagation();openLineage('measure','\${m.name}')"><div class="lc-name">\${m.name}</div><div class="lc-sub">\${m.table} · \${m.formatString||''} · depended on by \${m.dependedOnBy.length}</div></div>\`).join(""));
+  if(chainOrphanM.length) h+=orphanSection('chain-m','Unused Measures — Dead Chain','Other measures depend on them, but the full chain never reaches any visual','var(--clr-unused)',chainOrphanM.length,'Measures',
+    chainOrphanM.map(m=>\`<div class="lc clickable" style="border-left:3px solid var(--clr-unused);flex:0 0 auto" onclick="event.stopPropagation();openLineage('measure','\${m.name}')"><div class="lc-name">\${m.name}</div><div class="lc-sub">\${m.table} · \${m.formatString||''} · depended on by \${m.dependedOnBy.length}</div></div>\`).join(""));
 
-  if(unusedC.length) h+=orphanSection('orphan-c','Unused Columns','No visual, measure, or relationship uses them — safe to hide or remove','#EF4444',unusedC.length,'Columns',
-    unusedC.map(c=>\`<div class="lc clickable" style="border-left:3px solid #EF4444;flex:0 0 auto" onclick="event.stopPropagation();openLineage('column','\${c.name}')"><div class="lc-name">\${c.name}</div><div class="lc-sub">\${c.table} · \${c.dataType}</div></div>\`).join(""));
+  if(unusedC.length) h+=orphanSection('orphan-c','Unused Columns','No visual, measure, or relationship uses them — safe to hide or remove','var(--clr-unused)',unusedC.length,'Columns',
+    unusedC.map(c=>\`<div class="lc clickable" style="border-left:3px solid var(--clr-unused);flex:0 0 auto" onclick="event.stopPropagation();openLineage('column','\${c.name}')"><div class="lc-name">\${c.name}</div><div class="lc-sub">\${c.table} · \${c.dataType}</div></div>\`).join(""));
 
-  if(indirectM.length) h+=orphanSection('indirect-m','Indirect Measures','Not on any visual, but used inside other measures that are — keep these','#F59E0B',indirectM.length,'Measures',
-    indirectM.map(m=>\`<div class="lc clickable" style="border-left:3px solid #F59E0B;flex:0 0 auto" onclick="event.stopPropagation();openLineage('measure','\${m.name}')"><div class="lc-name">\${m.name}</div><div class="lc-sub">\${m.table} · \${m.formatString||''}</div></div>\`).join(""));
+  if(indirectM.length) h+=orphanSection('indirect-m','Indirect Measures','Not on any visual, but used inside other measures that are — keep these','var(--clr-indirect)',indirectM.length,'Measures',
+    indirectM.map(m=>\`<div class="lc clickable" style="border-left:3px solid var(--clr-indirect);flex:0 0 auto" onclick="event.stopPropagation();openLineage('measure','\${m.name}')"><div class="lc-name">\${m.name}</div><div class="lc-sub">\${m.table} · \${m.formatString||''}</div></div>\`).join(""));
 
-  if(indirectC.length) h+=orphanSection('indirect-c','Indirect Columns','Not on any visual, but used in a relationship or measure DAX — keep these','#F59E0B',indirectC.length,'Columns',
-    indirectC.map(c=>\`<div class="lc clickable" style="border-left:3px solid #F59E0B;flex:0 0 auto" onclick="event.stopPropagation();openLineage('column','\${c.name}')"><div class="lc-name">\${c.name}</div><div class="lc-sub">\${c.table} · \${c.dataType}</div></div>\`).join(""));
+  if(indirectC.length) h+=orphanSection('indirect-c','Indirect Columns','Not on any visual, but used in a relationship or measure DAX — keep these','var(--clr-indirect)',indirectC.length,'Columns',
+    indirectC.map(c=>\`<div class="lc clickable" style="border-left:3px solid var(--clr-indirect);flex:0 0 auto" onclick="event.stopPropagation();openLineage('column','\${c.name}')"><div class="lc-name">\${c.name}</div><div class="lc-sub">\${c.table} · \${c.dataType}</div></div>\`).join(""));
 
-  if(!unusedM.length&&!unusedC.length&&!indirectM.length&&!indirectC.length)h='<div style="text-align:center;padding:40px;color:#22C55E;font-weight:600">All fields are in use ✓</div>';
+  if(!unusedM.length&&!unusedC.length&&!indirectM.length&&!indirectC.length)h='<div style="text-align:center;padding:40px;color:var(--clr-success);font-weight:600">All fields are in use ✓</div>';
+  var totalUnused=unusedM.length+unusedC.length;
+  h+='<div class="panel-footer"><div class="left">'+
+    (totalUnused?totalUnused+' unused items · safe to review for removal':'No unused items to review')+
+    '</div></div>';
   document.getElementById("unused-content").innerHTML=h;
 }
 
@@ -892,7 +1133,7 @@ function renderSources(){
   });
 
   var modeChips=Object.keys(modeCounts).sort(function(a,b){return modeCounts[b]-modeCounts[a];}).map(function(m){
-    return '<span class="dep-chip" style="background:rgba(59,130,246,.1);color:#3B82F6;border-color:rgba(59,130,246,.2)">'+modeCounts[m]+'\u00d7 '+escHtml(m)+'</span>';
+    return '<span class="dep-chip" style="background:rgba(59,130,246,.1);color:var(--clr-column);border-color:rgba(59,130,246,.2)">'+modeCounts[m]+'\u00d7 '+escHtml(m)+'</span>';
   }).join('');
 
   var compatLine=DATA.compatibilityLevel
@@ -943,8 +1184,8 @@ function renderSources(){
         sourceRows+=
           '<tr>'+
             '<td><strong>'+escHtml(t.name)+'</strong></td>'+
-            '<td><span class="dep-chip" style="background:rgba(34,197,94,.1);color:#22C55E;border-color:rgba(34,197,94,.2)">'+escHtml(p.mode||'import')+'</span></td>'+
-            '<td><span class="dep-chip" style="background:rgba(168,85,247,.1);color:#A855F7;border-color:rgba(168,85,247,.2)">'+escHtml(p.sourceType||'Unknown')+'</span></td>'+
+            '<td><span class="dep-chip" style="background:rgba(34,197,94,.1);color:var(--clr-success);border-color:rgba(34,197,94,.2)">'+escHtml(p.mode||'import')+'</span></td>'+
+            '<td><span class="dep-chip" style="background:rgba(168,85,247,.1);color:var(--clr-calc);border-color:rgba(168,85,247,.2)">'+escHtml(p.sourceType||'Unknown')+'</span></td>'+
             '<td>'+loc+'</td>'+
           '</tr>';
       });
@@ -961,20 +1202,28 @@ function renderSources(){
       '</div>';
   }
 
+  var sourcesFooter='<div class="panel-footer"><div class="left">'+
+    tablesWithSources.length+' source tables'+
+    '</div></div>';
   if(tablesWithSources.length===0&&(DATA.expressions||[]).length===0){
     // Even when there's no partition info, show the model properties card.
-    host.innerHTML=modelPropsCard+'<div style="text-align:center;padding:40px 20px;color:var(--text-faint);font-size:13px">No partition or expression information found in this model.</div>';
+    host.innerHTML=modelPropsCard+'<div style="text-align:center;padding:40px 20px;color:var(--text-faint);font-size:13px">No partition or expression information found in this model.</div>'+sourcesFooter;
     return;
   }
-  host.innerHTML=modelPropsCard+summary+exprBlock+perTableBlock;
+  host.innerHTML=modelPropsCard+summary+exprBlock+perTableBlock+sourcesFooter;
 }
 
 function renderRelationships(){
   const rels=DATA.relationships;
-  if(!rels.length){document.getElementById("relationships-content").innerHTML='<div style="text-align:center;padding:40px;color:#6B7280">No relationships found in the model</div>';return;}
-  let h='<table class="data-table"><thead><tr><th>From Table</th><th>From Column</th><th></th><th>To Table</th><th>To Column</th><th>Status</th></tr></thead><tbody>';
+  var activeCount=rels.filter(function(r){return r.isActive;}).length;
+  var inactiveCount=rels.length-activeCount;
+  var relFooter='<div class="panel-footer"><div class="left">'+
+    rels.length+' relationships · '+activeCount+' active · '+inactiveCount+' inactive'+
+    '</div></div>';
+  if(!rels.length){document.getElementById("relationships-content").innerHTML='<div style="text-align:center;padding:40px;color:#6B7280">No relationships found in the model</div>'+relFooter;return;}
+  let h='<div class="table-wrap"><table class="data-table"><thead><tr><th>From Table</th><th>From Column</th><th></th><th>To Table</th><th>To Column</th><th>Status</th></tr></thead><tbody>';
   for(const r of rels){
-    const statusColor=r.isActive?'#10B981':'#6B7280';
+    const statusColor=r.isActive?'var(--clr-success)':'var(--text-faint)';
     const statusLabel=r.isActive?'Active':'Inactive';
     h+=\`<tr>
       <td style="font-weight:600">\${r.fromTable}</td>
@@ -985,13 +1234,14 @@ function renderRelationships(){
       <td><span style="color:\${statusColor};font-size:12px;font-weight:500">\${statusLabel}</span></td>
     </tr>\`;
   }
-  h+='</tbody></table>';
+  h+='</tbody></table></div>'+relFooter;
   document.getElementById("relationships-content").innerHTML=h;
 }
 
 function renderFunctions(){
   const fns=DATA.functions.filter(f=>!f.name.endsWith('.About'));
-  if(!fns.length){document.getElementById("functions-content").innerHTML='<div style="text-align:center;padding:40px;color:#6B7280">No user-defined functions found in the model</div>';return;}
+  var fnsFooter='<div class="panel-footer"><div class="left">'+fns.length+' function'+(fns.length===1?'':'s')+'</div></div>';
+  if(!fns.length){document.getElementById("functions-content").innerHTML='<div style="text-align:center;padding:40px;color:#6B7280">No user-defined functions found in the model</div>'+fnsFooter;return;}
   let h='<div style="display:flex;flex-direction:column;gap:12px">';
   for(const f of fns){
     const refMeasures=DATA.measures.filter(m=>m.daxExpression.includes("'"+f.name+"'")||m.daxExpression.includes(f.name+'('));
@@ -1001,7 +1251,7 @@ function renderFunctions(){
     }).join('<span style="color:var(--code-punct)">, </span>'):'<span style="color:var(--code-punct);font-style:italic">none</span>';
     const desc=f.description?'<div style="font-size:11px;color:#64748B;margin-top:6px;line-height:1.4">'+f.description.replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</div>':'';
     const expr=f.expression.replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    const measureChips=refMeasures.map(m=>\`<span class="dep-chip" style="background:rgba(245,158,11,.1);color:#F59E0B;border-color:rgba(245,158,11,.2);cursor:pointer" onclick="event.stopPropagation();openLineage('measure','\${m.name}')">\${m.name}</span>\`).join('');
+    const measureChips=refMeasures.map(m=>\`<span class="dep-chip" style="background:rgba(245,158,11,.1);color:var(--clr-measure);border-color:rgba(245,158,11,.2);cursor:pointer" onclick="event.stopPropagation();openLineage('measure','\${m.name}')">\${m.name}</span>\`).join('');
     h+=\`<div class="page-card">
       <div class="page-header" onclick="this.parentElement.classList.toggle('open')">
         <div style="flex:1">
@@ -1009,9 +1259,9 @@ function renderFunctions(){
           <div style="font-size:11px;color:#64748B;margin-top:2px;font-family:'JetBrains Mono',monospace">( \${params} )</div>
         </div>
         <div class="page-stats">
-          <div class="page-stat"><div class="page-stat-val" style="color:#F59E0B">\${refMeasures.length}</div><div class="page-stat-label">Measures</div></div>
+          <div class="page-stat"><div class="page-stat-val" style="color:var(--clr-measure)">\${refMeasures.length}</div><div class="page-stat-label">Measures</div></div>
         </div>
-        <span class="page-expand">▼</span>
+        <span class="page-expand" aria-hidden="true"></span>
       </div>
       <div class="page-body"><div class="page-body-inner">
         \${desc}
@@ -1020,13 +1270,14 @@ function renderFunctions(){
       </div></div>
     </div>\`;
   }
-  h+='</div>';
+  h+='</div>'+fnsFooter;
   document.getElementById("functions-content").innerHTML=h;
 }
 
 function renderCalcGroups(){
   const cgs=DATA.calcGroups;
-  if(!cgs.length){document.getElementById("calcgroups-content").innerHTML='<div style="text-align:center;padding:40px;color:#6B7280">No calculation groups found in the model</div>';return;}
+  var cgsFooter='<div class="panel-footer"><div class="left">'+cgs.length+' calc group'+(cgs.length===1?'':'s')+'</div></div>';
+  if(!cgs.length){document.getElementById("calcgroups-content").innerHTML='<div style="text-align:center;padding:40px;color:#6B7280">No calculation groups found in the model</div>'+cgsFooter;return;}
   let h='<div style="display:flex;flex-direction:column;gap:12px">';
   for(const cg of cgs){
     const desc=cg.description?'<div style="font-size:11px;color:var(--text-dim);margin-top:4px">'+cg.description.replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</div>':'';
@@ -1050,15 +1301,15 @@ function renderCalcGroups(){
           \${desc}
         </div>
         <div class="page-stats">
-          <div class="page-stat"><div class="page-stat-val" style="color:#A78BFA">\${cg.items.length}</div><div class="page-stat-label">Items</div></div>
+          <div class="page-stat"><div class="page-stat-val" style="color:var(--clr-upstream)">\${cg.items.length}</div><div class="page-stat-label">Items</div></div>
           <div class="page-stat"><div class="page-stat-val" style="color:#64748B">\${cg.precedence}</div><div class="page-stat-label">Precedence</div></div>
         </div>
-        <span class="page-expand">▼</span>
+        <span class="page-expand" aria-hidden="true"></span>
       </div>
       <div class="page-body"><div class="page-body-inner">\${items}</div></div>
     </div>\`;
   }
-  h+='</div>';
+  h+='</div>'+cgsFooter;
   document.getElementById("calcgroups-content").innerHTML=h;
 }
 
@@ -1068,6 +1319,7 @@ function toggleUnused(t){showUnusedOnly[t]=!showUnusedOnly[t];document.getElemen
 
 function currentMd(){
   switch(activeMd){
+    case "datadict":   return MARKDOWN_DATADICT;
     case "measures":   return MARKDOWN_MEASURES;
     case "functions":  return MARKDOWN_FUNCTIONS;
     case "calcgroups": return MARKDOWN_CALCGROUPS;
@@ -1077,7 +1329,8 @@ function currentMd(){
 }
 function currentMdFilename(){
   var suffix="-semantic-model.md";
-  if(activeMd==="measures")        suffix="-measures.md";
+  if(activeMd==="datadict")        suffix="-data-dictionary.md";
+  else if(activeMd==="measures")   suffix="-measures.md";
   else if(activeMd==="functions")  suffix="-functions.md";
   else if(activeMd==="calcgroups") suffix="-calculation-groups.md";
   else if(activeMd==="quality")    suffix="-data-quality.md";
@@ -1086,17 +1339,18 @@ function currentMdFilename(){
 
 function switchMd(which){
   activeMd=which;
-  var ids=["model","measures","functions","calcgroups","quality"];
+  var ids=["model","datadict","measures","functions","calcgroups","quality"];
   ids.forEach(function(id){
     var el=document.getElementById("md-tab-"+id);
     if(el)el.classList.toggle("active",which===id);
   });
   var sub=document.getElementById("md-subtitle");
   if(sub){
-    if(which==="measures")        sub.textContent="Measures reference · A\u2013Z alphabetical (no DAX expressions)";
-    else if(which==="functions")  sub.textContent="Functions reference · per-UDF parameters, descriptions and bodies";
-    else if(which==="calcgroups") sub.textContent="Calculation groups reference · per-item descriptions and bodies";
-    else if(which==="quality")    sub.textContent="Data quality review · coverage, removal candidates, indirect entities, inactive relationships";
+    if(which==="datadict")        sub.textContent="Data dictionary reference \u00b7 per-table columns, constraints, hierarchies (no DAX expressions)";
+    else if(which==="measures")   sub.textContent="Measures reference \u00b7 A\u2013Z alphabetical (no DAX expressions)";
+    else if(which==="functions")  sub.textContent="Functions reference \u00b7 per-UDF parameters, descriptions and bodies";
+    else if(which==="calcgroups") sub.textContent="Calculation groups reference \u00b7 per-item descriptions and bodies";
+    else if(which==="quality")    sub.textContent="Data quality review \u00b7 coverage, removal candidates, indirect entities, inactive relationships";
     else                          sub.textContent="Semantic-model documentation (no DAX expressions)";
   }
   renderDocs();
@@ -1144,6 +1398,12 @@ function mdInline(s){
   });
   s=s.replace(/&lt;a id=&quot;([^&]*)&quot;&gt;/g,function(_,id){return '<a id="'+id+'">';});
   s=s.replace(/&lt;\\/a&gt;/g,"</a>");
+  // <span class="..."> passthrough so the dashboard renders status badges,
+  // key-annotation badges, and chip pills as their styled components instead
+  // of literal escaped HTML. Attribute is restricted to class= to limit the
+  // surface; mdEscapeHtml has already neutralised &, <, > in the class value.
+  s=s.replace(/&lt;span class=&quot;([^&]*)&quot;&gt;/g,function(_,cls){return '<span class="'+cls+'">';});
+  s=s.replace(/&lt;\\/span&gt;/g,"</span>");
   // Bold ** **
   s=s.replace(/\\*\\*([^*]+)\\*\\*/g,"<strong>$1</strong>");
   // Italic _ _ (require word-boundary-ish neighbours so interior underscores don't match)
@@ -1210,6 +1470,24 @@ function mdRender(md){
       out.push("<blockquote>"+mdInline(qBuf.join(" "))+"</blockquote>");
       continue;
     }
+    // Fenced code block: \`\`\` or \`\`\`lang … \`\`\`
+    // Content is rendered verbatim (HTML-escaped, not Markdown-processed) so
+    // DAX bodies and signatures don't accidentally trigger inline-code purple.
+    if(/^\\s*\`\`\`/.test(ln)){
+      flushPara();
+      var langLine=ln.trim();
+      var lang=langLine.replace(/^\`\`\`/,"").trim();
+      var codeLines=[];
+      i++;
+      while(i<lines.length&&!/^\\s*\`\`\`\\s*$/.test(lines[i])){
+        codeLines.push(lines[i]);
+        i++;
+      }
+      if(i<lines.length)i++; // skip closing fence
+      var langAttr=lang?' data-lang="'+mdEscapeHtml(lang)+'"':'';
+      out.push('<pre class="md-code"'+langAttr+'><code>'+mdEscapeHtml(codeLines.join("\\n"))+'</code></pre>');
+      continue;
+    }
     // Numbered list (ordered). Supports indented bullets nested under each item.
     if(/^\\s*\\d+\\.\\s+/.test(ln)){
       flushPara();
@@ -1269,7 +1547,18 @@ function renderDocs(){
   var rendered=document.getElementById("md-rendered");
   var md=currentMd();
   if(src)src.textContent=md;
-  if(rendered)rendered.innerHTML=mdRender(md);
+  if(rendered){
+    rendered.innerHTML=mdRender(md)+
+      '<hr style="border:none;border-top:1px dashed var(--border-soft);margin:18px 0 10px">'+
+      '<div style="font:11px/1.5 \\'JetBrains Mono\\',monospace;color:var(--text-faint);text-align:center">'+
+        'Generated by Power BI Lineage v'+APP_VERSION+' · '+GENERATED_AT+' · '+escHtml(REPORT_NAME)+
+      '</div>';
+  }
+  // Docs panel footer (outside .md-rendered) shows line / char totals.
+  var lineCount=md?md.split(/\\r?\\n/).length:0;
+  setPanelFooter("footer-docs",
+    lineCount+' lines · generated '+GENERATED_AT,
+    (md?md.length:0)+' chars');
 }
 
 function copyMarkdown(){
