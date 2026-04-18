@@ -1,5 +1,34 @@
 import type { FullData } from "./data-builder.js";
 import { safeJSON, escHtml as serverEscHtml } from "./render/safe.js";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { fileURLToPath } from "node:url";
+
+// ─────────────────────────────────────────────────────────────────────
+// Vendored DAX syntax highlighter (see vendor/dax-highlight/README.md)
+//
+// Loaded once at module-load from vendor/dax-highlight/ and inlined
+// into the generated HTML. Zero runtime deps preserved — the vendor
+// files are just read off disk, like package.json in app.ts.
+//
+// Path resolution tries three locations so the same code works when
+// compiled to dist/ (production), dist-test/src/ (unit tests), or
+// run via ts-node / any other out-dir layout.
+// ─────────────────────────────────────────────────────────────────────
+const __dirname_html = path.dirname(fileURLToPath(import.meta.url));
+function readVendor(relative: string): string {
+  const candidates = [
+    path.resolve(__dirname_html, "..", "vendor", relative),
+    path.resolve(__dirname_html, "..", "..", "vendor", relative),
+    path.resolve(process.cwd(), "vendor", relative),
+  ];
+  for (const p of candidates) {
+    try { return fs.readFileSync(p, "utf8"); } catch { /* try next */ }
+  }
+  throw new Error("vendor file not found: " + relative);
+}
+const DAX_HIGHLIGHT_JS  = readVendor("dax-highlight/dax-highlight.js");
+const DAX_HIGHLIGHT_CSS = readVendor("dax-highlight/dax-highlight.css");
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // HTML Dashboard Generation
@@ -452,6 +481,39 @@ export function generateHTML(
   .md-rendered ol ul{margin:2px 0 6px}
 
   @media(max-width:768px){.summary{grid-template-columns:repeat(3,1fr)}.lineage-flow-row{flex-direction:column}.lineage-arrow-col{transform:rotate(90deg);padding:8px 0;width:100%}}
+
+  /* ── DAX syntax highlighter (vendor/dax-highlight) ───────────────── */
+  ${DAX_HIGHLIGHT_CSS}
+
+  /* ── Theme bridge — blend DAX colours with our --clr-* palette ───── */
+  /* The highlighter ships with a neutral dark palette. We keep its
+     default behaviour in dark mode and override for light mode via
+     our existing [data-theme="light"] attribute — no media-query
+     flicker. Tokens mapped to semantic --clr-* colours that already
+     theme-switch elsewhere in the dashboard (measure amber, function
+     teal, upstream purple, source emerald). */
+  .code-dax {
+    --dax-fg:        var(--text);
+    --dax-comment:   var(--text-fainter);
+    --dax-keyword:   var(--clr-upstream);
+    --dax-function:  var(--clr-function);
+    --dax-variable:  var(--clr-measure);
+    --dax-measure:   var(--clr-measure);
+    --dax-ref:       var(--clr-source);
+    --dax-string:    var(--clr-success);
+    --dax-number:    var(--clr-calc);
+  }
+  /* When embedded in our .lineage-dax block, inherit the block's
+     monospace font / size from the existing rule and add our token
+     classes on top. */
+  .lineage-dax.code-dax { font-family: inherit; line-height: inherit; tab-size: 2; }
+  .lineage-dax .dax-k, .lineage-dax .dax-f, .lineage-dax .dax-v,
+  .lineage-dax .dax-m, .lineage-dax .dax-r, .lineage-dax .dax-s,
+  .lineage-dax .dax-n, .lineage-dax .dax-c {
+    /* Spans need no further layout tweaks — inherit .lineage-dax
+       monospace styling; the colour rules from .code-dax .dax-*
+       already apply. */
+  }
 </style>
 </head>
 <body>
@@ -544,6 +606,8 @@ export function generateHTML(
   <div class="rb-right">v${version}<span class="rb-sep">·</span>local<span class="rb-sep">·</span>no data leaves your machine</div>
 </div>
 
+<!-- DAX syntax highlighter (vendor/dax-highlight) — exposes window.DaxHighlight -->
+<script>${DAX_HIGHLIGHT_JS}</script>
 <script>
 const DATA=${safeJSON(data)};
 const MARKDOWN=${markdownLiteral};
@@ -577,7 +641,26 @@ function toggleTheme(){
   if(btn)btn.textContent=next==='dark'?'☾':'☀';
 }
 
+// Colourise every .lineage-dax block that hasn't been highlighted
+// yet. Safe to call repeatedly — DaxHighlight.highlightElement is
+// idempotent via a __daxHighlighted flag, and we filter on the
+// .code-dax class the highlighter adds on first pass.
+//
+// MUST run BEFORE addCopyButtons — the highlighter replaces innerHTML,
+// which would wipe any already-appended copy button. Current order:
+//   1. renderX() sets innerHTML with raw DAX
+//   2. highlightDaxBlocks() replaces innerHTML with coloured spans
+//   3. addCopyButtons() appends the ⎘ button to the highlighted block
+function highlightDaxBlocks(){
+  if (typeof DaxHighlight === 'undefined') return;       // vendor script not loaded
+  DaxHighlight.highlightAll(document, '.lineage-dax:not(.code-dax)');
+  // Markdown-rendered code blocks also get highlighted (the Docs tab
+  // renders \`\`\`dax fences into <pre><code class="language-dax">).
+  DaxHighlight.highlightAll(document, 'pre code.language-dax:not(.code-dax)');
+}
+
 function addCopyButtons(){
+  highlightDaxBlocks();
   document.querySelectorAll('.lineage-dax:not([data-copy-wired])').forEach(function(el){
     el.setAttribute('data-copy-wired','1');
     var dax=el.textContent;
@@ -735,6 +818,10 @@ function switchTab(id){
   document.getElementById("panel-"+id).classList.add("active");
   if(id==="lineage"&&!document.getElementById("lineage-content").innerHTML.trim())
     document.getElementById("lineage-content").innerHTML='<div style="text-align:center;padding:60px 20px;color:var(--text-faint)"><div style="font-size:16px;margin-bottom:8px">Click a measure or column name to view its lineage</div><div style="font-size:12px">Go to the Measures or Columns tab and click any field name</div></div>';
+  // Functions + Calc Groups tabs display DAX bodies. Running through
+  // addCopyButtons() here (which also highlights) colourises any new
+  // blocks that weren't highlighted at initial render.
+  if(id==="functions"||id==="calcgroups"||id==="lineage")addCopyButtons();
 }
 
 function sc(s){return s==='unused'?'unused':s==='indirect'?'indirect':''}
@@ -1605,6 +1692,10 @@ function renderDocs(){
       '<div style="font:11px/1.5 \\'JetBrains Mono\\',monospace;color:var(--text-faint);text-align:center">'+
         'Generated by Power BI Lineage v'+APP_VERSION+' · '+GENERATED_AT+' · '+escHtml(REPORT_NAME)+
       '</div>';
+    // Colourise any \`\`\`dax fenced blocks that mdRender produced —
+    // they land as <pre><code class="language-dax"> which the
+    // highlighter targets by default.
+    highlightDaxBlocks();
   }
   // Docs panel footer (outside .md-rendered) shows line / char totals.
   var lineCount=md?md.split(/\\r?\\n/).length:0;

@@ -11,6 +11,25 @@ Sections in each release follow the Keep-a-Changelog vocabulary: **Added**, **Ch
 
 ---
 
+## [0.3.1] — 2026-04-18 · DAX syntax highlighting (branch `feat/dax-syntax-highlighting`)
+
+User-visible polish release. Every DAX block in the dashboard now renders with syntax highlighting — keywords, functions, variables, `[measure]` / `'table'[column]` references, strings, numbers and comments each get their own colour from the design-token palette.
+
+### Added
+- **`vendor/dax-highlight/`** — vendored copy of the tiny dependency-free DAX highlighter (MIT, upstream in `jonathan-pap.github.io`). Kept out of `src/` so it can be upgraded by dropping in new files; zero-runtime-dep policy preserved.
+- **Highlighter wiring in `src/html-generator.ts`** — reads `vendor/dax-highlight/dax-highlight.js` and `dax-highlight.css` at generation time (walks three candidate paths so it works in prod, tests, and any alternate `outDir`), inlines both into the generated HTML.
+- **Theme bridge** — `.code-dax` CSS custom properties (`--dax-keyword`, `--dax-function`, `--dax-variable`, `--dax-measure`, `--dax-ref`, `--dax-string`, `--dax-number`) mapped onto our existing semantic tokens (`--clr-upstream`, `--clr-function`, `--clr-measure`, `--clr-source`, `--clr-success`, `--clr-calc`). Highlighting follows the dark/light theme toggle automatically.
+- **`highlightDaxBlocks()`** client helper called at every render that produces a `.lineage-dax` block (Lineage view, Functions tab, Calc Groups tab, Docs tab's markdown-fenced `dax` blocks). Runs *before* `addCopyButtons` so the innerHTML replacement doesn't wipe copy buttons.
+- **`tests/render-dax-highlight.test.ts`** — 4 smoke tests for the vendor-file injection, CSS token presence, theme-bridge wiring, and client-helper call order.
+
+### Changed
+- **`switchTab` for Functions / Calc Groups / Lineage** now calls `addCopyButtons` which in turn triggers `highlightDaxBlocks`, so switching to those tabs colourises any newly-rendered DAX.
+
+### Test results
+48 / 48 green (was 44, +4 DAX smoke tests). Build and typecheck clean. Live smoke against `test/Health_and_Safety.Report` confirms `DaxHighlight` is present, all 8 token CSS classes emit, and `highlightDaxBlocks` is wired.
+
+---
+
 ## [0.3.0] — 2026-04-18 · Stop 4 (branch `stop-4/event-delegation`)
 
 Structural XSS fix — the last of the three Criticals from `/sc:analyze`. Minor-version bump because the event-handling model in the dashboard changes even though the UI behaviour is identical.
@@ -175,5 +194,6 @@ First release to properly support Power BI **composite models** (mixed-storage w
 | 0.0.1 – 0.0.4 | `main` (merged) | — |
 | 0.1.0 – 0.2.1 | `main` (merged) | v0.2 security track |
 | 0.3.0 | `stop-4/event-delegation` (open) | Structural XSS fix |
+| 0.3.1 | `feat/dax-syntax-highlighting` (open) | DAX syntax highlighting |
 
 The v0.2 track was merged to `main` via cherry-pick on 2026-04-18 after the stacked PRs #4–#6 each landed on their feature-branch base rather than main. See the Stop-3 commit message for the reconciliation detail. v0.3.0 is on its own branch awaiting merge.
