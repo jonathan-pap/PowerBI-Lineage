@@ -194,7 +194,7 @@ function renderSummary(){
 let showAutoDate = false;
 function visibleTables(){ return (DATA.tables||[]).filter(t=>showAutoDate||t.origin!=="auto-date"); }
 function autoDateCount(){ return (DATA.tables||[]).filter(t=>t.origin==="auto-date").length; }
-function toggleAutoDate(){ showAutoDate = !showAutoDate; renderTabs(); renderTables(); renderSources(); }
+function toggleAutoDate(){ showAutoDate = !showAutoDate; renderTabs(); renderTables(); renderSources(); renderTree(); }
 
 function renderTabs(){
   const um=DATA.totals.measuresUnused+DATA.totals.columnsUnused;
@@ -205,6 +205,7 @@ function renderTabs(){
   document.getElementById("tabs").innerHTML=[
     // Data layer
     {id:"sources",l:"Sources",b:vt.filter(function(t){return (t.partitions||[]).length>0;}).length},
+    {id:"tree",l:"Tree",b:null},
     {id:"tables",l:"Tables",b:vt.length},
     {id:"columns",l:"Columns",b:DATA.columns.length},
     {id:"relationships",l:"Relationships",b:DATA.relationships.length},
@@ -822,6 +823,214 @@ function renderRelationships(){
   document.getElementById("relationships-content").innerHTML=h;
 }
 
+// ─── Tree tab ──────────────────────────────────────────────────────────────
+// Source → Table → (Columns + Measures groups) → columns / measures.
+// Pure nested <details>/<summary>; no JS state for expand/collapse — the
+// browser handles it. Leaves are clickable (lineage nav); every summary
+// is a toggle. Auto-date tables respect the visibleTables() filter.
+//
+// Design lives in claudedocs/design_ado-md-compat.md's "Part 1 simplified"
+// and the subsequent brainstorm locking V1 scope to four levels max.
+
+function tClassifyTable(t){
+  if(t.origin==='auto-date')return 'Auto-date';
+  if(t.isCalcGroup)return 'Calc Group';
+  const out=(t.relationships||[]).filter(r=>r.direction==='outgoing').length;
+  const inc=(t.relationships||[]).filter(r=>r.direction==='incoming').length;
+  if(out>0&&inc===0)return 'Fact';
+  if(out===0&&inc>0)return 'Dimension';
+  if(out>0&&inc>0)return 'Bridge';
+  return 'Disconnected';
+}
+// Role sort weights: Facts first (where measures usually live), then Dims,
+// Bridges, Calc-Groups, Disconnected. Same ordering as the MD data-dictionary.
+const T_ROLE_WEIGHT={Fact:0,Dimension:1,Bridge:2,'Calc Group':3,Disconnected:4,'Auto-date':5};
+
+/**
+ * Derive a friendly display label for a table's data source. AS partitions
+ * use the last URL path segment (the workspace slug) as a concise subtitle
+ * — the full URL is kept in `sub` for the subtitle line on the source row.
+ * Tables with no partitions (disconnected, calc groups) bucket under
+ * "No source".
+ */
+function tSourceKey(t){
+  const p=t.partitions&&t.partitions[0];
+  if(!p)return {key:'__nosrc__',label:'No source',sub:''};
+  if(p.sourceType==='Analysis Services'){
+    const loc=p.sourceLocation||'';
+    // Last path segment of the cluster URL, or the full URL if it's short.
+    const lastSlash=loc.lastIndexOf('/');
+    const tail=lastSlash>=0?loc.substring(lastSlash+1):loc;
+    return {key:'AS:'+loc,label:'AS · '+(tail||'(unknown)'),sub:loc};
+  }
+  return {key:p.sourceType+'|'+(p.sourceLocation||''),label:p.sourceType,sub:p.sourceLocation||''};
+}
+
+function tBadgesForColumn(c,slicerSet,tableName){
+  const out=[];
+  if(c.isKey)out.push('<span class="badge badge--pk">🔑 PK</span>');
+  else if(c.isInferredPK)out.push('<span class="badge badge--pk-inf">🗝 PK</span>');
+  if(c.isFK&&c.fkTarget)out.push('<span class="badge badge--fk" title="→ '+escAttr(c.fkTarget.table+'['+c.fkTarget.column+']')+'">🔗 FK</span>');
+  if(c.isCalculated)out.push('<span class="badge badge--calc">🧮 CALC</span>');
+  if(c.isHidden)out.push('<span class="badge badge--hid-col">👁 HIDDEN</span>');
+  if(slicerSet.has(tableName+'|'+c.name))out.push('<span class="badge badge--slicer">🎚 SLICER</span>');
+  return out.join(' ');
+}
+
+function tBadgeForMeasure(m){
+  if(m.externalProxy)return '<span class="badge badge--calc">🌐 PROXY</span>';
+  if(m.status==='unused')return '<span class="badge badge--unused">⚠ UNUSED</span>';
+  if(m.status==='indirect')return '<span class="badge badge--indirect">↻ INDIRECT</span>';
+  return ''; // Direct needs no pill — absence = healthy
+}
+
+function renderTree(){
+  const el=document.getElementById("tree-content");
+  if(!el)return;
+  const tables=visibleTables();   // respects Show-auto-date toggle
+  const slicerSet=new Set((DATA.columns||[]).filter(c=>c.isSlicerField).map(c=>c.table+'|'+c.name));
+  // Full-detail measure lookup — table.measures carries a reduced shape.
+  const measuresByTable=new Map();
+  for(const m of DATA.measures||[]){
+    if(!measuresByTable.has(m.table))measuresByTable.set(m.table,[]);
+    measuresByTable.get(m.table).push(m);
+  }
+
+  // Group tables by source
+  const sourceMap=new Map();
+  for(const t of tables){
+    const s=tSourceKey(t);
+    if(!sourceMap.has(s.key))sourceMap.set(s.key,{label:s.label,sub:s.sub,tables:[]});
+    sourceMap.get(s.key).tables.push(t);
+  }
+  // Sort: AS first (by label), then other sources, "No source" last
+  const sortedSources=[...sourceMap.entries()].sort((a,b)=>{
+    const aNo=a[0]==='__nosrc__',bNo=b[0]==='__nosrc__';
+    if(aNo!==bNo)return aNo?1:-1;
+    return a[1].label.localeCompare(b[1].label);
+  });
+
+  const parts=[];
+  parts.push('<div class="tree-hint">Click any measure or column to open its full lineage. Click a table or group header to expand / collapse.</div>');
+
+  // Data-source branches
+  for(const [,src] of sortedSources){
+    const tblList=src.tables.slice().sort((a,b)=>{
+      const wa=T_ROLE_WEIGHT[tClassifyTable(a)]??9;
+      const wb=T_ROLE_WEIGHT[tClassifyTable(b)]??9;
+      if(wa!==wb)return wa-wb;
+      return a.name.localeCompare(b.name);
+    });
+    const totalMeasures=tblList.reduce((a,t)=>a+(t.measureCount||0),0);
+    const totalCols=tblList.reduce((a,t)=>a+(t.columnCount||0),0);
+    parts.push('<details class="tree-src" open>');
+    parts.push('<summary><span class="tree-icon">📦</span><strong>'+escHtml(src.label)+'</strong>'+
+      '<span class="tree-meta">'+tblList.length+' table'+(tblList.length===1?'':'s')+' · '+totalCols+' cols · '+totalMeasures+' measure'+(totalMeasures===1?'':'s')+'</span>'+
+      (src.sub?'<span class="tree-sub">'+escHtml(src.sub)+'</span>':'')+
+      '</summary>');
+
+    for(const t of tblList){
+      const role=tClassifyTable(t);
+      const roleCls='tree-role-'+role.toLowerCase().replace(/\s+/g,'-');
+      const tableIcon=t.isCalcGroup?'🧮':'📊';
+      const cols=t.columns||[];
+      const fullMeasures=(measuresByTable.get(t.name)||[]);
+      fullMeasures.sort((a,b)=>a.name.localeCompare(b.name));
+
+      parts.push('<details class="tree-table">');
+      parts.push('<summary>'+
+        '<span class="tree-icon">'+tableIcon+'</span>'+
+        '<strong>'+escHtml(t.name)+'</strong>'+
+        '<span class="badge tree-role '+roleCls+'">'+role.toUpperCase()+'</span>'+
+        '<span class="tree-meta">'+t.columnCount+' col'+(t.columnCount===1?'':'s')+
+          (t.measureCount>0?' · '+t.measureCount+' measure'+(t.measureCount===1?'':'s'):'')+
+          (t.keyCount>0?' · '+t.keyCount+' key'+(t.keyCount===1?'':'s'):'')+
+          (t.fkCount>0?' · '+t.fkCount+' FK'+(t.fkCount===1?'':'s'):'')+
+        '</span>'+
+      '</summary>');
+
+      // Columns group
+      if(cols.length>0){
+        const keyCount=cols.filter(c=>c.isKey||c.isInferredPK).length;
+        const fkCount=cols.filter(c=>c.isFK).length;
+        const hiddenCount=cols.filter(c=>c.isHidden).length;
+        const colExtras=[];
+        if(keyCount>0)colExtras.push(keyCount+' key'+(keyCount===1?'':'s'));
+        if(fkCount>0)colExtras.push(fkCount+' FK'+(fkCount===1?'':'s'));
+        if(hiddenCount>0)colExtras.push(hiddenCount+' hidden');
+        parts.push('<details class="tree-group">');
+        parts.push('<summary><span class="tree-icon">📋</span>Columns ('+cols.length+')'+(colExtras.length?'<span class="tree-meta">'+colExtras.join(' · ')+'</span>':'')+'</summary>');
+        for(const c of cols){
+          const badges=tBadgesForColumn(c,slicerSet,t.name);
+          parts.push(`<div class="tree-leaf tree-col clickable" data-action="lineage" data-type="column" data-name="${escAttr(c.name)}">`+
+            `<span class="tree-icon">·</span>`+
+            `<span class="tree-name">${escHtml(c.name)}</span>`+
+            `<span class="tree-type">${escHtml(c.dataType||'')}</span>`+
+            (badges?`<span class="tree-badges">${badges}</span>`:'')+
+          `</div>`);
+        }
+        parts.push('</details>');
+      }
+
+      // Measures group
+      if(fullMeasures.length>0){
+        const brk={direct:0,indirect:0,unused:0,proxy:0};
+        for(const m of fullMeasures){
+          if(m.externalProxy)brk.proxy++;
+          else brk[m.status]=(brk[m.status]||0)+1;
+        }
+        const brkParts=[];
+        if(brk.direct>0)brkParts.push(brk.direct+' ✓');
+        if(brk.indirect>0)brkParts.push(brk.indirect+' ↻');
+        if(brk.unused>0)brkParts.push(brk.unused+' ⚠');
+        if(brk.proxy>0)brkParts.push(brk.proxy+' 🌐');
+        parts.push('<details class="tree-group">');
+        parts.push('<summary><span class="tree-icon">ƒ</span>Measures ('+fullMeasures.length+')'+(brkParts.length?'<span class="tree-meta">'+brkParts.join(' · ')+'</span>':'')+'</summary>');
+        for(const m of fullMeasures){
+          const mb=tBadgeForMeasure(m);
+          parts.push(`<div class="tree-leaf tree-measure clickable" data-action="lineage" data-type="measure" data-name="${escAttr(m.name)}">`+
+            `<span class="tree-icon">●</span>`+
+            `<span class="tree-name">${escHtml(m.name)}</span>`+
+            (m.formatString?`<span class="tree-type">${escHtml(m.formatString)}</span>`:'')+
+            (mb?`<span class="tree-badges">${mb}</span>`:'')+
+          `</div>`);
+        }
+        parts.push('</details>');
+      }
+
+      parts.push('</details>'); // close tree-table
+    }
+    parts.push('</details>'); // close tree-src
+  }
+
+  // UDFs — separate root branch, siblings to data sources
+  const udfs=(DATA.functions||[]).filter(f=>!f.name.endsWith('.About'));
+  if(udfs.length>0){
+    parts.push('<details class="tree-src">');
+    parts.push('<summary><span class="tree-icon">🔧</span><strong>User-Defined Functions</strong><span class="tree-meta">'+udfs.length+' function'+(udfs.length===1?'':'s')+'</span></summary>');
+    for(const f of udfs){
+      const paramCount=f.parameters?f.parameters.split(',').length:0;
+      parts.push('<div class="tree-leaf tree-udf clickable" data-action="tab" data-tab="functions">'+
+        '<span class="tree-icon">ƒ</span>'+
+        '<span class="tree-name">'+escHtml(f.name)+'</span>'+
+        '<span class="tree-type">'+paramCount+' param'+(paramCount===1?'':'s')+'</span>'+
+      '</div>');
+    }
+    parts.push('</details>');
+  }
+
+  el.innerHTML=parts.join('');
+
+  // Footer
+  const adc=autoDateCount();
+  const autoToggle=adc>0
+    ? '<button class="filter-btn'+(showAutoDate?' active':'')+'" data-action="toggle-auto-date" title="'+(showAutoDate?'Hide':'Show')+' auto-date infrastructure">'+(showAutoDate?'Hide':'Show')+' auto-date ('+adc+')</button>'
+    : '';
+  setPanelFooter("tree-content",
+    tables.length+' table'+(tables.length===1?'':'s')+' · '+sortedSources.length+' source'+(sortedSources.length===1?'':'s')+(udfs.length>0?' · '+udfs.length+' UDF'+(udfs.length===1?'':'s'):'')+(adc>0&&!showAutoDate?' · <span style="color:var(--text-faint)">+'+adc+' auto-date hidden</span>':''),
+    autoToggle);
+}
+
 function renderFunctions(){
   const fns=DATA.functions.filter(f=>!f.name.endsWith('.About'));
   var fnsFooter='<div class="panel-footer"><div class="left">'+fns.length+' function'+(fns.length===1?'':'s')+'</div></div>';
@@ -1020,4 +1229,4 @@ function downloadMarkdown(){
   setTimeout(function(){URL.revokeObjectURL(url);},1000);
 }
 
-renderSummary();renderTabs();renderMeasures();renderColumns();renderTables();renderRelationships();renderSources();renderFunctions();renderCalcGroups();renderPages();renderUnused();renderDocs();switchTab("measures");addCopyButtons();
+renderSummary();renderTabs();renderMeasures();renderColumns();renderTables();renderRelationships();renderSources();renderTree();renderFunctions();renderCalcGroups();renderPages();renderUnused();renderDocs();switchTab("measures");addCopyButtons();
