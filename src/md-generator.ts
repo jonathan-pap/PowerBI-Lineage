@@ -18,23 +18,40 @@ function esc(s: string | undefined | null): string {
 }
 
 /**
- * Render a measure/column status as a coloured <span> badge that the dashboard
- * MD renderer will style as a pill. In raw MD viewers the span degrades to
- * plain text, so the doc stays readable in external tools too.
+ * Render a measure/column status as a coloured <span> badge that the
+ * dashboard MD renderer styles as a pill. The Unicode glyph inside each
+ * span is what survives CSS stripping — ADO Wiki and GitHub drop the
+ * `class` attribute, leaving the plain text `✓ Direct` / `↻ Indirect` /
+ * `⚠ Unused`. The glyph preserves visual separation from surrounding
+ * text even without the pill styling.
  */
 function statusLabel(s: "direct" | "indirect" | "unused" | string): string {
-  if (s === "direct")   return '<span class="badge badge--success">Direct</span>';
-  if (s === "indirect") return '<span class="badge badge--indirect">Indirect</span>';
-  if (s === "unused")   return '<span class="badge badge--unused">Unused</span>';
+  if (s === "direct")   return '<span class="badge badge--success">✓ Direct</span>';
+  if (s === "indirect") return '<span class="badge badge--indirect">↻ Indirect</span>';
+  if (s === "unused")   return '<span class="badge badge--unused">⚠ Unused</span>';
   return String(s);
 }
 
-/** Key / column-annotation badges used in the Data Dictionary and Quality notes. */
-const BADGE_PK     = '<span class="badge badge--pk">PK</span>';
-const BADGE_PK_INF = '<span class="badge badge--pk-inf">PK*</span>';
-const BADGE_FK     = '<span class="badge badge--fk">FK</span>';
-const BADGE_CALC   = '<span class="badge badge--calc">CALC</span>';
-const BADGE_HIDDEN = '<span class="badge badge--hidden">HIDDEN</span>';
+/**
+ * Key / column-annotation badges — used in Data Dictionary column rows
+ * and Quality-tab notes.
+ *
+ * The Unicode prefix is the only signal that survives CSS stripping on
+ * ADO Wiki / GitHub / any raw-MD viewer. In the dashboard the whole
+ * span (glyph + label) renders as a single coloured pill.
+ *
+ * Mapping rationale:
+ *   🔑 PK    — key icon, primary key set explicitly
+ *   🗝 PK*   — skeleton key, inferred PK (column is target of ≥1 rel)
+ *   🔗 FK    — link icon, foreign key (column is source of ≥1 rel)
+ *   🧮 CALC  — abacus, calculated column / calc group
+ *   👁 HIDDEN — eye (visible-eye reads as "peek-only"; CSS strikes it)
+ */
+const BADGE_PK     = '<span class="badge badge--pk">🔑 PK</span>';
+const BADGE_PK_INF = '<span class="badge badge--pk-inf">🗝 PK*</span>';
+const BADGE_FK     = '<span class="badge badge--fk">🔗 FK</span>';
+const BADGE_CALC   = '<span class="badge badge--calc">🧮 CALC</span>';
+const BADGE_HIDDEN = '<span class="badge badge--hidden">👁 HIDDEN</span>';
 
 /** GitHub-compatible slug for in-document anchor links. */
 function slug(s: string): string {
@@ -132,7 +149,7 @@ function userTables(data: FullData): TableData[] {
  *  local measure is a structural pointer, not a computation. Removing one
  *  breaks the composite contract, so every list that shows "unused" or
  *  "safe to remove" must distinguish them. */
-const BADGE_PROXY = '<span class="badge badge--calc">EXTERNAL</span>';
+const BADGE_PROXY = '<span class="badge badge--calc">🌐 EXTERNAL</span>';
 
 /** Inline descriptor rendered next to a proxy measure's name. Includes the
  *  remote model and (when the remote name differs from the local one) the
@@ -767,7 +784,7 @@ export function generateMeasuresMd(data: FullData, reportName: string): string {
       const meta = [
         `**Table:** ${esc(m.table)}`,
         `**Format:** ${esc(m.formatString) || "—"}`,
-        `**Status:** ${isProxy ? '<span class="badge badge--calc">External proxy</span>' : statusLabel(m.status)}`,
+        `**Status:** ${isProxy ? '<span class="badge badge--calc">🌐 External proxy</span>' : statusLabel(m.status)}`,
         `**Visuals:** ${m.usageCount}`,
         `**Pages:** ${m.pageCount}`,
       ];
