@@ -241,13 +241,17 @@ export function generateMarkdown(data: FullData, reportName: string): string {
   lines.push("    - 3.1 [Storage modes](#31-storage-modes)");
   lines.push("    - 3.2 [Parameters and expressions](#32-parameters-and-expressions)");
   lines.push("    - 3.3 [Per-table sources](#33-per-table-sources)");
-  lines.push("4. [Data Dictionary — Summary](#4-data-dictionary--summary)  _(full inventory: Data Dictionary Reference)_");
-  lines.push("5. [Measures — Summary](#5-measures--summary)");
-  lines.push("6. [Calculation Groups](#6-calculation-groups)");
-  lines.push("7. [User-Defined Functions](#7-user-defined-functions)");
+  // adoSlug collapses consecutive hyphens — "## 4. Data Dictionary — Summary"
+  // (em-dash between two spaces) slugs to 4-data-dictionary-summary, not
+  // 4-data-dictionary--summary. Matched here so the anchor-resolution
+  // test passes on ADO Wiki.
+  lines.push("4. [Data Dictionary — Summary](#4-data-dictionary-summary)  _(full inventory: Data Dictionary Reference)_");
+  lines.push("5. [Measures — Summary](#5-measures-summary)");
+  lines.push("6. [Calculation Groups](#6-calculation-groups-summary)");
+  lines.push("7. [User-Defined Functions](#7-user-defined-functions-summary)");
   lines.push("8. [Report Pages](#8-report-pages)");
   lines.push("");
-  lines.push("Appendix A — [Generation metadata](#appendix-a--generation-metadata)");
+  lines.push("Appendix A — [Generation metadata](#appendix-a-generation-metadata)");
   lines.push("");
   lines.push("---");
   lines.push("");
@@ -332,7 +336,11 @@ export function generateMarkdown(data: FullData, reportName: string): string {
   lines.push("|-------|------|--------:|---------:|-----:|----:|-----------:|");
   for (const t of userTablesSorted) {
     const role = rolesByTable.get(t.name) || "Disconnected";
-    lines.push(`| [${t.name}](#${slug(t.name)}) | ${role} | ${t.columnCount} | ${t.measureCount} | ${t.keyCount} | ${t.fkCount} | ${t.hiddenColumnCount} |`);
+    // Table name is plain text — per-table detail lives in the
+    // Data Dictionary Reference (separate file). Wrapping it in a
+    // markdown link to `#${slug}` would 404 because this file has
+    // no per-table sections.
+    lines.push(`| ${esc(t.name)} | ${role} | ${t.columnCount} | ${t.measureCount} | ${t.keyCount} | ${t.fkCount} | ${t.hiddenColumnCount} |`);
   }
   lines.push("");
   if (autoDateTables.length > 0) {
@@ -440,7 +448,9 @@ export function generateMarkdown(data: FullData, reportName: string): string {
       // One row per partition. Most tables have exactly one.
       for (const p of t.partitions) {
         const loc = p.sourceLocation ? "`" + esc(p.sourceLocation) + "`" : "—";
-        lines.push(`| [${esc(t.name)}](#${slug(t.name)}) | ${esc(p.mode)} | ${esc(p.sourceType)} | ${loc} |`);
+        // Plain text — see §2.2 comment for the rationale (no
+        // per-table section in this doc).
+        lines.push(`| ${esc(t.name)} | ${esc(p.mode)} | ${esc(p.sourceType)} | ${loc} |`);
       }
     }
     lines.push("");
@@ -681,7 +691,7 @@ export function generateMeasuresMd(data: FullData, reportName: string): string {
       for (const m of ms) {
         const p = m.externalProxy!;
         const remote = p.remoteName === m.name ? "_same_" : `\`${esc(p.remoteName)}\``;
-        lines.push(`| [${esc(m.name)}](#${slug(m.name)}) | ${remote} | ${esc(p.type)} | ${esc(m.table)} |`);
+        lines.push(`| [${esc(m.name)}](#${adoSlug(m.name)}) | ${remote} | ${esc(p.type)} | ${esc(m.table)} |`);
       }
       lines.push("");
     }
@@ -718,9 +728,10 @@ export function generateMeasuresMd(data: FullData, reportName: string): string {
   lines.push("");
 
   // ── Sections ──────────────────────────────────────────────────────────────
-  const renderSection = (heading: string, anchor: string, items: ModelMeasure[]) => {
+  const renderSection = (heading: string, _anchor: string, items: ModelMeasure[]) => {
+    // <a id="..."> is redundant here — `## ${heading}` auto-anchors
+    // to the same slug on every platform we render on.
     lines.push(`## ${heading}`);
-    lines.push(`<a id="${anchor}"></a>`);
     lines.push("");
     if (items.length === 0) {
       lines.push(`_No measures starting with ${heading}._`);
@@ -743,8 +754,14 @@ export function generateMeasuresMd(data: FullData, reportName: string): string {
         : m.status === "unused" ? " · _unused_"
         : m.status === "indirect" ? " · _indirect_"
         : "";
+      // Keep the <a id> anchor INSIDE the details — the <details>
+      // element itself isn't anchorable by heading auto-slug, so this
+      // is the jump target for the proxy-summary table at the top.
+      // ADO Wiki honours this for <a id> in practice; if it ever
+      // doesn't, the link lands at the nearest heading (the A-Z
+      // letter section) which is close enough.
       lines.push(`<details>`);
-      lines.push(`<a id="${slug(m.name)}"></a>`);
+      lines.push(`<a id="${adoSlug(m.name)}"></a>`);
       lines.push(`<summary><strong>${esc(m.name)}</strong>${proxyTag(m)} <small>— ${esc(m.table)}${statusTag}</small></summary>`);
       lines.push("");
       const meta = [
@@ -794,7 +811,11 @@ export function generateMeasuresMd(data: FullData, reportName: string): string {
   };
 
   for (const L of letters) renderSection(L, L.toLowerCase(), buckets.get(L)!);
-  if (buckets.get("#")!.length > 0) renderSection("Other (non-letter starts)", "other", buckets.get("#")!);
+  // Heading text is plain "Other" so its auto-slug is `other`,
+  // matching the Jump-to link `[#](#other)`. The old form
+  // "Other (non-letter starts)" adoSlugs to `other-non-letter-starts`
+  // which wouldn't resolve.
+  if (buckets.get("#")!.length > 0) renderSection("Other", "other", buckets.get("#")!);
 
   lines.push(`_Generated by powerbi-lineage · ${ts}_`);
   lines.push("");
@@ -1000,14 +1021,16 @@ export function generateCalcGroupsMd(data: FullData, reportName: string): string
   // Jump nav: one entry per group.
   lines.push("## Jump to");
   lines.push("");
-  lines.push(cgs.map(cg => `[${cg.name}](#${slug(cg.name)})`).join(" · "));
+  // Each calc-group heading carries a number prefix (`## 1. Foo`) so
+  // the heading auto-slug is `1-foo`, NOT just `foo` — the jump-to
+  // links below need to match the auto-slug of the actual heading.
+  lines.push(cgs.map((cg, i) => `[${cg.name}](#${adoSlug(`${i + 1}. ${cg.name}`)})`).join(" · "));
   lines.push("");
   lines.push("---");
   lines.push("");
 
   cgs.forEach((cg, i) => {
     lines.push(`## ${i + 1}. ${cg.name}`);
-    lines.push(`<a id="${slug(cg.name)}"></a>`);
     lines.push("");
     if (cg.description) {
       lines.push(`> ${cg.description.replace(/\n/g, " ")}`);
@@ -1507,7 +1530,7 @@ export function generateDataDictionaryMd(data: FullData, reportName: string): st
   // ── Jump nav — user tables only on the hot path ───────────────────────────
   lines.push("## Jump to");
   lines.push("");
-  lines.push(userTablesSorted.map(t => `[${t.name}](#${slug(t.name)})`).join(" · "));
+  lines.push(userTablesSorted.map(t => `[${t.name}](#${adoSlug(t.name)})`).join(" · "));
   if (autoDateTables.length > 0) {
     lines.push("");
     lines.push(`_${autoDateTables.length} auto-date infrastructure tables collapsed at the bottom of this document._`);
@@ -1519,8 +1542,9 @@ export function generateDataDictionaryMd(data: FullData, reportName: string): st
   // ── One collapsible section per user table ────────────────────────────────
   for (const tbl of userTablesSorted) {
     const cgTag = tbl.isCalcGroup ? " · _calculation group_" : "";
+    // `## ${tbl.name}` auto-slugs to adoSlug(tbl.name) — the explicit
+    // <a id> was redundant.
     lines.push(`## ${tbl.name}`);
-    lines.push(`<a id="${slug(tbl.name)}"></a>`);
     lines.push("");
 
     // Summary line outside the details so it's always visible.

@@ -21,7 +21,16 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { adoSlug } from "../src/md-generator.js";
+import {
+  adoSlug,
+  generateMarkdown,
+  generateMeasuresMd,
+  generateFunctionsMd,
+  generateCalcGroupsMd,
+  generateQualityMd,
+  generateDataDictionaryMd,
+} from "../src/md-generator.js";
+import { buildFullData } from "../src/data-builder.js";
 
 // ──────────────────────────────────────────────────────────────────
 // Unit — adoSlug across the documented matrix
@@ -78,4 +87,87 @@ for (const [input, expected] of cases) {
 
 const FIXTURE = "test/Health_and_Safety.Report";
 const FIXTURE_EXISTS = fs.existsSync(path.resolve(FIXTURE));
-void FIXTURE_EXISTS;  // referenced by Stop-2 tests; keep the import alive
+
+/**
+ * Extract every heading from an MD body. Returns the slug each
+ * heading will produce on ADO Wiki / GitHub / our dashboard. One
+ * pitfall: markdown inside fenced ``` blocks can look like a
+ * heading but isn't. The check `fenced` suppresses that confusion.
+ */
+function headingSlugs(md: string): Set<string> {
+  const slugs = new Set<string>();
+  const lines = md.split(/\r?\n/);
+  let fenced = false;
+  for (const ln of lines) {
+    if (/^```/.test(ln)) { fenced = !fenced; continue; }
+    if (fenced) continue;
+    const m = /^#{1,6}\s+(.+)$/.exec(ln);
+    if (m) slugs.add(adoSlug(m[1].replace(/\s+$/, "")));
+  }
+  return slugs;
+}
+
+/** Extract every `[text](#anchor)` reference from an MD body. */
+function anchorRefs(md: string): string[] {
+  const refs: string[] = [];
+  const rx = /\[[^\]]*\]\(#([^)\s]+)\)/g;
+  let m: RegExpExecArray | null;
+  while ((m = rx.exec(md))) refs.push(m[1]);
+  return refs;
+}
+
+/** Also gather explicit `<a id="...">` declarations — they extend the
+ *  set of valid targets even when no heading exists (used inside
+ *  <details> where the <details> itself isn't heading-anchorable). */
+function explicitAnchors(md: string): Set<string> {
+  const out = new Set<string>();
+  const rx = /<a\s+id="([^"]+)"\s*>/g;
+  let m: RegExpExecArray | null;
+  while ((m = rx.exec(md))) out.add(m[1]);
+  return out;
+}
+
+const docs: Array<{ name: string; md: () => string }> = FIXTURE_EXISTS ? (() => {
+  const data = buildFullData(path.resolve(FIXTURE));
+  const reportName = "Health_and_Safety";
+  return [
+    { name: "model.md",          md: () => generateMarkdown(data, reportName) },
+    { name: "measures.md",       md: () => generateMeasuresMd(data, reportName) },
+    { name: "functions.md",      md: () => generateFunctionsMd(data, reportName) },
+    { name: "calc-groups.md",    md: () => generateCalcGroupsMd(data, reportName) },
+    { name: "quality.md",        md: () => generateQualityMd(data, reportName) },
+    { name: "data-dictionary.md", md: () => generateDataDictionaryMd(data, reportName) },
+  ];
+})() : [];
+
+for (const { name, md } of docs) {
+  test(`${name} — every [text](#anchor) resolves to a heading or <a id>`, () => {
+    const body = md();
+    const headings = headingSlugs(body);
+    const explicit = explicitAnchors(body);
+    const refs = anchorRefs(body);
+    const unresolved = refs.filter(r => !headings.has(r) && !explicit.has(r));
+    assert.equal(
+      unresolved.length,
+      0,
+      `Broken anchors in ${name}:\n  ${unresolved.join("\n  ")}\n` +
+      `(If these should resolve, either adjust the heading text or ` +
+      `fix the hand-rolled link to match adoSlug of the heading.)`
+    );
+  });
+}
+
+if (FIXTURE_EXISTS) {
+  test("no <a id> emitted right after a heading (redundant)", () => {
+    const bodies = docs.map(d => d.md());
+    // `## Something\n<a id="...">` is redundant — the heading already
+    // auto-anchors. Stop 2 removed three such sites; this test fires
+    // if anyone reintroduces the pattern.
+    const redundantRx = /^##+\s+[^\n]+\n<a\s+id=/m;
+    for (const body of bodies) {
+      const m = body.match(redundantRx);
+      assert.equal(m, null,
+        `Found redundant <a id> right after a heading (use heading auto-slug instead):\n  ${m?.[0]}`);
+    }
+  });
+}
