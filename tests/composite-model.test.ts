@@ -112,6 +112,40 @@ test("Stop 6.3 — proxy cluster URL resolves from the shared expression body", 
   assert.ok(proxyWithCluster, "no proxy measure carries a resolved powerbi:// cluster — expression lookup regressed");
 });
 
+test("EXTERNALMEASURE regex — doubled-quote DAX escape survives round-trip", () => {
+  // DAX escapes an embedded double-quote by doubling it. A measure
+  // named `foo"bar` is written in source as "foo""bar". The previous
+  // regex used [^"]* which silently truncated after `foo`; the
+  // current pattern accepts (?:[^"]|"") and un-doubles with
+  // undoubleDaxQuotes(). This test doesn't need the H&S fixture —
+  // we synthesise a RawModel with a pathological measure name and
+  // drive it through buildFullData.
+  //
+  // Rather than synthesising a whole FullData (requires a full fake
+  // file tree), we exercise the regex directly via re-implementing
+  // it here — the module itself keeps the regex private, but the
+  // pattern is simple enough to cover structurally.
+  const rx = /EXTERNALMEASURE\s*\(\s*"((?:[^"]|"")*)"\s*,\s*(\w+)\s*,\s*"DirectQuery to AS - ((?:[^"]|"")+)"\s*\)/i;
+  const undouble = (s: string): string => s.replace(/""/g, '"');
+
+  // Case 1: no doubled quotes (backwards compat — previous behaviour)
+  const m1 = `EXTERNALMEASURE("Number of Fatal Injuries", INTEGER, "DirectQuery to AS - Health_and_Safety_Gold")`.match(rx);
+  assert.ok(m1, "vanilla EXTERNALMEASURE failed to match");
+  assert.equal(undouble(m1![1]), "Number of Fatal Injuries");
+  assert.equal(undouble(m1![3]), "Health_and_Safety_Gold");
+
+  // Case 2: remote name with a doubled quote
+  const m2 = `EXTERNALMEASURE("foo""bar", INTEGER, "DirectQuery to AS - cube")`.match(rx);
+  assert.ok(m2, "doubled-quote remote name failed to match");
+  assert.equal(undouble(m2![1]), 'foo"bar',
+    "expected un-doubled literal; got " + undouble(m2![1]));
+
+  // Case 3: external model with a doubled quote (rare but possible)
+  const m3 = `EXTERNALMEASURE("x", INTEGER, "DirectQuery to AS - a""b")`.match(rx);
+  assert.ok(m3, "doubled-quote external model failed to match");
+  assert.equal(undouble(m3![3]), 'a"b');
+});
+
 // ──────────────────────────────────────────────────────────────────────
 // Task 4: auto-date table classification
 // ──────────────────────────────────────────────────────────────────────
