@@ -1,4 +1,5 @@
 import type { FullData } from "./data-builder.js";
+import { safeJSON } from "./render/safe.js";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // HTML Dashboard Generation
@@ -16,13 +17,16 @@ export function generateHTML(
   version: string = "0.1.0"
 ): string {
   const ts = new Date().toISOString().replace("T", " ").substring(0, 16);
-  // JSON.stringify safely escapes each markdown body for embedding in JS consts.
-  const markdownLiteral = JSON.stringify(markdown);
-  const measuresMarkdownLiteral = JSON.stringify(measuresMarkdown);
-  const functionsMarkdownLiteral = JSON.stringify(functionsMarkdown);
-  const calcGroupsMarkdownLiteral = JSON.stringify(calcGroupsMarkdown);
-  const qualityMarkdownLiteral = JSON.stringify(qualityMarkdown);
-  const dataDictionaryMarkdownLiteral = JSON.stringify(dataDictionaryMarkdown);
+  // safeJSON escapes <, >, &, U+2028, U+2029 on top of JSON.stringify
+  // so a measure/column/description containing `</script>` or a bare
+  // line-terminator can't break out of the <script> block it's
+  // embedded in. Every payload below lands inside <script>const X=...;</script>.
+  const markdownLiteral = safeJSON(markdown);
+  const measuresMarkdownLiteral = safeJSON(measuresMarkdown);
+  const functionsMarkdownLiteral = safeJSON(functionsMarkdown);
+  const calcGroupsMarkdownLiteral = safeJSON(calcGroupsMarkdown);
+  const qualityMarkdownLiteral = safeJSON(qualityMarkdown);
+  const dataDictionaryMarkdownLiteral = safeJSON(dataDictionaryMarkdown);
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -541,16 +545,16 @@ export function generateHTML(
 </div>
 
 <script>
-const DATA=${JSON.stringify(data)};
+const DATA=${safeJSON(data)};
 const MARKDOWN=${markdownLiteral};
 const MARKDOWN_MEASURES=${measuresMarkdownLiteral};
 const MARKDOWN_FUNCTIONS=${functionsMarkdownLiteral};
 const MARKDOWN_CALCGROUPS=${calcGroupsMarkdownLiteral};
 const MARKDOWN_QUALITY=${qualityMarkdownLiteral};
 const MARKDOWN_DATADICT=${dataDictionaryMarkdownLiteral};
-const REPORT_NAME=${JSON.stringify(reportName)};
-const APP_VERSION=${JSON.stringify(version)};
-const GENERATED_AT=${JSON.stringify(ts)};
+const REPORT_NAME=${safeJSON(reportName)};
+const APP_VERSION=${safeJSON(version)};
+const GENERATED_AT=${safeJSON(ts)};
 let activeMd="model";
 let mdViewMode="rendered";
 
