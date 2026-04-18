@@ -11,6 +11,49 @@ Sections in each release follow the Keep-a-Changelog vocabulary: **Added**, **Ch
 
 ---
 
+## [0.7.0] — 2026-04-18 · ADO Wiki + GitHub MD compatibility (branch `feat/ado-md-compat`)
+
+User-visible release: every generated MD doc is now a drop-in paste for ADO Wiki, works the same on GitHub, and carries Mermaid lineage + star-fragment diagrams inline. All in a single universal format — no toggle, no env var, no mode flag.
+
+### Added
+- **`adoSlug()` helper + 19 unit cases** matching Microsoft's documented ADO Wiki heading-slug algorithm (lowercase, strip punctuation, non-word → hyphen, collapse). Replaces `slug()` at every MD anchor derivation site.
+- **Anchor-resolution integration tests** — one per doc. Extract every `[text](#anchor)` link and assert it matches `adoSlug()` of some `## heading` in the same document. Caught 5 previously-broken anchors on the H&S fixture during implementation (see Fixed).
+- **Emoji prefix inside every `<span class="badge">`** — `🔑 PK`, `🗝 PK*`, `🔗 FK`, `🧮 CALC`, `👁 HIDDEN`, `🎚 SLICER`, `🌐 EXTERNAL`, `✓ Direct`, `↻ Indirect`, `⚠ Unused`. CSS-styled pills in the dashboard show the glyph as an icon; ADO Wiki / GitHub strip the class and fall back to `🔑 PK` plain text that stays visually distinct from body copy.
+- **Per-measure Mermaid lineage graphs** (`measures.md`) — upstream deps → current measure → downstream visuals (de-duplicated by title, capped at 12 with overflow node). Renders natively in ADO Wiki + GitHub.
+- **Per-fact-table Mermaid star fragments** (`data-dictionary.md`) — fact table at the centre, outgoing-relationship dimensions around it (FK column names as edge labels, deduped by target table). Fact tables only; bridges / dimensions / calc-groups / disconnected / auto-date skip.
+- **Suggested wiki page-name hint** — each of the six docs begins with `<!-- Suggested ADO Wiki page name: <ReportName>/<Section> -->` so paste-to-wiki lands at a consistent page path.
+- **README "Publishing to ADO Wiki" section** — 3-step copy-paste workflow + a compatibility matrix.
+
+### Fixed
+Five silent anchor breakages surfaced by the new anchor-resolution test and fixed in-release:
+1. `#4-data-dictionary--summary` (double hyphen from em-dash+space collapse) → `#4-data-dictionary-summary`.
+2. `#5-measures--summary` — same pattern.
+3. `#6-calculation-groups` → heading is `## 6. Calculation Groups — Summary` so the anchor is `#6-calculation-groups-summary`.
+4. `#7-user-defined-functions` — same pattern.
+5. `#appendix-a--generation-metadata` → em-dash collapse to `#appendix-a-generation-metadata`.
+Plus `## Other (non-letter starts)` bucket heading in measures.md slugged to `other-non-letter-starts` while the Jump-to link said `#other` — renamed to `## Other` so the auto-slug matches.
+
+### Changed
+- **Redundant `<a id>` tags dropped** at three sites (after `## Name` headings in data-dictionary / calc-groups / measures A-Z). Heading auto-anchor does the same job, tested. One `<a id>` site kept deliberately: inside per-measure `<details>` blocks in measures.md, where the `<details>` itself isn't heading-anchorable and the proxy-summary table jumps to it.
+- **Cross-doc table links in `model.md` §2.2 / §3.3** turned to plain text — the targets (`#dim_site`, etc.) live in `data-dictionary.md` (separate file) and Markdown has no clean cross-doc link form without a concrete filename that the user controls at paste time.
+- **`client/main.ts` badge spans** synced with server — 8 sites updated so the dashboard pills and the downloaded-MD pills carry the same glyphs.
+
+### Deliberate non-features
+- **No `POWERBI_LINEAGE_MD_TARGET` env var**, no rich/minimal mode toggle. One universal format works on ADO Wiki + GitHub + dashboard. A future `rich|minimal` toggle may land when there's evidence of demand (e.g. Teams / email / PR-description pasting where `<details>` flattens) — not this release.
+- **No `[[_TOC_]]` emission**. Users who want ADO's auto-TOC type it themselves as the first line of a pasted wiki page. Documented in the README quick-start.
+- **No full-model Mermaid overview** in `model.md` §2 — 36 edges on H&S is too dense without interactive collapse. Deferred.
+
+### Test results
+56 → 98 green (+42 across the 5 new test files):
+- `tests/md-anchors.test.ts` — 19 unit cases + 6 integration (one per doc) + 1 regression guard = 26 tests
+- `tests/md-badges.test.ts` — 1 unit (constants) + 7 integration + 2 regression guards = 10 tests
+- `tests/md-mermaid.test.ts` — 3 measure-lineage + 3 star-fragment = 6 tests
+
+### Zero impact on non-composite / simple models
+Every feature is data-driven. Models without measures don't get mermaid blocks. Models without composite proxies don't get EXTERNAL badges. Models without `LocalDateTable_<guid>` don't see the auto-date callouts. Anchor algorithm is stricter (matches ADO Wiki) but the H&S fixture shows it produces identical output to the old `slug()` on 26/26 headings we actually emit.
+
+---
+
 ## [0.6.0] — 2026-04-18 · Generated-MD pass (branch `feat/md-improvements`)
 
 User-visible MD output quality release. The six companion documents (`model.md`, `measures.md`, `functions.md`, `calc-groups.md`, `quality.md`, `data-dictionary.md`) now correctly surface composite-model metadata and stop drowning Quality signals in Power-BI-generated auto-date infrastructure noise. Minor-version bump because the content of what users export has changed meaningfully.

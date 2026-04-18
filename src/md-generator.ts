@@ -317,6 +317,7 @@ export function generateMarkdown(data: FullData, reportName: string): string {
   const valueFilterLabel = mp.valueFilterBehavior || "Automatic (default)";
 
   // ── Front matter ──────────────────────────────────────────────────────────
+  lines.push(`<!-- Suggested ADO Wiki page name: ${reportName}/Model -->`);
   lines.push(`# Semantic Model Technical Specification`);
   lines.push("");
   lines.push(`## ${reportName}`);
@@ -759,6 +760,7 @@ export function generateMeasuresMd(data: FullData, reportName: string): string {
   const t = data.totals;
 
   // ── Front matter ──────────────────────────────────────────────────────────
+  lines.push(`<!-- Suggested ADO Wiki page name: ${reportName}/Measures -->`);
   lines.push(`# Measures Reference`);
   lines.push("");
   lines.push(`## ${reportName}`);
@@ -987,6 +989,7 @@ export function generateFunctionsMd(data: FullData, reportName: string): string 
   const fns = [...data.functions].filter(f => !f.name.endsWith(".About")).sort((a, b) => a.name.localeCompare(b.name));
 
   // ── Front matter ──────────────────────────────────────────────────────────
+  lines.push(`<!-- Suggested ADO Wiki page name: ${reportName}/Functions -->`);
   lines.push(`# Functions Reference`);
   lines.push("");
   lines.push(`## ${reportName}`);
@@ -1130,6 +1133,7 @@ export function generateCalcGroupsMd(data: FullData, reportName: string): string
   const totalItems = cgs.reduce((acc, cg) => acc + cg.items.length, 0);
 
   // ── Front matter ──────────────────────────────────────────────────────────
+  lines.push(`<!-- Suggested ADO Wiki page name: ${reportName}/CalcGroups -->`);
   lines.push(`# Calculation Groups Reference`);
   lines.push("");
   lines.push(`## ${reportName}`);
@@ -1286,6 +1290,7 @@ export function generateQualityMd(data: FullData, reportName: string): string {
   const measureDocPct = data.totals.measuresInModel > 0 ? Math.round(((data.totals.measuresInModel - undocumentedMeasures.length) / data.totals.measuresInModel) * 100) : 0;
 
   // ── Front matter ──────────────────────────────────────────────────────────
+  lines.push(`<!-- Suggested ADO Wiki page name: ${reportName}/Quality -->`);
   lines.push(`# Data Quality Review`);
   lines.push("");
   lines.push(`## ${reportName}`);
@@ -1629,6 +1634,7 @@ export function generateDataDictionaryMd(data: FullData, reportName: string): st
   const autoDateColumnCount = autoDateTables.reduce((a, t) => a + t.columnCount, 0);
 
   // ── Front matter ──────────────────────────────────────────────────────────
+  lines.push(`<!-- Suggested ADO Wiki page name: ${reportName}/DataDictionary -->`);
   lines.push(`# Data Dictionary Reference`);
   lines.push("");
   lines.push(`## ${reportName}`);
