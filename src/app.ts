@@ -59,9 +59,13 @@ function landingHTML(recents: string[], error?: string): string {
   const recentItems = recents.map(p => {
     const name = path.basename(p).replace(/\.Report$/, "");
     const parent = path.basename(path.dirname(p));
-    return `<button class="recent" onclick="go('${p.replace(/\\/g, "\\\\")}')">
-      <span class="recent-name">${name}</span>
-      <span class="recent-path">${parent}/${path.basename(p)}</span>
+    // data-action="open-recent" + data-path=... — the delegated listener
+    // reads dataset.path (browser-decoded), so a path containing quotes
+    // or HTML-special characters can't break out of the attribute or
+    // inject into a JS-string context. escAttr keeps the attribute safe.
+    return `<button class="recent" data-action="open-recent" data-path="${escHtml(p)}">
+      <span class="recent-name">${escHtml(name)}</span>
+      <span class="recent-path">${escHtml(parent)}/${escHtml(path.basename(p))}</span>
     </button>`;
   }).join("\n");
 
@@ -444,7 +448,7 @@ function landingHTML(recents: string[], error?: string): string {
     <form id="form" action="/generate" method="GET">
       <div class="input-row">
         <input type="text" id="rpath" name="path" placeholder="C:\\Projects\\Sales.Report" value="" autocomplete="off" spellcheck="false"/>
-        <button type="button" class="browse-btn" id="browse-btn" onclick="pickFolder()">Browse</button>
+        <button type="button" class="browse-btn" id="browse-btn" data-action="browse">Browse</button>
         <button type="submit" class="go" id="btn">Analyse</button>
       </div>
     </form>
@@ -463,7 +467,7 @@ function landingHTML(recents: string[], error?: string): string {
 </div>
 
 <script>
-function go(p) {
+function openRecent(p) {
   document.getElementById('rpath').value = p;
   document.getElementById('form').submit();
   document.getElementById('spinner').classList.add('active');
@@ -478,7 +482,7 @@ window.addEventListener('pageshow', function() {
   document.getElementById('btn').disabled = false;
 });
 
-// --- Native folder picker ---
+// Native Windows folder-browser dialog via /pick-folder → PowerShell.
 function pickFolder() {
   var btn = document.getElementById('browse-btn');
   btn.disabled = true;
@@ -491,6 +495,19 @@ function pickFolder() {
     .catch(function() {})
     .finally(function() { btn.disabled = false; btn.textContent = 'Browse'; });
 }
+
+// Event delegation — the recents list splices user-controlled paths
+// into HTML attributes (data-path). Reading via dataset.path is
+// structurally safe because the browser HTML-decodes the attribute
+// before exposing it, so no path character can ever enter a JS parser.
+document.addEventListener('click', function(e) {
+  var el = e.target.closest && e.target.closest('[data-action]');
+  if (!el) return;
+  switch (el.getAttribute('data-action')) {
+    case 'open-recent': openRecent(el.dataset.path); break;
+    case 'browse':      pickFolder(); break;
+  }
+});
 </script>
 </body>
 </html>`;

@@ -1,5 +1,5 @@
 import type { FullData } from "./data-builder.js";
-import { safeJSON } from "./render/safe.js";
+import { safeJSON, escHtml as serverEscHtml } from "./render/safe.js";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // HTML Dashboard Generation
@@ -32,7 +32,7 @@ export function generateHTML(
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Model Usage - ${reportName}</title>
+<title>Model Usage - ${serverEscHtml(reportName)}</title>
 <script>(function(){try{var t=localStorage.getItem('usage-theme')||'dark';document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -458,12 +458,12 @@ export function generateHTML(
 <div class="container">
   <div class="header">
     <div class="header-left">
-      <div class="top"><span class="usage-map-badge">Usage Map</span><span class="header-sep">|</span><span class="header-sub">${reportName}</span></div>
+      <div class="top"><span class="usage-map-badge">Usage Map</span><span class="header-sep">|</span><span class="header-sub">${serverEscHtml(reportName)}</span></div>
       <div class="timestamp">Generated: ${ts}</div>
     </div>
     <div class="header-actions">
-      <button class="theme-btn" id="theme-btn" onclick="toggleTheme()" title="Toggle light/dark theme" aria-label="Toggle theme">☾</button>
-      <button class="refresh-btn" onclick="location.reload()">↻ Refresh</button>
+      <button class="theme-btn" id="theme-btn" data-action="theme" title="Toggle light/dark theme" aria-label="Toggle theme">☾</button>
+      <button class="refresh-btn" data-action="reload">↻ Refresh</button>
     </div>
   </div>
   <div class="summary" id="summary"></div>
@@ -472,11 +472,11 @@ export function generateHTML(
   <div class="panel" id="panel-measures">
     <div class="search-row">
       <input class="search-input" placeholder="Search measures..." oninput="filterTable('measures',this.value)">
-      <button class="filter-btn" id="btn-unused-m" onclick="toggleUnused('measures')">Not on visual</button>
+      <button class="filter-btn" id="btn-unused-m" data-action="unused-filter" data-entity="measures">Not on visual</button>
     </div>
     <div class="table-wrap"><table class="data-table"><thead><tr>
-      <th onclick="sortTable('measures','name')">Measure ↕</th><th onclick="sortTable('measures','table')">Table ↕</th>
-      <th onclick="sortTable('measures','usageCount')">Used ↕</th><th onclick="sortTable('measures','pageCount')">Pages ↕</th>
+      <th data-action="sort" data-table="measures" data-key="name">Measure ↕</th><th data-action="sort" data-table="measures" data-key="table">Table ↕</th>
+      <th data-action="sort" data-table="measures" data-key="usageCount">Used ↕</th><th data-action="sort" data-table="measures" data-key="pageCount">Pages ↕</th>
       <th>Dependencies</th><th>Used In</th><th>Format</th>
     </tr></thead><tbody id="tbody-measures"></tbody></table></div>
     <div class="panel-footer" id="footer-measures"></div>
@@ -485,12 +485,12 @@ export function generateHTML(
   <div class="panel" id="panel-columns">
     <div class="search-row">
       <input class="search-input" placeholder="Search columns..." oninput="filterTable('columns',this.value)">
-      <button class="filter-btn" id="btn-unused-c" onclick="toggleUnused('columns')">Not on visual</button>
+      <button class="filter-btn" id="btn-unused-c" data-action="unused-filter" data-entity="columns">Not on visual</button>
     </div>
     <div class="table-wrap"><table class="data-table"><thead><tr>
-      <th onclick="sortTable('columns','name')">Column ↕</th><th onclick="sortTable('columns','table')">Table ↕</th>
-      <th onclick="sortTable('columns','dataType')">Type ↕</th><th onclick="sortTable('columns','usageCount')">Used ↕</th>
-      <th onclick="sortTable('columns','pageCount')">Pages ↕</th><th>Used In</th>
+      <th data-action="sort" data-table="columns" data-key="name">Column ↕</th><th data-action="sort" data-table="columns" data-key="table">Table ↕</th>
+      <th data-action="sort" data-table="columns" data-key="dataType">Type ↕</th><th data-action="sort" data-table="columns" data-key="usageCount">Used ↕</th>
+      <th data-action="sort" data-table="columns" data-key="pageCount">Pages ↕</th><th>Used In</th>
     </tr></thead><tbody id="tbody-columns"></tbody></table></div>
     <div class="panel-footer" id="footer-columns"></div>
   </div>
@@ -506,22 +506,22 @@ export function generateHTML(
   <div class="panel" id="panel-docs">
     <div class="search-row">
       <div style="display:flex;gap:4px;flex-wrap:wrap">
-        <button class="filter-btn active" id="md-tab-model" onclick="switchMd('model')">Model</button>
-        <button class="filter-btn" id="md-tab-datadict" onclick="switchMd('datadict')">Data Dictionary</button>
-        <button class="filter-btn" id="md-tab-measures" onclick="switchMd('measures')">Measures</button>
-        <button class="filter-btn" id="md-tab-functions" onclick="switchMd('functions')">Functions</button>
-        <button class="filter-btn" id="md-tab-calcgroups" onclick="switchMd('calcgroups')">Calc Groups</button>
-        <button class="filter-btn" id="md-tab-quality" onclick="switchMd('quality')">Quality</button>
+        <button class="filter-btn active" id="md-tab-model" data-action="md-tab" data-md="model">Model</button>
+        <button class="filter-btn" id="md-tab-datadict" data-action="md-tab" data-md="datadict">Data Dictionary</button>
+        <button class="filter-btn" id="md-tab-measures" data-action="md-tab" data-md="measures">Measures</button>
+        <button class="filter-btn" id="md-tab-functions" data-action="md-tab" data-md="functions">Functions</button>
+        <button class="filter-btn" id="md-tab-calcgroups" data-action="md-tab" data-md="calcgroups">Calc Groups</button>
+        <button class="filter-btn" id="md-tab-quality" data-action="md-tab" data-md="quality">Quality</button>
       </div>
       <div style="flex:1;color:var(--text-dim);font-size:12px;margin-left:8px" id="md-subtitle">Semantic-model documentation (no DAX)</div>
       <div style="display:flex;gap:4px">
-        <button class="filter-btn active" id="md-mode-rendered" onclick="switchMdMode('rendered')">Rendered</button>
-        <button class="filter-btn" id="md-mode-raw" onclick="switchMdMode('raw')">Raw</button>
+        <button class="filter-btn active" id="md-mode-rendered" data-action="md-mode" data-mode="rendered">Rendered</button>
+        <button class="filter-btn" id="md-mode-raw" data-action="md-mode" data-mode="raw">Raw</button>
       </div>
-      <button class="filter-btn" onclick="expandAllDetails()" title="Expand all collapsed sections">⊕ All</button>
-      <button class="filter-btn" onclick="collapseAllDetails()" title="Collapse all sections">⊖ All</button>
-      <button class="filter-btn" id="md-copy-btn" onclick="copyMarkdown()">⎘ Copy</button>
-      <button class="filter-btn" onclick="downloadMarkdown()">⤓ Download</button>
+      <button class="filter-btn" data-action="md-expand-all" title="Expand all collapsed sections">⊕ All</button>
+      <button class="filter-btn" data-action="md-collapse-all" title="Collapse all sections">⊖ All</button>
+      <button class="filter-btn" id="md-copy-btn" data-action="md-copy">⎘ Copy</button>
+      <button class="filter-btn" data-action="md-download">⤓ Download</button>
     </div>
     <div id="md-rendered" class="md-rendered"></div>
     <pre id="md-source" class="md-source" style="display:none"></pre>
@@ -534,12 +534,12 @@ export function generateHTML(
   <div class="rb-left">
     <span class="usage-map-badge">Usage Map</span>
     <span class="rb-sep">|</span>
-    <span class="rb-report">${reportName}</span>
+    <span class="rb-report">${serverEscHtml(reportName)}</span>
   </div>
   <div class="rb-center">
     <span class="dot"></span>
     <span class="timer">Last scan ${ts}</span>
-    <button onclick="location.reload()">Re-scan</button>
+    <button data-action="reload">Re-scan</button>
   </div>
   <div class="rb-right">v${version}<span class="rb-sep">·</span>local<span class="rb-sep">·</span>no data leaves your machine</div>
 </div>
@@ -620,6 +620,54 @@ let openTables=new Set();
 // when hiddenPages > bound pages).
 const pageData=(DATA.pages||[]).slice();
 
+// ─────────────────────────────────────────────────────────────────────
+// Event delegation — one document-level click listener dispatches to
+// action handlers based on [data-action] markers.
+//
+// WHY: every inline click handler used to splice a field name
+// directly into a JS string literal. A measure named
+//   foo'),alert(1),('bar
+// would break out and execute. We now put the name in [data-name]
+// (HTML-attribute encoded, safe) and read it via element.dataset.name
+// — the browser decodes it back to a plain string with no parsing of
+// user content as JS.
+//
+// Adding a new action:
+//   1. Add a case below with the handler call.
+//   2. Render the target element with a data-action attribute set to
+//      the verb plus any data-* attributes the case reads.
+//   3. Use escAttr(userValue) when the value comes from the model.
+//
+// .closest() walks from e.target upwards and returns the innermost
+// [data-action] element, so a chip inside a page-header fires the
+// chip's action without bubbling to the parent's toggle — no need
+// for event.stopPropagation() at each site.
+// ─────────────────────────────────────────────────────────────────────
+document.addEventListener('click', function(e){
+  var el = e.target.closest && e.target.closest('[data-action]');
+  if (!el) return;
+  var a = el.getAttribute('data-action');
+  var d = el.dataset;
+  switch(a){
+    case 'lineage':         navigateLineage(d.type, d.name); break;
+    case 'tab':             switchTab(d.tab); break;
+    case 'md-tab':          switchMd(d.md); break;
+    case 'md-mode':         switchMdMode(d.mode); break;
+    case 'sort':            sortTable(d.table, d.key); break;
+    case 'unused-filter':   toggleUnused(d.entity); break;
+    case 'theme':           toggleTheme(); break;
+    case 'reload':          location.reload(); break;
+    case 'md-expand-all':   expandAllDetails(); break;
+    case 'md-collapse-all': collapseAllDetails(); break;
+    case 'md-copy':         copyMarkdown(); break;
+    case 'md-download':     downloadMarkdown(); break;
+    case 'page-toggle':     togglePage(d.name); break;
+    case 'table-toggle':    toggleTableCard(d.name); break;
+    case 'orphan-toggle':   toggleOrphanSection(d.section); break;
+    case 'card-toggle':     el.parentElement.classList.toggle('open'); break;
+  }
+});
+
 function uc(n){return n===0?"zero":n<=1?"low":"good"}
 
 function renderSummary(){
@@ -662,7 +710,7 @@ function renderTabs(){
     {id:"lineage",l:"Lineage",b:null},
     // Output
     {id:"docs",l:"Docs",b:null}
-  ].map(t=>\`<button class="tab \${activeTab===t.id?'active':''}" onclick="switchTab('\${t.id}')">\${t.l}\${t.b!==null?\`<span class="tab-count \${t.w?'warn':''}">\${t.b}</span>\`:''}</button>\`).join("");
+  ].map(t=>\`<button class="tab \${activeTab===t.id?'active':''}" data-action="tab" data-tab="\${t.id}">\${t.l}\${t.b!==null?\`<span class="tab-count \${t.w?'warn':''}">\${t.b}</span>\`:''}</button>\`).join("");
 }
 
 // Shared panel-footer writer. Each render* function calls this at the end
@@ -696,13 +744,13 @@ function renderMeasures(){
   if(showUnusedOnly.measures)items=items.filter(m=>m.status!=='direct');
   if(searchTerms.measures){const q=searchTerms.measures.toLowerCase();items=items.filter(m=>m.name.toLowerCase().includes(q)||m.table.toLowerCase().includes(q));}
   document.getElementById("tbody-measures").innerHTML=items.map(m=>{
-    const deps=m.daxDependencies.map(d=>\`<span class="dep-chip" onclick="openLineage('measure','\${d}')">\${d}</span>\`).join("")||'<span style="color:var(--text-faint)">—</span>';
+    const deps=m.daxDependencies.map(d=>\`<span class="dep-chip" data-action="lineage" data-type="measure" data-name="\${escAttr(d)}">\${escHtml(d)}</span>\`).join("")||'<span style="color:var(--text-faint)">—</span>';
     const pages=[...new Set(m.usedIn.map(u=>u.pageName))];
-    const used=pages.map(p=>\`<span class="used-chip">\${p}</span>\`).join("")||'<span style="color:var(--text-faint)">—</span>';
+    const used=pages.map(p=>\`<span class="used-chip">\${escHtml(p)}</span>\`).join("")||'<span style="color:var(--text-faint)">—</span>';
     const statusBadge=m.status==='indirect'?'<span class="badge badge--indirect">INDIRECT</span>':m.status==='unused'?'<span class="badge badge--unused">UNUSED</span>':'';
     const nameAttr=m.description?' title="'+escAttr(m.description)+'" data-desc="1"':'';
     const descRow=m.description?'<div class="desc-muted" style="margin-top:2px;font-size:11px">'+escHtml(m.description)+'</div>':'';
-    return \`<tr class="\${sc(m.status)}"><td><span class="field-name"\${nameAttr} onclick="openLineage('measure','\${m.name}')">\${m.name}</span>\${statusBadge}\${descRow}</td><td><span class="field-table">\${m.table}</span></td><td><span class="usage-count \${uc(m.usageCount)}">\${m.usageCount}</span></td><td><span class="usage-count \${uc(m.pageCount)}">\${m.pageCount}</span></td><td>\${deps}</td><td>\${used}</td><td><span class="format-str">\${m.formatString||'—'}</span></td></tr>\`;
+    return \`<tr class="\${sc(m.status)}"><td><span class="field-name"\${nameAttr} data-action="lineage" data-type="measure" data-name="\${escAttr(m.name)}">\${escHtml(m.name)}</span>\${statusBadge}\${descRow}</td><td><span class="field-table">\${escHtml(m.table)}</span></td><td><span class="usage-count \${uc(m.usageCount)}">\${m.usageCount}</span></td><td><span class="usage-count \${uc(m.pageCount)}">\${m.pageCount}</span></td><td>\${deps}</td><td>\${used}</td><td><span class="format-str">\${escHtml(m.formatString||'—')}</span></td></tr>\`;
   }).join("");
   setPanelFooter("footer-measures",
     "Showing "+items.length+" of "+DATA.measures.length+" measures · "+DATA.totals.measuresUnused+" unused · "+DATA.totals.measuresIndirect+" indirect",
@@ -716,21 +764,21 @@ function renderColumns(){
   if(searchTerms.columns){const q=searchTerms.columns.toLowerCase();items=items.filter(c=>c.name.toLowerCase().includes(q)||c.table.toLowerCase().includes(q));}
   document.getElementById("tbody-columns").innerHTML=items.map(c=>{
     const pages=[...new Set(c.usedIn.map(u=>u.pageName))];
-    const used=pages.map(p=>\`<span class="used-chip">\${p}</span>\`).join("")||'<span style="color:var(--text-faint)">—</span>';
+    const used=pages.map(p=>\`<span class="used-chip">\${escHtml(p)}</span>\`).join("")||'<span style="color:var(--text-faint)">—</span>';
     // SLICER badge intentionally omitted here — it now lives on the per-column
     // row inside the Tables tab, next to PK/FK/CALC/HIDDEN, where it's more
     // useful in context.
     const statusBadge=c.status==='indirect'?'<span class="badge badge--indirect">INDIRECT</span>':c.status==='unused'?'<span class="badge badge--unused">UNUSED</span>':'';
     const cNameAttr=c.description?' title="'+escAttr(c.description)+'" data-desc="1"':'';
     const cDescRow=c.description?'<div class="desc-muted" style="margin-top:2px;font-size:11px">'+escHtml(c.description)+'</div>':'';
-    return \`<tr class="\${sc(c.status)}"><td><span class="field-name"\${cNameAttr} onclick="openLineage('column','\${c.name}')">\${c.name}</span>\${statusBadge}\${cDescRow}</td><td><span class="field-table">\${c.table}</span></td><td><span class="mono" style="font-size:11px;color:#64748B">\${c.dataType}</span></td><td><span class="usage-count \${uc(c.usageCount)}">\${c.usageCount}</span></td><td><span class="usage-count \${uc(c.pageCount)}">\${c.pageCount}</span></td><td>\${used}</td></tr>\`;
+    return \`<tr class="\${sc(c.status)}"><td><span class="field-name"\${cNameAttr} data-action="lineage" data-type="column" data-name="\${escAttr(c.name)}">\${escHtml(c.name)}</span>\${statusBadge}\${cDescRow}</td><td><span class="field-table">\${escHtml(c.table)}</span></td><td><span class="mono" style="font-size:11px;color:#64748B">\${escHtml(c.dataType)}</span></td><td><span class="usage-count \${uc(c.usageCount)}">\${c.usageCount}</span></td><td><span class="usage-count \${uc(c.pageCount)}">\${c.pageCount}</span></td><td>\${used}</td></tr>\`;
   }).join("");
   setPanelFooter("footer-columns",
     "Showing "+items.length+" of "+DATA.columns.length+" columns · "+DATA.totals.columnsUnused+" unused",
     sortIndicator(sortState.columns));
 }
 
-function openLineage(type,name){
+function navigateLineage(type,name){
   lastTab=activeTab!=="lineage"?activeTab:lastTab;
   activeTab="lineage";renderTabs();
   document.querySelectorAll(".panel").forEach(p=>p.classList.remove("active"));
@@ -754,49 +802,49 @@ function openLineage(type,name){
     const extRemoteName=extMatch?extMatch[1]:null;
 
     el.innerHTML=\`
-      <div class="lineage-back" onclick="switchTab('\${backTab}')">← Back to \${backTab==='measures'?'Measures':'Columns'}</div>
+      <div class="lineage-back" data-action="tab" data-tab="\${escAttr(backTab)}">← Back to \${backTab==='measures'?'Measures':'Columns'}</div>
       <div class="lineage-hero">
-        <div class="lineage-hero-title"><span class="dot" style="background:var(--clr-measure)"></span>\${m.name}</div>
-        <div class="lineage-hero-meta">\${m.table} · \${m.formatString||'—'} · \${m.usageCount} visual\${m.usageCount!==1?'s':''} · \${m.pageCount} page\${m.pageCount!==1?'s':''}</div>
+        <div class="lineage-hero-title"><span class="dot" style="background:var(--clr-measure)"></span>\${escHtml(m.name)}</div>
+        <div class="lineage-hero-meta">\${escHtml(m.table)} · \${escHtml(m.formatString||'—')} · \${m.usageCount} visual\${m.usageCount!==1?'s':''} · \${m.pageCount} page\${m.pageCount!==1?'s':''}</div>
         \${m.description?'<div class="desc-line" style="margin-top:8px;font-size:13px">'+escHtml(m.description)+'</div>':''}
-        <div class="lineage-dax">\${m.daxExpression}</div>
+        <div class="lineage-dax">\${escHtml(m.daxExpression)}</div>
       </div>
       <div class="lineage-flow-row">
         <div class="lineage-flow-col">
           <div class="lineage-flow-col-label" style="color:var(--clr-upstream)">↑ Upstream</div>
           \${usedFuncs.map(f=>\`
-            <div class="lc udf clickable" style="margin-bottom:4px" onclick="switchTab('functions')">
-              <div class="lc-name" style="color:var(--clr-function)">ƒ \${f.name}</div>
+            <div class="lc udf clickable" style="margin-bottom:4px" data-action="tab" data-tab="functions">
+              <div class="lc-name" style="color:var(--clr-function)">ƒ \${escHtml(f.name)}</div>
               <div class="lc-sub">Function · \${f.parameters?f.parameters.split(',').length+' param'+(f.parameters.split(',').length!==1?'s':''):'no params'}</div>
             </div>\`).join("")}
           \${extModel?\`
           <div class="lc" style="border-left:3px solid var(--clr-function);margin-bottom:4px;background:var(--clr-function-soft)">
-            <div class="lc-name" style="color:var(--clr-function)">⊡ \${extModel}</div>
-            <div class="lc-sub">External semantic model · EXTERNALMEASURE\${extRemoteName&&extRemoteName!==m.name?' · remote name "'+extRemoteName+'"':''}</div>
+            <div class="lc-name" style="color:var(--clr-function)">⊡ \${escHtml(extModel)}</div>
+            <div class="lc-sub">External semantic model · EXTERNALMEASURE\${extRemoteName&&extRemoteName!==m.name?' · remote name "'+escHtml(extRemoteName)+'"':''}</div>
           </div>\`:''}
           <div class="lc source" style="margin-bottom:4px">
-            <div class="lc-name" style="color:var(--clr-source)">⬡ \${m.table}</div>
+            <div class="lc-name" style="color:var(--clr-source)">⬡ \${escHtml(m.table)}</div>
             <div class="lc-sub">Source table</div>
           </div>
           \${upstream.length?upstream.map(u=>\`
-            <div class="lc upstream clickable" onclick="openLineage('measure','\${u.name}')">
-              <div class="lc-name">\${u.name}</div>
-              <div class="lc-sub">\${u.table} · \${u.formatString||''}</div>
+            <div class="lc upstream clickable" data-action="lineage" data-type="measure" data-name="\${escAttr(u.name)}">
+              <div class="lc-name">\${escHtml(u.name)}</div>
+              <div class="lc-sub">\${escHtml(u.table)} · \${escHtml(u.formatString||'')}</div>
             </div>\`).join(""):\`\${(usedFuncs.length||extModel)?'':\`<div class="lc upstream empty"><div class="lc-name">No dependencies</div><div class="lc-sub">Base measure</div></div>\`}\`}
         </div>
         <div class="lineage-arrow-col">→</div>
         <div class="lineage-flow-col">
           <div class="lineage-flow-col-label" style="color:var(--clr-measure)">● This Measure</div>
           <div class="lc center">
-            <div class="lc-name">\${m.name}</div>
-            <div class="lc-sub">\${m.daxExpression.length>50?m.daxExpression.substring(0,50)+'…':m.daxExpression}</div>
+            <div class="lc-name">\${escHtml(m.name)}</div>
+            <div class="lc-sub">\${escHtml(m.daxExpression.length>50?m.daxExpression.substring(0,50)+'…':m.daxExpression)}</div>
           </div>
           \${feedsInto.length?\`
             <div class="feeds-label">Feeds into</div>
             \${feedsInto.map(f=>\`
-              <div class="lc feeds clickable" onclick="openLineage('measure','\${f.name}')">
-                <div class="lc-name">\${f.name}</div>
-                <div class="lc-sub">\${f.formatString||''} · \${f.usageCount} visual\${f.usageCount!==1?'s':''}</div>
+              <div class="lc feeds clickable" data-action="lineage" data-type="measure" data-name="\${escAttr(f.name)}">
+                <div class="lc-name">\${escHtml(f.name)}</div>
+                <div class="lc-sub">\${escHtml(f.formatString||'')} · \${f.usageCount} visual\${f.usageCount!==1?'s':''}</div>
               </div>\`).join("")}
           \`:''}
         </div>
@@ -805,9 +853,9 @@ function openLineage(type,name){
           <div class="lineage-flow-col-label" style="color:var(--clr-downstream)">↓ Downstream</div>
           \${m.usedIn.length?m.usedIn.map(d=>\`
             <div class="lc downstream">
-              <div class="lc-name">\${d.visualTitle}</div>
-              <div class="lc-sub">\${d.visualType} · \${d.bindingRole}</div>
-              <div class="lc-role">\${d.pageName}</div>
+              <div class="lc-name">\${escHtml(d.visualTitle)}</div>
+              <div class="lc-sub">\${escHtml(d.visualType)} · \${escHtml(d.bindingRole)}</div>
+              <div class="lc-role">\${escHtml(d.pageName)}</div>
             </div>\`).join(""):\`<div class="lc downstream empty"><div class="lc-name" style="color:var(--clr-unused)">Not used</div><div class="lc-sub">Orphaned measure</div></div>\`}
         </div>
       </div>\`;
@@ -820,33 +868,33 @@ function openLineage(type,name){
     const related=DATA.measures.filter(m=>m.daxExpression.includes(colRef)||m.daxExpression.includes('['+c.name+']'));
 
     el.innerHTML=\`
-      <div class="lineage-back" onclick="switchTab('columns')">← Back to Columns</div>
+      <div class="lineage-back" data-action="tab" data-tab="columns">← Back to Columns</div>
       <div class="lineage-hero">
-        <div class="lineage-hero-title"><span class="dot" style="background:var(--clr-column)"></span>\${c.name}</div>
-        <div class="lineage-hero-meta">\${c.table} · \${c.dataType} · \${c.usageCount} visual\${c.usageCount!==1?'s':''} · \${c.pageCount} page\${c.pageCount!==1?'s':''}</div>
+        <div class="lineage-hero-title"><span class="dot" style="background:var(--clr-column)"></span>\${escHtml(c.name)}</div>
+        <div class="lineage-hero-meta">\${escHtml(c.table)} · \${escHtml(c.dataType)} · \${c.usageCount} visual\${c.usageCount!==1?'s':''} · \${c.pageCount} page\${c.pageCount!==1?'s':''}</div>
         \${c.description?'<div class="desc-line" style="margin-top:8px;font-size:13px">'+escHtml(c.description)+'</div>':''}
       </div>
       <div class="lineage-flow-row">
         <div class="lineage-flow-col">
           <div class="lineage-flow-col-label" style="color:var(--clr-source)">↑ Source</div>
           <div class="lc source">
-            <div class="lc-name" style="color:var(--clr-source)">⬡ \${c.table}</div>
-            <div class="lc-sub">\${c.dataType}</div>
+            <div class="lc-name" style="color:var(--clr-source)">⬡ \${escHtml(c.table)}</div>
+            <div class="lc-sub">\${escHtml(c.dataType)}</div>
           </div>
         </div>
         <div class="lineage-arrow-col">→</div>
         <div class="lineage-flow-col">
           <div class="lineage-flow-col-label" style="color:var(--clr-column)">● This Column</div>
           <div class="lc center col-type">
-            <div class="lc-name">\${c.name}</div>
-            <div class="lc-sub">\${c.table}[\${c.name}]</div>
+            <div class="lc-name">\${escHtml(c.name)}</div>
+            <div class="lc-sub">\${escHtml(c.table)}[\${escHtml(c.name)}]</div>
           </div>
           \${related.length?\`
-            <div class="feeds-label">Measures referencing \${c.name}</div>
+            <div class="feeds-label">Measures referencing \${escHtml(c.name)}</div>
             \${related.map(m=>\`
-              <div class="lc feeds clickable" onclick="openLineage('measure','\${m.name}')">
-                <div class="lc-name">\${m.name}</div>
-                <div class="lc-sub">\${m.formatString||''} · \${m.usageCount} visual\${m.usageCount!==1?'s':''}</div>
+              <div class="lc feeds clickable" data-action="lineage" data-type="measure" data-name="\${escAttr(m.name)}">
+                <div class="lc-name">\${escHtml(m.name)}</div>
+                <div class="lc-sub">\${escHtml(m.formatString||'')} · \${m.usageCount} visual\${m.usageCount!==1?'s':''}</div>
               </div>\`).join("")}
           \`:''}
         </div>
@@ -855,9 +903,9 @@ function openLineage(type,name){
           <div class="lineage-flow-col-label" style="color:var(--clr-downstream)">↓ Downstream</div>
           \${c.usedIn.length?c.usedIn.map(d=>\`
             <div class="lc downstream">
-              <div class="lc-name">\${d.visualTitle}</div>
-              <div class="lc-sub">\${d.visualType} · \${d.bindingRole}</div>
-              <div class="lc-role">\${d.pageName}</div>
+              <div class="lc-name">\${escHtml(d.visualTitle)}</div>
+              <div class="lc-sub">\${escHtml(d.visualType)} · \${escHtml(d.bindingRole)}</div>
+              <div class="lc-role">\${escHtml(d.pageName)}</div>
             </div>\`).join(""):\`<div class="lc downstream empty"><div class="lc-name" style="color:var(--clr-unused)">Not used</div><div class="lc-sub">Orphaned column</div></div>\`}
         </div>
       </div>\`;
@@ -871,26 +919,26 @@ function renderPages(){
     const isOpen=openPages.has(p.name);
     const hiddenBadge=hiddenSet.has(p.name)?'<span class="badge badge--hidden" title="This page is marked HiddenInViewMode — typically a tooltip, drillthrough, or nav-suppressed page">HIDDEN</span>':'';
 
-    const typeChips=Object.entries(p.typeCounts).map(([t,c])=>\`<span class="page-type-chip">\${c}× \${t}</span>\`).join("");
+    const typeChips=Object.entries(p.typeCounts).map(([t,c])=>\`<span class="page-type-chip">\${c}× \${escHtml(t)}</span>\`).join("");
 
     const visualRows=p.visuals.map(v=>{
       const bindingChips=v.bindings.map(b=>{
         const color=b.fieldType==="measure"?FC.measure:FC.column;
-        return \`<span class="dep-chip" style="background:\${color}15;color:\${color};border-color:\${color}30;cursor:pointer" onclick="event.stopPropagation();openLineage('\${b.fieldType}','\${b.fieldName}')">\${b.fieldName}</span>\`;
+        return \`<span class="dep-chip" style="background:\${color}15;color:\${color};border-color:\${color}30;cursor:pointer" data-action="lineage" data-type="\${escAttr(b.fieldType)}" data-name="\${escAttr(b.fieldName)}">\${escHtml(b.fieldName)}</span>\`;
       }).join("");
       return \`<div class="page-visual-row">
-        <span class="page-visual-type">\${v.type}</span>
-        <span class="page-visual-title">\${v.title}</span>
+        <span class="page-visual-type">\${escHtml(v.type)}</span>
+        <span class="page-visual-title">\${escHtml(v.title)}</span>
         <div class="page-visual-bindings">\${bindingChips}</div>
       </div>\`;
     }).join("");
 
-    const measureChips=p.measures.map(m=>\`<span class="dep-chip" style="background:rgba(245,158,11,.1);color:var(--clr-measure);border-color:rgba(245,158,11,.2);cursor:pointer" onclick="event.stopPropagation();openLineage('measure','\${m}')">\${m}</span>\`).join("");
-    const columnChips=p.columns.map(c=>\`<span class="dep-chip" style="background:rgba(59,130,246,.1);color:var(--clr-column);border-color:rgba(59,130,246,.2);cursor:pointer" onclick="event.stopPropagation();openLineage('column','\${c}')">\${c}</span>\`).join("");
+    const measureChips=p.measures.map(m=>\`<span class="dep-chip" style="background:rgba(245,158,11,.1);color:var(--clr-measure);border-color:rgba(245,158,11,.2);cursor:pointer" data-action="lineage" data-type="measure" data-name="\${escAttr(m)}">\${escHtml(m)}</span>\`).join("");
+    const columnChips=p.columns.map(c=>\`<span class="dep-chip" style="background:rgba(59,130,246,.1);color:var(--clr-column);border-color:rgba(59,130,246,.2);cursor:pointer" data-action="lineage" data-type="column" data-name="\${escAttr(c)}">\${escHtml(c)}</span>\`).join("");
 
     return \`<div class="page-card \${isOpen?'open':''}">
-      <div class="page-header" onclick="togglePage('\${p.name}')">
-        <div class="page-name">\${p.name}\${hiddenBadge}</div>
+      <div class="page-header" data-action="page-toggle" data-name="\${escAttr(p.name)}">
+        <div class="page-name">\${escHtml(p.name)}\${hiddenBadge}</div>
         <div class="page-stats">
           <div class="page-stat"><div class="page-stat-val" style="color:var(--clr-downstream)">\${p.visualCount}</div><div class="page-stat-label">Visuals</div></div>
           <div class="page-stat"><div class="page-stat-val" style="color:var(--clr-measure)">\${p.measureCount}</div><div class="page-stat-label">Measures</div></div>
@@ -959,27 +1007,27 @@ function renderTables(){
       const statusClass=c.status==='unused'?'zero':c.status==='indirect'?'low':'good';
       // Relationship column: FK target (outgoing) or incoming PK refs, or both if the column is a bridge
       const parts=[];
-      if(c.isFK&&c.fkTarget)parts.push(\`<span class="rel-out">→ \${c.fkTarget.table}[\${c.fkTarget.column}]</span>\`);
+      if(c.isFK&&c.fkTarget)parts.push(\`<span class="rel-out">→ \${escHtml(c.fkTarget.table)}[\${escHtml(c.fkTarget.column)}]</span>\`);
       if(c.incomingRefs&&c.incomingRefs.length>0){
-        const refs=c.incomingRefs.map(r=>\`<span class="rel-in\${r.isActive?'':' rel-inactive'}">← \${r.table}[\${r.column}]\${r.isActive?'':' <span style="font-size:9px;opacity:.7">(inactive)</span>'}</span>\`).join('<span style="color:var(--text-fainter);margin:0 4px">·</span>');
+        const refs=c.incomingRefs.map(r=>\`<span class="rel-in\${r.isActive?'':' rel-inactive'}">← \${escHtml(r.table)}[\${escHtml(r.column)}]\${r.isActive?'':' <span style="font-size:9px;opacity:.7">(inactive)</span>'}</span>\`).join('<span style="color:var(--text-fainter);margin:0 4px">·</span>');
         parts.push(refs);
       }
       const relText=parts.length?parts.join('<br>'):'<span style="color:var(--text-fainter)">—</span>';
       const colDesc=c.description?'<div class="desc-muted" style="margin-top:3px">'+escHtml(c.description)+'</div>':'';
       return \`<div class="tcol-row">
         <div>
-          <span class="tcol-name" onclick="openLineage('column','\${c.name.replace(/'/g,"\\\\'")}')">\${c.name}</span>\${badges.join('')}
+          <span class="tcol-name" data-action="lineage" data-type="column" data-name="\${escAttr(c.name)}">\${escHtml(c.name)}</span>\${badges.join('')}
           <span class="usage-count \${statusClass}" style="margin-left:8px;font-size:10px">\${c.usageCount}</span>
           \${colDesc}
         </div>
-        <div class="tcol-type">\${c.dataType}</div>
+        <div class="tcol-type">\${escHtml(c.dataType)}</div>
         <div class="tcol-fk">\${relText}</div>
       </div>\`;
     }).join("")||'<div style="padding:8px 10px;color:var(--text-faint);font-size:12px">No columns</div>';
 
     const measureList=t.measures.map(m=>{
       const cls=m.status==='unused'?'zero':m.status==='indirect'?'low':'good';
-      return \`<span class="dep-chip" style="background:rgba(245,158,11,.1);color:var(--clr-measure);border-color:rgba(245,158,11,.2);cursor:pointer" onclick="event.stopPropagation();openLineage('measure','\${m.name.replace(/'/g,"\\\\'")}')">\${m.name} <span class="usage-count \${cls}" style="margin-left:4px;font-size:9px">\${m.usageCount}</span></span>\`;
+      return \`<span class="dep-chip" style="background:rgba(245,158,11,.1);color:var(--clr-measure);border-color:rgba(245,158,11,.2);cursor:pointer" data-action="lineage" data-type="measure" data-name="\${escAttr(m.name)}">\${escHtml(m.name)} <span class="usage-count \${cls}" style="margin-left:4px;font-size:9px">\${m.usageCount}</span></span>\`;
     }).join("")||'<span style="color:var(--text-faint);font-size:12px">None</span>';
 
     const relRows=t.relationships.map(r=>{
@@ -987,8 +1035,8 @@ function renderTables(){
       const dirLabel=r.direction==='outgoing'?'FK →':'← PK';
       const inactive=r.isActive?'':' trel-inactive';
       const arrow=r.direction==='outgoing'?'→':'←';
-      const other=r.direction==='outgoing'?\`\${r.toTable}[\${r.toColumn}]\`:\`\${r.fromTable}[\${r.fromColumn}]\`;
-      const self=r.direction==='outgoing'?\`[\${r.fromColumn}]\`:\`[\${r.toColumn}]\`;
+      const other=r.direction==='outgoing'?\`\${escHtml(r.toTable)}[\${escHtml(r.toColumn)}]\`:\`\${escHtml(r.fromTable)}[\${escHtml(r.fromColumn)}]\`;
+      const self=r.direction==='outgoing'?\`[\${escHtml(r.fromColumn)}]\`:\`[\${escHtml(r.toColumn)}]\`;
       return \`<div class="trel-row\${inactive}">
         <span class="badge \${dirClass}">\${dirLabel}</span>
         <span>\${self} <span style="color:var(--text-faint)">\${arrow}</span> \${other}</span>
@@ -998,9 +1046,9 @@ function renderTables(){
 
     const tableDesc=t.description?'<div class="desc-line">'+escHtml(t.description)+'</div>':'';
     return \`<div class="page-card \${isOpen?'open':''}">
-      <div class="page-header" onclick="toggleTableCard('\${t.name.replace(/'/g,"\\\\'")}')">
+      <div class="page-header" data-action="table-toggle" data-name="\${escAttr(t.name)}">
         <div style="flex:1;min-width:0">
-          <div class="page-name">\${t.name}\${calcGroupPill}</div>
+          <div class="page-name">\${escHtml(t.name)}\${calcGroupPill}</div>
           \${tableDesc}
         </div>
         <div class="page-stats">
@@ -1045,13 +1093,13 @@ function toggleOrphanSection(id){if(openOrphanSections.has(id))openOrphanSection
 function orphanSection(id,title,subtitle,color,count,countLabel,items){
   const isOpen=openOrphanSections.has(id);
   return \`<div class="page-card \${isOpen?'open':''}" style="border-left:3px solid \${color}">
-    <div class="page-header" onclick="toggleOrphanSection('\${id}')">
+    <div class="page-header" data-action="orphan-toggle" data-section="\${escAttr(id)}">
       <div style="flex:1">
-        <div class="page-name" style="font-size:14px">\${title}</div>
-        <div style="font-size:11px;color:#64748B;margin-top:2px">\${subtitle}</div>
+        <div class="page-name" style="font-size:14px">\${escHtml(title)}</div>
+        <div style="font-size:11px;color:#64748B;margin-top:2px">\${escHtml(subtitle)}</div>
       </div>
       <div class="page-stats">
-        <div class="page-stat"><div class="page-stat-val" style="color:\${color}">\${count}</div><div class="page-stat-label">\${countLabel}</div></div>
+        <div class="page-stat"><div class="page-stat-val" style="color:\${color}">\${count}</div><div class="page-stat-label">\${escHtml(countLabel)}</div></div>
       </div>
       <span class="page-expand" aria-hidden="true"></span>
     </div>
@@ -1069,19 +1117,19 @@ function renderUnused(){
   let h='';
 
   if(pureOrphanM.length) h+=orphanSection('pure-m','Unused Measures — Not Referenced Anywhere','No visual uses them and no other measure references them — safe to remove','var(--clr-unused)',pureOrphanM.length,'Measures',
-    pureOrphanM.map(m=>\`<div class="lc clickable" style="border-left:3px solid var(--clr-unused);flex:0 0 auto" onclick="event.stopPropagation();openLineage('measure','\${m.name}')"><div class="lc-name">\${m.name}</div><div class="lc-sub">\${m.table} · \${m.formatString||''}</div></div>\`).join(""));
+    pureOrphanM.map(m=>\`<div class="lc clickable" style="border-left:3px solid var(--clr-unused);flex:0 0 auto" data-action="lineage" data-type="measure" data-name="\${escAttr(m.name)}"><div class="lc-name">\${escHtml(m.name)}</div><div class="lc-sub">\${escHtml(m.table)} · \${escHtml(m.formatString||'')}</div></div>\`).join(""));
 
   if(chainOrphanM.length) h+=orphanSection('chain-m','Unused Measures — Dead Chain','Other measures depend on them, but the full chain never reaches any visual','var(--clr-unused)',chainOrphanM.length,'Measures',
-    chainOrphanM.map(m=>\`<div class="lc clickable" style="border-left:3px solid var(--clr-unused);flex:0 0 auto" onclick="event.stopPropagation();openLineage('measure','\${m.name}')"><div class="lc-name">\${m.name}</div><div class="lc-sub">\${m.table} · \${m.formatString||''} · depended on by \${m.dependedOnBy.length}</div></div>\`).join(""));
+    chainOrphanM.map(m=>\`<div class="lc clickable" style="border-left:3px solid var(--clr-unused);flex:0 0 auto" data-action="lineage" data-type="measure" data-name="\${escAttr(m.name)}"><div class="lc-name">\${escHtml(m.name)}</div><div class="lc-sub">\${escHtml(m.table)} · \${escHtml(m.formatString||'')} · depended on by \${m.dependedOnBy.length}</div></div>\`).join(""));
 
   if(unusedC.length) h+=orphanSection('orphan-c','Unused Columns','No visual, measure, or relationship uses them — safe to hide or remove','var(--clr-unused)',unusedC.length,'Columns',
-    unusedC.map(c=>\`<div class="lc clickable" style="border-left:3px solid var(--clr-unused);flex:0 0 auto" onclick="event.stopPropagation();openLineage('column','\${c.name}')"><div class="lc-name">\${c.name}</div><div class="lc-sub">\${c.table} · \${c.dataType}</div></div>\`).join(""));
+    unusedC.map(c=>\`<div class="lc clickable" style="border-left:3px solid var(--clr-unused);flex:0 0 auto" data-action="lineage" data-type="column" data-name="\${escAttr(c.name)}"><div class="lc-name">\${escHtml(c.name)}</div><div class="lc-sub">\${escHtml(c.table)} · \${escHtml(c.dataType)}</div></div>\`).join(""));
 
   if(indirectM.length) h+=orphanSection('indirect-m','Indirect Measures','Not on any visual, but used inside other measures that are — keep these','var(--clr-indirect)',indirectM.length,'Measures',
-    indirectM.map(m=>\`<div class="lc clickable" style="border-left:3px solid var(--clr-indirect);flex:0 0 auto" onclick="event.stopPropagation();openLineage('measure','\${m.name}')"><div class="lc-name">\${m.name}</div><div class="lc-sub">\${m.table} · \${m.formatString||''}</div></div>\`).join(""));
+    indirectM.map(m=>\`<div class="lc clickable" style="border-left:3px solid var(--clr-indirect);flex:0 0 auto" data-action="lineage" data-type="measure" data-name="\${escAttr(m.name)}"><div class="lc-name">\${escHtml(m.name)}</div><div class="lc-sub">\${escHtml(m.table)} · \${escHtml(m.formatString||'')}</div></div>\`).join(""));
 
   if(indirectC.length) h+=orphanSection('indirect-c','Indirect Columns','Not on any visual, but used in a relationship or measure DAX — keep these','var(--clr-indirect)',indirectC.length,'Columns',
-    indirectC.map(c=>\`<div class="lc clickable" style="border-left:3px solid var(--clr-indirect);flex:0 0 auto" onclick="event.stopPropagation();openLineage('column','\${c.name}')"><div class="lc-name">\${c.name}</div><div class="lc-sub">\${c.table} · \${c.dataType}</div></div>\`).join(""));
+    indirectC.map(c=>\`<div class="lc clickable" style="border-left:3px solid var(--clr-indirect);flex:0 0 auto" data-action="lineage" data-type="column" data-name="\${escAttr(c.name)}"><div class="lc-name">\${escHtml(c.name)}</div><div class="lc-sub">\${escHtml(c.table)} · \${escHtml(c.dataType)}</div></div>\`).join(""));
 
   if(!unusedM.length&&!unusedC.length&&!indirectM.length&&!indirectC.length)h='<div style="text-align:center;padding:40px;color:var(--clr-success);font-weight:600">All fields are in use ✓</div>';
   var totalUnused=unusedM.length+unusedC.length;
@@ -1255,11 +1303,11 @@ function renderFunctions(){
     }).join('<span style="color:var(--code-punct)">, </span>'):'<span style="color:var(--code-punct);font-style:italic">none</span>';
     const desc=f.description?'<div style="font-size:11px;color:#64748B;margin-top:6px;line-height:1.4">'+f.description.replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</div>':'';
     const expr=f.expression.replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    const measureChips=refMeasures.map(m=>\`<span class="dep-chip" style="background:rgba(245,158,11,.1);color:var(--clr-measure);border-color:rgba(245,158,11,.2);cursor:pointer" onclick="event.stopPropagation();openLineage('measure','\${m.name}')">\${m.name}</span>\`).join('');
+    const measureChips=refMeasures.map(m=>\`<span class="dep-chip" style="background:rgba(245,158,11,.1);color:var(--clr-measure);border-color:rgba(245,158,11,.2);cursor:pointer" data-action="lineage" data-type="measure" data-name="\${escAttr(m.name)}">\${escHtml(m.name)}</span>\`).join('');
     h+=\`<div class="page-card">
-      <div class="page-header" onclick="this.parentElement.classList.toggle('open')">
+      <div class="page-header" data-action="card-toggle">
         <div style="flex:1">
-          <div class="page-name" style="font-size:14px">\${f.name}</div>
+          <div class="page-name" style="font-size:14px">\${escHtml(f.name)}</div>
           <div style="font-size:11px;color:#64748B;margin-top:2px;font-family:'JetBrains Mono',monospace">( \${params} )</div>
         </div>
         <div class="page-stats">
@@ -1299,9 +1347,9 @@ function renderCalcGroups(){
       </div>\`;
     }
     h+=\`<div class="page-card">
-      <div class="page-header" onclick="this.parentElement.classList.toggle('open')">
+      <div class="page-header" data-action="card-toggle">
         <div style="flex:1">
-          <div class="page-name" style="font-size:14px">\${cg.name}</div>
+          <div class="page-name" style="font-size:14px">\${escHtml(cg.name)}</div>
           \${desc}
         </div>
         <div class="page-stats">

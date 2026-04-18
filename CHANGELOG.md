@@ -9,7 +9,41 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 Sections in each release follow the Keep-a-Changelog vocabulary: **Added**, **Changed**, **Fixed**, **Security**, **Removed**, **Deprecated**.
 
-> **Note on "unreleased" versions:** the v0.2 track (PRs #4–#6) is currently stacked on top of PR #3 and hasn't been merged to `main` yet. Each entry lists its source commit / PR so you can cross-reference the branch state.
+---
+
+## [0.3.0] — 2026-04-18 · Stop 4 (branch `stop-4/event-delegation`)
+
+Structural XSS fix — the last of the three Criticals from `/sc:analyze`. Minor-version bump because the event-handling model in the dashboard changes even though the UI behaviour is identical.
+
+### Security
+- **Event delegation instead of inline `onclick=`.** Every `onclick="…${field}…"` site in the dashboard and landing page has been replaced with `data-action="<verb>"` + `data-<prop>="<escAttr(value)>"`. A single document-level `click` listener dispatches based on `[data-action]` via `closest()`. Model-controlled names (measures, columns, tables, pages, paths) never reach a JS parser — they live in HTML attributes, which the browser HTML-decodes before exposing via `element.dataset.<prop>`. Removes the XSS class structurally, not just by escaping harder.
+- **Server-side `reportName` splices escaped.** The `<title>`, header sub-title, and footer branding splices for the report name now go through `escHtml` on the server. A report folder named `Foo<img src=x onerror=…>.Report` no longer reflects as raw HTML.
+- **Defense-in-depth escapes on every field-name HTML-text splice** inside the embedded client script — measure / column / table / format-string / dataType / visualTitle / visualType / bindingRole / pageName all now route through `escHtml`. Previously many were raw `${m.name}` splices; if the browser ever stopped normalising them via intermediate DOM APIs, the output would have rendered attacker markup.
+
+### Changed
+- **`openLineage` → `navigateLineage`.** Every internal call site was being edited for the delegation refactor — took the opportunity to rename the function to match its actual behaviour (it navigates, it doesn't *open* anything).
+- **`stopPropagation` calls removed.** With a single delegated handler using `closest('[data-action]')`, bubbling is no longer a concern — a click on a chip inside a `.page-header` matches the chip's innermost `[data-action]`, not the header's.
+
+### Added
+- **Delegated click listener** (~45 lines) at the top of the embedded client script. Handles 16 action verbs: `lineage`, `tab`, `md-tab`, `md-mode`, `sort`, `unused-filter`, `theme`, `reload`, `md-expand-all`, `md-collapse-all`, `md-copy`, `md-download`, `page-toggle`, `table-toggle`, `orphan-toggle`, `card-toggle` — plus `open-recent` and `browse` on the landing page.
+- **`tests/render-xss-fuzz.test.ts`** — 6 regression tests covering:
+  - no `onclick=` HTML attribute in any rendered output
+  - data-* attribute values contain no raw `'`, `"`, `<`, `>` for adversarial input
+  - `</script>` payload doesn't inflate the legitimate embed-block count
+  - `<img onerror=…>` payload doesn't render as a real tag
+  - delegator's `[data-action]` contract is wired (canary against future refactors removing it)
+  - every emitted `data-action="<verb>"` has a matching `case` in the delegator's switch
+
+### Fixed (caught by the fuzz tests during development)
+- Server-side `${reportName}` was being spliced raw into the `<title>`, header, and footer at three sites — escaped now.
+- Commentary inside the delegator docblock used literal `onclick=` and `data-action="<verb>"` strings, which tripped the structural-invariant tests. Rephrased so the tests are sensitive only to real code.
+
+### Test results
+44 / 44 green (was 38, +6 fuzz tests). Runtime ~100 ms. Zero new deps.
+
+---
+
+> **Note on "unreleased" versions:** the v0.2 track was merged to `main` on 2026-04-18. v0.3.0 (this entry) is currently on its own branch awaiting merge.
 
 ---
 
@@ -136,12 +170,10 @@ First release to properly support Power BI **composite models** (mixed-storage w
 
 ## Release / branch status at the time of writing
 
-| Version | Location | Merge target |
+| Version | Location | Notes |
 |---|---|---|
 | 0.0.1 – 0.0.4 | `main` (merged) | — |
-| 0.1.0 | `stop-0/composite-model-and-chips` (PR #3, open) | `main` |
-| 0.1.1 | `stop-1/safe-helpers-and-tests` (PR #4, open) | `stop-0/…` |
-| 0.2.0 | `stop-2/server-boundary` (PR #5, open) | `stop-1/…` |
-| 0.2.1 | `stop-3/data-embed-safety` (PR #6, open) | `stop-2/…` |
+| 0.1.0 – 0.2.1 | `main` (merged) | v0.2 security track |
+| 0.3.0 | `stop-4/event-delegation` (open) | Structural XSS fix |
 
-The v0.2 track is stacked — each PR targets the branch of the previous stop so reviewers see only that stop's changes. Once PR #3 merges to `main`, PRs #4–#6 will be rebased / retargeted onto `main` in order.
+The v0.2 track was merged to `main` via cherry-pick on 2026-04-18 after the stacked PRs #4–#6 each landed on their feature-branch base rather than main. See the Stop-3 commit message for the reconciliation detail. v0.3.0 is on its own branch awaiting merge.
