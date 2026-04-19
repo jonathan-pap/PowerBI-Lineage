@@ -878,10 +878,50 @@ function tBadgesForColumn(c,slicerSet,tableName){
 }
 
 function tBadgeForMeasure(m){
-  if(m.externalProxy)return '<span class="badge badge--calc">🌐 PROXY</span>';
+  if(m.externalProxy){
+    // Tooltip surfaces the remote target so the user can see which
+    // cube this proxies to without clicking through to measures.md.
+    const tip=escAttr('External proxy → '+m.externalProxy.externalModel+'['+m.externalProxy.remoteName+']');
+    return `<span class="badge badge--calc" title="${tip}">🌐 PROXY</span>`;
+  }
   if(m.status==='unused')return '<span class="badge badge--unused">⚠ UNUSED</span>';
   if(m.status==='indirect')return '<span class="badge badge--indirect">↻ INDIRECT</span>';
   return ''; // Direct needs no pill — absence = healthy
+}
+
+// Role-aware icon for the tree-table summary. The default 📊 emoji
+// renders as a pixelated bar chart on Windows and looks identical for
+// every table, making long lists of facts/dims visually indistinct.
+// Monochrome geometric glyphs render consistently and let role be
+// read at a glance without needing to parse the role pill.
+function tIconForTable(t){
+  if(t.isCalcGroup)return '🧮';
+  if(t.origin==='auto-date')return '◷';
+  const role=tClassifyTable(t);
+  switch(role){
+    case 'Fact':         return '▦';  // crosshatched — the "busy" table
+    case 'Dimension':    return '▤';  // horizontal rules — the "list" table
+    case 'Bridge':       return '⇄';  // two-way — relates two tables
+    case 'Disconnected': return '◌';  // hollow circle — unconnected
+    default:             return '▫';
+  }
+}
+
+// "Measure home" tables — those that exist purely to host measures
+// with little or no data of their own (e.g. `_measures`,
+// `_Rollup_measures`, `MeasureTable`). User convention on composite
+// models: a single placeholder column + many measures. Surfacing
+// them as a dedicated pseudo-root keeps them from cluttering the
+// data-source groupings they'd otherwise appear under as
+// DISCONNECTED. Match: table name contains "measure" (case-
+// insensitive) AND has at least one measure. Excludes calc groups,
+// field params, and composite-model proxies so those classifiers
+// stay authoritative.
+function tIsMeasureHomeTable(t){
+  return (t.measureCount||0) > 0
+      && !t.isCalcGroup
+      && t.parameterKind==null
+      && /measure/i.test(t.name);
 }
 
 function renderTree(){
@@ -896,15 +936,22 @@ function renderTree(){
     measuresByTable.get(m.table).push(m);
   }
 
-  // Split off field parameters and composite-model proxy tables up
-  // front — they shouldn't appear as data-source branches. Each
-  // gets its own collapsed-by-default pseudo-root below.
+  // Split off field parameters, composite-model proxies, and
+  // measure-home tables up front — each gets its own pseudo-root
+  // below and shouldn't appear as a DISCONNECTED data-source branch.
+  // Order matters: parameter/proxy classifiers from data-builder
+  // are authoritative; measure-home is a pure name-based override
+  // applied last so a table classified as a field param doesn't
+  // accidentally get pulled into measure-tables just because its
+  // name matches.
   const fieldParamTables=[];
   const proxyTables=[];
+  const measureHomeTables=[];
   const regularTables=[];
   for(const t of tables){
     if(t.parameterKind==='field')fieldParamTables.push(t);
     else if(t.parameterKind==='compositeModelProxy')proxyTables.push(t);
+    else if(tIsMeasureHomeTable(t))measureHomeTables.push(t);
     else regularTables.push(t);
   }
 
@@ -944,7 +991,7 @@ function renderTree(){
     for(const t of tblList){
       const role=tClassifyTable(t);
       const roleCls='tree-role-'+role.toLowerCase().replace(/\s+/g,'-');
-      const tableIcon=t.isCalcGroup?'🧮':'📊';
+      const tableIcon=tIconForTable(t);
       const cols=t.columns||[];
       const fullMeasures=(measuresByTable.get(t.name)||[]);
       fullMeasures.sort((a,b)=>a.name.localeCompare(b.name));
@@ -1087,6 +1134,77 @@ function renderTree(){
     parts.push('</details>');
   }
 
+  // Measure Tables — dedicated pseudo-root for tables that exist
+  // purely to host measures. Open by default (usually only 1–2 of
+  // these, and their contents are the whole reason they exist).
+  // Tables classified as field params / proxies / calc groups are
+  // already filtered out above, so this branch only gets the
+  // `_measures` / `_Rollup_measures` / `MeasureTable` style tables.
+  if(measureHomeTables.length>0){
+    const tblList=measureHomeTables.slice().sort((a,b)=>a.name.localeCompare(b.name));
+    const totalMeasures=tblList.reduce((a,t)=>a+(t.measureCount||0),0);
+    parts.push('<details class="tree-src" open>');
+    parts.push('<summary><span class="tree-icon">ƒ</span><strong>Measure Tables</strong>'+
+      '<span class="tree-meta">'+tblList.length+' table'+(tblList.length===1?'':'s')+' · '+totalMeasures+' measure'+(totalMeasures===1?'':'s')+'</span>'+
+      '</summary>');
+    for(const t of tblList){
+      const cols=t.columns||[];
+      const fullMeasures=(measuresByTable.get(t.name)||[]);
+      fullMeasures.sort((a,b)=>a.name.localeCompare(b.name));
+      parts.push('<details class="tree-table">');
+      parts.push('<summary>'+
+        '<span class="tree-icon">ƒ</span>'+
+        '<strong>'+escHtml(t.name)+'</strong>'+
+        '<span class="badge tree-role tree-role-measure-home" title="Table hosts measures only">MEASURE TABLE</span>'+
+        '<span class="tree-meta">'+t.measureCount+' measure'+(t.measureCount===1?'':'s')+
+          (t.columnCount>0?' · '+t.columnCount+' col'+(t.columnCount===1?'':'s'):'')+
+        '</span>'+
+      '</summary>');
+      // Columns group (usually empty or a single placeholder column)
+      if(cols.length>0){
+        parts.push('<details class="tree-group">');
+        parts.push('<summary><span class="tree-icon">📋</span>Columns ('+cols.length+')</summary>');
+        for(const c of cols){
+          const badges=tBadgesForColumn(c,slicerSet,t.name);
+          parts.push(`<div class="tree-leaf tree-col clickable" data-action="lineage" data-type="column" data-name="${escAttr(c.name)}">`+
+            `<span class="tree-icon">·</span>`+
+            `<span class="tree-name">${escHtml(c.name)}</span>`+
+            `<span class="tree-type">${escHtml(c.dataType||'')}</span>`+
+            (badges?`<span class="tree-badges">${badges}</span>`:'')+
+          `</div>`);
+        }
+        parts.push('</details>');
+      }
+      // Measures group
+      if(fullMeasures.length>0){
+        const brk={direct:0,indirect:0,unused:0,proxy:0};
+        for(const m of fullMeasures){
+          if(m.externalProxy)brk.proxy++;
+          else brk[m.status]=(brk[m.status]||0)+1;
+        }
+        const brkParts=[];
+        if(brk.direct>0)brkParts.push(brk.direct+' ✓');
+        if(brk.indirect>0)brkParts.push(brk.indirect+' ↻');
+        if(brk.unused>0)brkParts.push(brk.unused+' ⚠');
+        if(brk.proxy>0)brkParts.push(brk.proxy+' 🌐');
+        parts.push('<details class="tree-group" open>');
+        parts.push('<summary><span class="tree-icon">ƒ</span>Measures ('+fullMeasures.length+')'+(brkParts.length?'<span class="tree-meta">'+brkParts.join(' · ')+'</span>':'')+'</summary>');
+        for(const m of fullMeasures){
+          const mb=tBadgeForMeasure(m);
+          parts.push(`<div class="tree-leaf tree-measure clickable" data-action="lineage" data-type="measure" data-name="${escAttr(m.name)}">`+
+            `<span class="tree-icon">●</span>`+
+            `<span class="tree-name">${escHtml(m.name)}</span>`+
+            (m.formatString?`<span class="tree-type">${escHtml(m.formatString)}</span>`:'')+
+            (mb?`<span class="tree-badges">${mb}</span>`:'')+
+          `</div>`);
+        }
+        parts.push('</details>');
+      }
+      parts.push('</details>'); // close tree-table
+    }
+    parts.push('</details>'); // close tree-src
+  }
+
   // Composite Model Proxies — dedicated pseudo-root, collapsed by
   // default. These are the single-column DirectQuery-to-AS entity
   // stubs that Power BI auto-creates for composite models (Domain_*,
@@ -1163,6 +1281,7 @@ function renderTree(){
     ? `<button class="filter-btn${showAutoDate?' active':''}" data-action="toggle-auto-date" title="${showAutoDate?'Hide':'Show'} auto-date infrastructure">${showAutoDate?'Hide':'Show'} auto-date (${adc})</button>`
     : '';
   const footerLeft=`${tables.length} table${tables.length===1?'':'s'} · ${sortedSources.length} source${sortedSources.length===1?'':'s'}`+
+    (measureHomeTables.length>0?` · ${measureHomeTables.length} measure table${measureHomeTables.length===1?'':'s'}`:'')+
     (fieldParamTables.length>0?` · ${fieldParamTables.length} param${fieldParamTables.length===1?'':'s'}`:'')+
     (proxyTables.length>0?` · ${proxyTables.length} prox${proxyTables.length===1?'y':'ies'}`:'')+
     (udfs.length>0?` · ${udfs.length} UDF${udfs.length===1?'':'s'}`:'')+

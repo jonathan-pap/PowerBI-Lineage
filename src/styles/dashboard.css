@@ -564,6 +564,7 @@
   .tree-role-auto-date    { background: var(--clr-indirect-soft);color: var(--clr-indirect);border-color: var(--clr-indirect-mid); opacity: 0.7; }
   .tree-role-parameter    { background: var(--clr-slicer-soft);  color: var(--clr-slicer);  border-color: var(--clr-slicer-mid); }
   .tree-role-proxy        { background: var(--clr-upstream-soft);color: var(--clr-upstream);border-color: var(--clr-upstream-mid); }
+  .tree-role-measure-home { background: var(--clr-measure-soft); color: var(--clr-measure); border-color: var(--clr-measure-mid); }
 
   /* Group-level (Columns / Measures) — nested under table */
   .tree-group {
