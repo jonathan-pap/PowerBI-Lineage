@@ -1986,8 +1986,7 @@ export function generateSourcesMd(data: FullData, reportName: string): string {
         const mode = p ? p.mode : "—";
         const kind = p ? (p.partitionKind || "—") : "—";
         const sub = fileSubFor(t) || (p?.expressionSource ? `expr: ${p.expressionSource}` : "");
-        const calcBadge = t.isCalculatedTable ? " 🧮" : "";
-        lines.push(`| ${esc(t.name)}${calcBadge} | \`${esc(mode)}\` | \`${esc(kind)}\` | ${t.columnCount} | ${t.measureCount} | ${esc(sub) || "—"} |`);
+        lines.push(`| ${esc(t.name)} | \`${esc(mode)}\` | \`${esc(kind)}\` | ${t.columnCount} | ${t.measureCount} | ${esc(sub) || "—"} |`);
       }
       lines.push("");
     }
