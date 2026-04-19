@@ -849,10 +849,41 @@ function tClassifyTable(t){
 // Bridges, Calc-Groups, Disconnected. Same ordering as the MD data-dictionary.
 const T_ROLE_WEIGHT={Fact:0,Dimension:1,Bridge:2,'Calc Group':3,Disconnected:4,'Auto-date':5};
 
+// File-based source types: their sourceLocation is a path+filename
+// where different tables land in different files but share a common
+// folder. Grouping by full location shards one logical source into
+// N one-table branches; grouping by folder collapses them back into
+// a single branch with the filename shown per-table.
+const T_FILE_SOURCE_TYPES=new Set([
+  'Parquet','Excel','CSV','JSON','XML','Access',
+  'Inline (encoded)','Inline data',
+]);
+
+/** Split a path into { folder, file } using whichever slash wins. */
+function tSplitPath(loc){
+  if(!loc)return {folder:'',file:''};
+  const i=Math.max(loc.lastIndexOf('/'),loc.lastIndexOf('\\'));
+  if(i<0)return {folder:'',file:loc};
+  return {folder:loc.substring(0,i),file:loc.substring(i+1)};
+}
+
+/** Last path segment of a folder — used as a concise label tail. */
+function tFolderTail(folder){
+  if(!folder)return '';
+  const i=Math.max(folder.lastIndexOf('/'),folder.lastIndexOf('\\'));
+  return i>=0?folder.substring(i+1):folder;
+}
+
 /**
- * Derive a friendly display label for a table's data source. AS partitions
- * use the last URL path segment (the workspace slug) as a concise subtitle
- * — the full URL is kept in `sub` for the subtitle line on the source row.
+ * Derive a friendly display label for a table's data source.
+ *   - Analysis Services: group by cluster URL, label = workspace slug.
+ *   - File-based (Parquet / Excel / CSV / …): group by containing
+ *     folder so all tables backed by files in one folder share one
+ *     branch. Per-table filename surfaces on the table's own sub line.
+ *   - Everything else: group by full sourceLocation (SQL server+db,
+ *     OData URL, SharePoint root, Snowflake account, …). Those
+ *     locations are already the right level of aggregation.
+ *
  * Tables with no partitions (disconnected, calc groups) bucket under
  * "No source".
  */
@@ -866,7 +897,30 @@ function tSourceKey(t){
     const tail=lastSlash>=0?loc.substring(lastSlash+1):loc;
     return {key:'AS:'+loc,label:'AS · '+(tail||'(unknown)'),sub:loc};
   }
+  if(T_FILE_SOURCE_TYPES.has(p.sourceType)){
+    const {folder}=tSplitPath(p.sourceLocation||'');
+    if(folder){
+      const tail=tFolderTail(folder);
+      return {key:p.sourceType+'|'+folder,label:p.sourceType+(tail?' · '+tail:''),sub:folder};
+    }
+    // No folder — inline or unresolved path. Collapse every such
+    // table into one bucket per source type so they don't fragment
+    // into N single-table branches.
+    return {key:p.sourceType+'|__all__',label:p.sourceType,sub:''};
+  }
   return {key:p.sourceType+'|'+(p.sourceLocation||''),label:p.sourceType,sub:p.sourceLocation||''};
+}
+
+/**
+ * Per-table source sub-line. For file-based sources where the group
+ * is the folder, show the filename so each table in the branch is
+ * individually identifiable. Empty string for everything else.
+ */
+function tTableSourceSub(t){
+  const p=t.partitions&&t.partitions[0];
+  if(!p||!T_FILE_SOURCE_TYPES.has(p.sourceType))return '';
+  const {file}=tSplitPath(p.sourceLocation||'');
+  return file||'';
 }
 
 function tBadgesForColumn(c,slicerSet,tableName){
@@ -999,6 +1053,7 @@ function renderTree(){
       const fullMeasures=(measuresByTable.get(t.name)||[]);
       fullMeasures.sort((a,b)=>a.name.localeCompare(b.name));
 
+      const tblSub=tTableSourceSub(t);
       parts.push('<details class="tree-table">');
       parts.push('<summary>'+
         '<span class="tree-icon">'+tableIcon+'</span>'+
@@ -1010,6 +1065,7 @@ function renderTree(){
           (t.keyCount>0?' · '+t.keyCount+' key'+(t.keyCount===1?'':'s'):'')+
           (t.fkCount>0?' · '+t.fkCount+' FK'+(t.fkCount===1?'':'s'):'')+
         '</span>'+
+        (tblSub?'<span class="tree-sub">'+escHtml(tblSub)+'</span>':'')+
       '</summary>');
 
       // Columns group

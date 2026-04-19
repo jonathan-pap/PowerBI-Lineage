@@ -55,6 +55,34 @@ test("Tree tab — client bundle registers a `tree` tab button", () => {
   );
 });
 
+test("Tree tab — file-based source types group by folder not full path", () => {
+  // Regression for "6 Parquet groups with 1 table each" bug on the
+  // training model. The tSourceKey helper must split off the filename
+  // for file-based sources and key by folder, otherwise every
+  // Parquet/Excel/CSV file lands in its own one-table branch.
+  const html = generateHTML(minimalData(), "t", "", "", "", "", "", "", "0");
+  // Inlined client source — grep for the set literal pinning the
+  // file-based types. If someone removes Parquet from this set the
+  // fragmentation bug returns.
+  assert.ok(
+    /T_FILE_SOURCE_TYPES\s*=\s*new Set\(\s*\[[^\]]*['"]Parquet['"]/m.test(html),
+    "T_FILE_SOURCE_TYPES must include Parquet — otherwise multi-file Parquet models fragment into N one-table branches"
+  );
+  // Also pin Excel and CSV since they have the same shape.
+  for (const t of ["Excel", "CSV"]) {
+    assert.ok(
+      new RegExp(`T_FILE_SOURCE_TYPES\\s*=\\s*new Set\\(\\s*\\[[^\\]]*['"]${t}['"]`).test(html),
+      `T_FILE_SOURCE_TYPES must include ${t} — same fragmentation risk as Parquet`
+    );
+  }
+  // The tSourceKey function must call tSplitPath for these types —
+  // grep the function body.
+  assert.ok(
+    /function tSourceKey\([\s\S]+?tSplitPath/.test(html),
+    "tSourceKey doesn't call tSplitPath — folder-level grouping not wired"
+  );
+});
+
 test("Tree tab — renderTree function + bootstrap call are present", () => {
   const html = generateHTML(minimalData(), "t", "", "", "", "", "", "", "0");
   assert.ok(html.includes("function renderTree("),
