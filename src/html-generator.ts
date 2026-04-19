@@ -242,6 +242,7 @@ export function generateHTML(
   </div>
 
   <div class="panel" id="panel-tables"><div id="tables-content"></div></div>
+  <div class="panel" id="panel-erd"><div id="erd-content"></div></div>
   <div class="panel" id="panel-relationships"><div id="relationships-content"></div></div>
   <div class="panel" id="panel-sources"><div id="sources-content"></div></div>
   <div class="panel" id="panel-functions"><div id="functions-content"></div></div>
