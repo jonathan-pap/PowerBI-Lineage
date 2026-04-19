@@ -203,9 +203,12 @@ function renderTabs(){
   // Bottom-up build order: data foundations first, then calculation logic,
   // then consumption (pages), then analysis (unused/lineage), then docs.
   document.getElementById("tabs").innerHTML=[
+    // Orientation — Model Tree sits first because it's the holistic
+    // Source→Table→Columns/Measures map; every other data-layer tab
+    // is a flat drill-down of what the tree already shows grouped.
+    {id:"tree",l:"Model Tree",b:null},
     // Data layer
     {id:"sources",l:"Sources",b:vt.filter(function(t){return (t.partitions||[]).length>0;}).length},
-    {id:"tree",l:"Model Tree",b:null},
     {id:"tables",l:"Tables",b:vt.length},
     {id:"columns",l:"Columns",b:DATA.columns.length},
     {id:"relationships",l:"Relationships",b:DATA.relationships.length},
@@ -1102,14 +1105,14 @@ function renderTree(){
   if(fieldParamTables.length>0){
     const tblList=fieldParamTables.slice().sort((a,b)=>a.name.localeCompare(b.name));
     parts.push('<details class="tree-src">');
-    parts.push('<summary><span class="tree-icon">🎛</span><strong>Field Parameters</strong>'+
+    parts.push('<summary><span class="tree-icon">▣</span><strong>Field Parameters</strong>'+
       '<span class="tree-meta">'+tblList.length+' parameter'+(tblList.length===1?'':'s')+'</span>'+
       '</summary>');
     for(const t of tblList){
       const cols=t.columns||[];
       parts.push('<details class="tree-table">');
       parts.push('<summary>'+
-        '<span class="tree-icon">🎛</span>'+
+        '<span class="tree-icon">▣</span>'+
         '<strong>'+escHtml(t.name)+'</strong>'+
         '<span class="badge tree-role tree-role-parameter" title="Field parameter (what-if / selector)">PARAMETER</span>'+
         '<span class="tree-meta">'+t.columnCount+' col'+(t.columnCount===1?'':'s')+'</span>'+
@@ -1227,14 +1230,14 @@ function renderTree(){
     const sortedModels=[...byModel.entries()].sort((a,b)=>a[0].localeCompare(b[0]));
     const totalTables=proxyTables.length;
     parts.push('<details class="tree-src">');
-    parts.push('<summary><span class="tree-icon">🔌</span><strong>Composite Model Proxies</strong>'+
+    parts.push('<summary><span class="tree-icon">◈</span><strong>Composite Model Proxies</strong>'+
       '<span class="tree-meta">'+totalTables+' proxy table'+(totalTables===1?'':'s')+' · '+sortedModels.length+' remote model'+(sortedModels.length===1?'':'s')+'</span>'+
       '</summary>');
     for(const [modelName,tblList] of sortedModels){
       tblList.sort((a,b)=>a.name.localeCompare(b.name));
       parts.push('<details class="tree-table">');
       parts.push('<summary>'+
-        '<span class="tree-icon">🔌</span>'+
+        '<span class="tree-icon">◈</span>'+
         '<strong>'+escHtml(modelName)+'</strong>'+
         '<span class="badge tree-role tree-role-proxy" title="Remote Analysis Services model referenced via DirectQuery">REMOTE</span>'+
         '<span class="tree-meta">'+tblList.length+' table'+(tblList.length===1?'':'s')+'</span>'+
