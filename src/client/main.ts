@@ -524,8 +524,8 @@ function tableGroupKey(t){
 // Display metadata for each group. `defaultOpen:true` means the group
 // body is visible on first load (the user can still collapse it).
 const TABLE_GROUPS=[
-  {key:'data',        label:'Data Tables',             defaultOpen:true,  icon:'▦'},
-  {key:'measure',     label:'Measure Tables',          defaultOpen:true,  icon:'ƒ'},
+  {key:'data',        label:'Data Tables',             defaultOpen:false, icon:'▦'},
+  {key:'measure',     label:'Measure Tables',          defaultOpen:false, icon:'ƒ'},
   {key:'field-param', label:'Field Parameters',        defaultOpen:false, icon:'▣'},
   {key:'proxy',       label:'Composite Model Proxies', defaultOpen:false, icon:'◈'},
   {key:'calcgroup',   label:'Calculation Groups',      defaultOpen:false, icon:'🧮'},
