@@ -55,9 +55,19 @@ The dashboard can also run **entirely in the browser** with no Node install — 
 
 ### Build + serve locally
 
+Double-click on Windows:
+
+```
+launch-browser.bat
+```
+
+First run does `npm install` + `npm run build:browser`, then starts the static server and opens your browser. Subsequent runs skip the build.
+
+Or from the terminal:
+
 ```
 npm run build:browser    # compiles to ./docs/
-npm run serve:browser    # starts a local HTTPS-ish server on 127.0.0.1:5700
+npm run serve:browser    # starts a local server on 127.0.0.1:5700
 ```
 
 The browser build reuses the existing parser, data-builder, and md-generator unchanged — only three small new modules sit between them and the browser's storage API:
