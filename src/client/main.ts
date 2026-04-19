@@ -205,7 +205,7 @@ function renderTabs(){
   document.getElementById("tabs").innerHTML=[
     // Data layer
     {id:"sources",l:"Sources",b:vt.filter(function(t){return (t.partitions||[]).length>0;}).length},
-    {id:"tree",l:"Tree",b:null},
+    {id:"tree",l:"Model Tree",b:null},
     {id:"tables",l:"Tables",b:vt.length},
     {id:"columns",l:"Columns",b:DATA.columns.length},
     {id:"relationships",l:"Relationships",b:DATA.relationships.length},
@@ -896,9 +896,21 @@ function renderTree(){
     measuresByTable.get(m.table).push(m);
   }
 
-  // Group tables by source
-  const sourceMap=new Map();
+  // Split off field parameters and composite-model proxy tables up
+  // front — they shouldn't appear as data-source branches. Each
+  // gets its own collapsed-by-default pseudo-root below.
+  const fieldParamTables=[];
+  const proxyTables=[];
+  const regularTables=[];
   for(const t of tables){
+    if(t.parameterKind==='field')fieldParamTables.push(t);
+    else if(t.parameterKind==='compositeModelProxy')proxyTables.push(t);
+    else regularTables.push(t);
+  }
+
+  // Group tables by source (regular tables only)
+  const sourceMap=new Map();
+  for(const t of regularTables){
     const s=tSourceKey(t);
     if(!sourceMap.has(s.key))sourceMap.set(s.key,{label:s.label,sub:s.sub,tables:[]});
     sourceMap.get(s.key).tables.push(t);
@@ -942,6 +954,7 @@ function renderTree(){
         '<span class="tree-icon">'+tableIcon+'</span>'+
         '<strong>'+escHtml(t.name)+'</strong>'+
         '<span class="badge tree-role '+roleCls+'">'+role.toUpperCase()+'</span>'+
+        (t.isCalculatedTable?'<span class="badge badge--calc" title="DAX calculated table">🧮 CALC TABLE</span>':'')+
         '<span class="tree-meta">'+t.columnCount+' col'+(t.columnCount===1?'':'s')+
           (t.measureCount>0?' · '+t.measureCount+' measure'+(t.measureCount===1?'':'s'):'')+
           (t.keyCount>0?' · '+t.keyCount+' key'+(t.keyCount===1?'':'s'):'')+
@@ -1034,6 +1047,95 @@ function renderTree(){
     parts.push('</details>'); // close tree-src
   }
 
+  // Field Parameters — dedicated pseudo-root, collapsed by default.
+  // Detected via Power BI's `extendedProperty ParameterMetadata` on
+  // any column (data-builder exposes this as parameterKind === 'field').
+  // Renders columns but no data-source grouping — a field-param
+  // table isn't a data source in any meaningful sense.
+  if(fieldParamTables.length>0){
+    const tblList=fieldParamTables.slice().sort((a,b)=>a.name.localeCompare(b.name));
+    parts.push('<details class="tree-src">');
+    parts.push('<summary><span class="tree-icon">🎛</span><strong>Field Parameters</strong>'+
+      '<span class="tree-meta">'+tblList.length+' parameter'+(tblList.length===1?'':'s')+'</span>'+
+      '</summary>');
+    for(const t of tblList){
+      const cols=t.columns||[];
+      parts.push('<details class="tree-table">');
+      parts.push('<summary>'+
+        '<span class="tree-icon">🎛</span>'+
+        '<strong>'+escHtml(t.name)+'</strong>'+
+        '<span class="badge tree-role tree-role-parameter" title="Field parameter (what-if / selector)">PARAMETER</span>'+
+        '<span class="tree-meta">'+t.columnCount+' col'+(t.columnCount===1?'':'s')+'</span>'+
+        (t.description?'<span class="tree-sub">'+escHtml(t.description)+'</span>':'')+
+      '</summary>');
+      if(cols.length>0){
+        parts.push('<details class="tree-group">');
+        parts.push('<summary><span class="tree-icon">📋</span>Columns ('+cols.length+')</summary>');
+        for(const c of cols){
+          const badges=tBadgesForColumn(c,slicerSet,t.name);
+          parts.push(`<div class="tree-leaf tree-col clickable" data-action="lineage" data-type="column" data-name="${escAttr(c.name)}">`+
+            `<span class="tree-icon">·</span>`+
+            `<span class="tree-name">${escHtml(c.name)}</span>`+
+            `<span class="tree-type">${escHtml(c.dataType||'')}</span>`+
+            (badges?`<span class="tree-badges">${badges}</span>`:'')+
+          `</div>`);
+        }
+        parts.push('</details>');
+      }
+      parts.push('</details>'); // close tree-table
+    }
+    parts.push('</details>');
+  }
+
+  // Composite Model Proxies — dedicated pseudo-root, collapsed by
+  // default. These are the single-column DirectQuery-to-AS entity
+  // stubs that Power BI auto-creates for composite models (Domain_*,
+  // Globa_*, table_HS, …). They're not real user tables — they're
+  // "remote handles" — so showing them as DISCONNECTED data sources
+  // in the main tree is misleading. Group them under one branch
+  // with the remote model they point at.
+  if(proxyTables.length>0){
+    // Sub-group by the AS model name parsed from expressionSource
+    // ("DirectQuery to AS - <ModelName>").
+    const byModel=new Map();
+    for(const t of proxyTables){
+      const p=(t.partitions||[]).find(p=>p.mode==='directQuery'&&p.expressionSource);
+      const exprSrc=p?p.expressionSource||'':'';
+      const m=exprSrc.match(/^DirectQuery to AS - (.+)$/);
+      const key=m?m[1]:(exprSrc||'Unknown');
+      if(!byModel.has(key))byModel.set(key,[]);
+      byModel.get(key).push(t);
+    }
+    const sortedModels=[...byModel.entries()].sort((a,b)=>a[0].localeCompare(b[0]));
+    const totalTables=proxyTables.length;
+    parts.push('<details class="tree-src">');
+    parts.push('<summary><span class="tree-icon">🔌</span><strong>Composite Model Proxies</strong>'+
+      '<span class="tree-meta">'+totalTables+' proxy table'+(totalTables===1?'':'s')+' · '+sortedModels.length+' remote model'+(sortedModels.length===1?'':'s')+'</span>'+
+      '</summary>');
+    for(const [modelName,tblList] of sortedModels){
+      tblList.sort((a,b)=>a.name.localeCompare(b.name));
+      parts.push('<details class="tree-table">');
+      parts.push('<summary>'+
+        '<span class="tree-icon">🔌</span>'+
+        '<strong>'+escHtml(modelName)+'</strong>'+
+        '<span class="badge tree-role tree-role-proxy" title="Remote Analysis Services model referenced via DirectQuery">REMOTE</span>'+
+        '<span class="tree-meta">'+tblList.length+' table'+(tblList.length===1?'':'s')+'</span>'+
+      '</summary>');
+      parts.push('<details class="tree-group">');
+      parts.push('<summary><span class="tree-icon">📋</span>Proxy Tables ('+tblList.length+')</summary>');
+      for(const t of tblList){
+        parts.push(`<div class="tree-leaf tree-proxy clickable" data-action="lineage" data-type="table" data-name="${escAttr(t.name)}">`+
+          `<span class="tree-icon">·</span>`+
+          `<span class="tree-name">${escHtml(t.name)}</span>`+
+          (t.description?`<span class="tree-type">${escHtml(t.description)}</span>`:'')+
+        `</div>`);
+      }
+      parts.push('</details>');
+      parts.push('</details>');
+    }
+    parts.push('</details>');
+  }
+
   // UDFs — separate root branch, siblings to data sources
   const udfs=(DATA.functions||[]).filter(f=>!f.name.endsWith('.About'));
   if(udfs.length>0){
@@ -1060,7 +1162,11 @@ function renderTree(){
   const autoToggle=adc>0
     ? `<button class="filter-btn${showAutoDate?' active':''}" data-action="toggle-auto-date" title="${showAutoDate?'Hide':'Show'} auto-date infrastructure">${showAutoDate?'Hide':'Show'} auto-date (${adc})</button>`
     : '';
-  const footerLeft=`${tables.length} table${tables.length===1?'':'s'} · ${sortedSources.length} source${sortedSources.length===1?'':'s'}${udfs.length>0?` · ${udfs.length} UDF${udfs.length===1?'':'s'}`:''}${adc>0&&!showAutoDate?` · <span style="color:var(--text-faint)">+${adc} auto-date hidden</span>`:''}`;
+  const footerLeft=`${tables.length} table${tables.length===1?'':'s'} · ${sortedSources.length} source${sortedSources.length===1?'':'s'}`+
+    (fieldParamTables.length>0?` · ${fieldParamTables.length} param${fieldParamTables.length===1?'':'s'}`:'')+
+    (proxyTables.length>0?` · ${proxyTables.length} prox${proxyTables.length===1?'y':'ies'}`:'')+
+    (udfs.length>0?` · ${udfs.length} UDF${udfs.length===1?'':'s'}`:'')+
+    (adc>0&&!showAutoDate?` · <span style="color:var(--text-faint)">+${adc} auto-date hidden</span>`:'');
   el.insertAdjacentHTML("beforeend",
     `<div class="panel-footer"><div class="left">${footerLeft}</div><div class="right">${autoToggle}</div></div>`);
 }

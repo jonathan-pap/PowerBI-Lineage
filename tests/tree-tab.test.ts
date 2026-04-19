@@ -50,7 +50,7 @@ test("Tree tab — client bundle registers a `tree` tab button", () => {
   // source for the registration line.
   // tsc may reformat the object literal with spaces — tolerant regex.
   assert.ok(
-    /id:\s*"tree",\s*l:\s*"Tree"/.test(html),
+    /id:\s*"tree",\s*l:\s*"Model Tree"/.test(html),
     "tab registration for `tree` missing — renderTabs() won't emit the button",
   );
 });
@@ -116,5 +116,105 @@ if (FIXTURE_EXISTS) {
     // root — they're not attached to any data-source bucket.
     const udfs = data.functions.filter(f => !f.name.endsWith(".About"));
     assert.ok(Array.isArray(udfs), "functions list should be enumerable");
+  });
+
+  // ── Parameter + composite-model-proxy detection (v1.1) ────────────
+  // These tests pin the specific names the user flagged in screenshots.
+  // If detection breaks, these tables would regress to appearing as
+  // phantom "DISCONNECTED" data sources in the Model Tree.
+  test("Tree tab — H&S field parameters are detected via ParameterMetadata", () => {
+    const data = buildFullData(path.resolve(FIXTURE));
+    const fieldParams = data.tables
+      .filter(t => t.parameterKind === "field")
+      .map(t => t.name)
+      .sort();
+    // The `switch_*` tables built via Power BI's field-parameter UI
+    // carry the `extendedProperty ParameterMetadata` annotation on the
+    // `Parameter Fields` column. Hand-rolled calculated tables with
+    // parameter-like intent (e.g. `switch_hours_worked`) don't carry
+    // the marker and are classified as calc tables instead — that's
+    // the correct TMDL-level answer even if the author thinks of them
+    // as "parameters" in their mental model.
+    for (const expected of [
+      "switch_geodata",
+      "switch_site_details",
+      "switch_time_period",
+    ]) {
+      assert.ok(
+        fieldParams.includes(expected),
+        `expected ${expected} to be classified as parameterKind="field" — ` +
+        `detected field params were: [${fieldParams.join(", ")}]`,
+      );
+    }
+    // `switch_hours_worked` lacks ParameterMetadata — confirm it's
+    // classified as a calc table, not silently promoted to "field".
+    const swhw = data.tables.find(t => t.name === "switch_hours_worked");
+    assert.ok(swhw, "switch_hours_worked missing from fixture");
+    assert.equal(swhw!.parameterKind, null,
+      "switch_hours_worked has no ParameterMetadata — must stay parameterKind=null (calc table)");
+    assert.equal(swhw!.isCalculatedTable, true,
+      "switch_hours_worked partition is `= calculated` — must surface via isCalculatedTable=true");
+  });
+
+  test("Tree tab — H&S composite-model proxies are detected via DQ entity shape", () => {
+    const data = buildFullData(path.resolve(FIXTURE));
+    const proxies = data.tables
+      .filter(t => t.parameterKind === "compositeModelProxy")
+      .map(t => t.name)
+      .sort();
+    // The user flagged these in screenshots as "parameters" — they're
+    // actually DirectQuery-to-AS proxy tables from the composite model.
+    // Each is single-column, same-name, with a DQ partition that
+    // resolves to a shared expression pointing at a remote AS cube.
+    for (const expected of [
+      "Domain_Health_and_Safety_SQL",
+      "Domain_Health_and_Safety_Schema",
+      "Domain_Health_and_Safety_WH",
+      "Globa_Data_House",
+      "Global_Data_House_SQL",
+      "Global_Dimensions_Schema",
+      "Global_Dimensions_Text_Summary",
+      "table_HS",
+      "table_PSIF",
+      "table_injury",
+      "table_trcf_targets",
+    ]) {
+      assert.ok(
+        proxies.includes(expected),
+        `expected ${expected} to be classified as parameterKind="compositeModelProxy" — ` +
+        `detected proxies were: [${proxies.join(", ")}]`,
+      );
+    }
+  });
+
+  test("Tree tab — H&S calc tables carry isCalculatedTable=true", () => {
+    const data = buildFullData(path.resolve(FIXTURE));
+    // The switch_* field parameters are themselves calculated tables
+    // (their partitions are `= calculated`), so isCalculatedTable must
+    // be true for them. This tests the partitionKind plumbing
+    // end-to-end, independent of the parameterKind classifier.
+    const calcTables = data.tables
+      .filter(t => t.isCalculatedTable)
+      .map(t => t.name);
+    assert.ok(
+      calcTables.some(n => n.startsWith("switch_")),
+      `expected at least one switch_* calculated table on H&S — ` +
+      `isCalculatedTable=true set was: [${calcTables.join(", ")}]`,
+    );
+  });
+
+  test("Tree tab — H&S proxy tables have expressionSource populated on their DQ partition", () => {
+    // Regression guard on the parser: without expressionSource, the
+    // compositeModelProxy classifier can't fire and the proxies fall
+    // back to DISCONNECTED.
+    const data = buildFullData(path.resolve(FIXTURE));
+    const proxy = data.tables.find(t => t.name === "table_HS");
+    assert.ok(proxy, "table_HS missing from fixture build");
+    const dqP = (proxy!.partitions || []).find(p => p.mode === "directQuery");
+    assert.ok(dqP, "table_HS has no directQuery partition");
+    assert.ok(
+      dqP!.expressionSource && dqP!.expressionSource.length > 0,
+      "table_HS's DQ partition is missing expressionSource — parser regression",
+    );
   });
 }
