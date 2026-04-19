@@ -1,0 +1,40 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "outDir": "./docs",
+    "rootDir": "./src",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "declaration": false,
+    "sourceMap": false,
+    "removeComments": false,
+    "paths": {
+      "fs": ["./src/browser/fs-shim.ts"],
+      "path": ["./src/browser/path-shim.ts"]
+    },
+    "allowImportingTsExtensions": false
+  },
+  "include": [
+    "src/browser/**/*",
+    "src/model-parser.ts",
+    "src/data-builder.ts",
+    "src/md-generator.ts",
+    "src/report-scanner.ts",
+    "src/pbir-reader.ts",
+    "src/render/**/*"
+  ],
+  "exclude": [
+    "src/app.ts",
+    "src/html-generator.ts",
+    "src/path-guard.ts",
+    "src/differ.ts",
+    "src/diff-md.ts",
+    "src/client/**/*"
+  ]
+}

@@ -41,6 +41,37 @@ node dist/app.js
 
 The app listens on `http://localhost:5679` (or the next free port). Paste the path to your `.Report` folder, or use the Browse button to pick it. Recent reports are remembered.
 
+## Browser mode (install-free)
+
+The dashboard can also run **entirely in the browser** with no Node install — pick a PBIP folder via the File System Access API and the parser + renderer run client-side. Your files stay on your machine; nothing is uploaded.
+
+### Live
+
+[**→ Open the browser build**](https://jonathan-pap.github.io/PowerBI-Lineage/) (requires Chrome, Edge, or Opera — Firefox and Safari don't support the File System Access API yet)
+
+1. Click **Open folder**.
+2. Pick the PBIP project folder — the one that contains both `<Name>.Report` and `<Name>.SemanticModel`.
+3. Dashboard renders in the same page.
+
+### Build + serve locally
+
+```
+npm run build:browser    # compiles to ./docs/
+npm run serve:browser    # starts a local HTTPS-ish server on 127.0.0.1:5700
+```
+
+The browser build reuses the existing parser, data-builder, and md-generator unchanged — only three small new modules sit between them and the browser's storage API:
+
+- `src/browser/fs-shim.ts` — pretends to be `fs` but reads from an in-memory Map
+- `src/browser/path-shim.ts` — POSIX-style `path` replacement
+- `src/browser/fsa-walk.ts` — walks a `FileSystemDirectoryHandle` into the Map
+
+At runtime an import-map in `docs/index.html` redirects bare `import ... from "fs"` / `"path"` calls to the shims. The parser never knows the difference.
+
+### Deploy
+
+`.github/workflows/pages.yml` auto-publishes `docs/` to GitHub Pages on every push to `main`. No manual deploy step.
+
 ## Project layout
 
 ```
@@ -52,6 +83,11 @@ src/
   html-generator.ts  Dashboard HTML template
   render/safe.ts     HTML/JS/JSON escape helpers (single source of truth)
   app.ts             HTTP server + landing page + folder picker
+  browser/           Browser-mode shims: fs + path + FSA-API walker + entry shell
+
+scripts/
+  build-browser.mjs  Assembles docs/ from dist/ + the browser TS output
+  serve-browser.mjs  Tiny static server for local browser-mode testing
 
 tests/               Unit tests (compiled via tsconfig.test.json -> dist-test/)
 ```
