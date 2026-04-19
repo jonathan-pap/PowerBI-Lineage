@@ -162,7 +162,6 @@
   .badge--unused    {background:var(--clr-unused-soft);    color:var(--clr-unused);    border-color:transparent;}
   .badge--success   {background:var(--clr-success-soft);   color:var(--clr-success);   border-color:transparent;}
   .badge--indirect  {background:rgba(100,116,139,.15);     color:var(--clr-indirect);  border-color:transparent;}
-  .badge--calc-grp  {background:var(--clr-slicer-soft);    color:var(--clr-slicer);    border-color:var(--clr-slicer-mid);}
   .badge--direction-out{background:var(--clr-success-soft); color:var(--clr-success);  border-color:var(--clr-success-mid);}
   .badge--direction-in {background:var(--clr-column-soft);  color:var(--clr-column);   border-color:var(--clr-column-mid);}
   .header-sep{font-size:13px;color:var(--text-fainter)}
@@ -237,7 +236,6 @@
   .trel-row:hover{background:var(--surface-alt)}
   /* .trel-dir.out / .trel-dir.in replaced by .badge--direction-out / .badge--direction-in */
   .trel-inactive{opacity:.55;font-style:italic}
-  /* .calc-group-pill replaced by .badge.badge--calc-grp */
   .format-str{font-size:11px;color:var(--text-faint);font-family:'JetBrains Mono',monospace}
 
   .lineage-back{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-dim);cursor:pointer;margin-bottom:16px;transition:color .15s}

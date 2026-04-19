@@ -514,7 +514,6 @@ function renderTables(){
   const slicerSet=new Set((DATA.columns||[]).filter(c=>c.isSlicerField).map(c=>c.table+'|'+c.name));
   document.getElementById("tables-content").innerHTML=tables.map(t=>{
     const isOpen=openTables.has(t.name);
-    const calcGroupPill=t.isCalcGroup?'<span class="badge badge--calc-grp" title="This table is a calculation group">🧮 CALC GROUP</span>':'';
 
     const colRows=t.columns.map(c=>{
       const badges=[];
@@ -568,7 +567,7 @@ function renderTables(){
     return `<div class="page-card ${isOpen?'open':''}">
       <div class="page-header" data-action="table-toggle" data-name="${escAttr(t.name)}">
         <div style="flex:1;min-width:0">
-          <div class="page-name">${escHtml(t.name)}${calcGroupPill}</div>
+          <div class="page-name">${escHtml(t.name)}</div>
           ${tableDesc}
         </div>
         <div class="page-stats">
