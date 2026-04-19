@@ -41,6 +41,69 @@ node dist/app.js
 
 The app listens on `http://localhost:5679` (or the next free port). Paste the path to your `.Report` folder, or use the Browse button to pick it. Recent reports are remembered.
 
+## Model diff (CLI)
+
+Compare two `.Report` folders and emit a structured Markdown diff — designed for PR comments, wiki change-log pages, and CI gating on breaking changes:
+
+```
+node dist/app.js diff <old.Report> <new.Report> [options]
+
+Options:
+  --format <md|json>     Output format (default: md)
+  --output <file>        Write to file instead of stdout
+  --summary              Terse PR-comment form with collapsed <details> sections
+  --fail-on <level>      Exit 1 if any change ≥ level (breaking | caution | any)
+```
+
+Changes are classified into three risk tiers:
+
+- 🔴 **Breaking** — consumers will fail or return different results (removed measure, relationship dropped, column dataType changed, partition mode flipped)
+- 🟡 **Caution** — may change results (measure DAX edited, partition source changed, relationship activity flipped)
+- 🟢 **Safe** — additive or cosmetic (added measure/column, description or format updated)
+
+Example for a PR comment via [GitHub CLI](https://cli.github.com):
+
+```
+node dist/app.js diff old.Report new.Report --summary --output diff.md
+gh pr comment --body-file diff.md
+```
+
+### GitHub Actions snippet
+
+Drop this into `.github/workflows/pbip-diff.yml` to post a diff comment on every PR that touches TMDL:
+
+```yaml
+name: PBIP diff
+on:
+  pull_request:
+    paths: ['**/*.SemanticModel/**', '**/*.Report/**']
+
+jobs:
+  diff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - name: Check out base revision into ./base
+        run: |
+          git worktree add ./base ${{ github.event.pull_request.base.sha }}
+      - run: npm ci && npm run build
+      - name: Generate diff
+        run: |
+          node dist/app.js diff ./base/path/to/Model.Report ./path/to/Model.Report \
+            --summary --output diff.md \
+            --fail-on breaking || echo "BREAKING=1" >> $GITHUB_ENV
+      - name: Post PR comment
+        uses: marocchino/sticky-pull-request-comment@v2
+        with: { path: diff.md }
+      - if: env.BREAKING == '1'
+        run: |
+          echo "::error::Breaking changes detected — see PR comment"
+          exit 1
+```
+
 ## Project layout
 
 ```
@@ -50,8 +113,10 @@ src/
   report-scanner.ts  Walks visuals/filters/objects to extract field bindings
   data-builder.ts    Cross-references model + report into FullData
   html-generator.ts  Dashboard HTML template
+  differ.ts          Model diff — two FullData in, DiffResult out
+  diff-md.ts         DiffResult → Markdown (full + PR-comment forms)
   render/safe.ts     HTML/JS/JSON escape helpers (single source of truth)
-  app.ts             HTTP server + landing page + folder picker
+  app.ts             HTTP server + landing page + folder picker + `diff` CLI subcommand
 
 tests/               Unit tests (compiled via tsconfig.test.json -> dist-test/)
 ```

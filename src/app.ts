@@ -14,6 +14,8 @@ import { generateMarkdown, generateMeasuresMd, generateFunctionsMd, generateCalc
 import { findSemanticModelPath } from "./model-parser.js";
 import { escHtml } from "./render/safe.js";
 import { validateReportPath } from "./path-guard.js";
+import { diffModels } from "./differ.js";
+import { renderDiffMd, renderDiffSummaryMd } from "./diff-md.js";
 
 // Resolve the package version once at module load (falls back if unavailable).
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -526,6 +528,108 @@ function parseQuery(url: string): Record<string, string> {
     if (k) q[decodeURIComponent(k.replace(/\+/g, " "))] = decodeURIComponent((v || "").replace(/\+/g, " "));
   });
   return q;
+}
+
+// ---------------------------------------------------------------------------
+// CLI subcommands — intercept argv BEFORE the HTTP server starts.
+//
+// The app defaults to server mode (no args → opens the dashboard).
+// A positional first arg is the subcommand; known subcommands short-
+// circuit to stdout-writing handlers and exit without binding a port.
+// ---------------------------------------------------------------------------
+
+/**
+ * Parse a flat `--key value` / `--flag` style CLI from a slice of argv.
+ * Returns both the positional args (in order) and a flag map. We roll
+ * this by hand instead of pulling in commander / yargs because one of
+ * the app's core constraints is zero runtime deps.
+ */
+function parseCli(argv: string[]): { positional: string[]; flags: Record<string, string | true> } {
+  const positional: string[] = [];
+  const flags: Record<string, string | true> = {};
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a.startsWith("--")) {
+      const key = a.slice(2);
+      const next = argv[i + 1];
+      if (next !== undefined && !next.startsWith("--")) {
+        flags[key] = next;
+        i++;
+      } else {
+        flags[key] = true;
+      }
+    } else {
+      positional.push(a);
+    }
+  }
+  return { positional, flags };
+}
+
+/**
+ * `powerbi-lineage diff <old.Report> <new.Report> [--format md|json]
+ *                                                 [--output <file>]
+ *                                                 [--summary]
+ *                                                 [--fail-on breaking|caution|any]`
+ *
+ * Compares two .Report folders and emits a structured diff. Exits 0 on
+ * success, 2 on usage error, or 1 when `--fail-on` threshold is met.
+ */
+function runDiffCommand(argv: string[]): never {
+  const { positional, flags } = parseCli(argv);
+  if (positional.length !== 2) {
+    console.error("Usage: powerbi-lineage diff <old.Report> <new.Report> [options]");
+    console.error("");
+    console.error("Options:");
+    console.error("  --format <md|json>     Output format (default: md)");
+    console.error("  --output <file>        Write to file instead of stdout");
+    console.error("  --summary              Terse PR-comment form with collapsed sections");
+    console.error("  --fail-on <level>      Exit 1 if any change >= level (breaking|caution|any)");
+    process.exit(2);
+  }
+  const [oldPath, newPath] = positional;
+  const format = (flags.format === "json" ? "json" : "md") as "md" | "json";
+  const summaryMode = flags.summary === true;
+  const failOn = typeof flags["fail-on"] === "string" ? flags["fail-on"] as string : null;
+
+  // Validate both inputs use the same safety rules as server mode.
+  for (const p of [oldPath, newPath]) {
+    const v = validateReportPath(p);
+    if (!v.ok) {
+      console.error(`Invalid report path "${p}": ${v.reason}`);
+      process.exit(2);
+    }
+  }
+
+  const oldData = buildFullData(oldPath);
+  const newData = buildFullData(newPath);
+  const result = diffModels(
+    oldData, newData,
+    path.basename(oldPath),
+    path.basename(newPath),
+  );
+
+  const output = format === "json"
+    ? JSON.stringify(result, null, 2)
+    : (summaryMode ? renderDiffSummaryMd(result) : renderDiffMd(result));
+
+  if (typeof flags.output === "string") {
+    fs.writeFileSync(flags.output, output, "utf8");
+  } else {
+    process.stdout.write(output.endsWith("\n") ? output : output + "\n");
+  }
+
+  // Exit-code gating for CI.
+  if (failOn === "breaking" && result.summary.breaking > 0) process.exit(1);
+  if (failOn === "caution" && (result.summary.breaking > 0 || result.summary.caution > 0)) process.exit(1);
+  if (failOn === "any" && result.summary.total > 0) process.exit(1);
+  process.exit(0);
+}
+
+// Dispatcher: if argv[2] is a known subcommand, run it and exit before
+// the server block below ever executes.
+const SUBCOMMAND = process.argv[2];
+if (SUBCOMMAND === "diff") {
+  runDiffCommand(process.argv.slice(3));
 }
 
 const server = http.createServer((req, res) => {
