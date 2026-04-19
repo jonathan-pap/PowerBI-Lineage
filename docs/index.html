@@ -1,0 +1,2568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Model Usage - (browser)</title>
+<script>(function(){try{var t=localStorage.getItem('usage-theme')||'dark';document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>  *{margin:0;padding:0;box-sizing:border-box}
+  :root{
+    --bg:#0B0D11;--surface:#1A1D27;--surface-alt:#12141A;--surface-deep:#12141C;--surface-center:#14161C;
+    --border:#2A2D3A;--border-soft:#1E2028;--border-row:#1A1D27;
+    --text:#F8FAFC;--text-body:#E2E8F0;--text-muted:#94A3B8;--text-dim:#7A8595;--text-faint:#5E6A7B;--text-fainter:#4A5566;
+    --row-hover:#20242F;--hover-border:#475569;
+    --chip-dep-bg:rgba(139,92,246,.1);--chip-dep-bd:rgba(139,92,246,.2);--chip-dep-tx:#A78BFA;--chip-dep-hover:rgba(139,92,246,.2);
+    --chip-used-bg:rgba(59,130,246,.1);--chip-used-bd:rgba(59,130,246,.15);--chip-used-tx:#93C5FD;
+    --code-name:#93C5FD;--code-type:#A78BFA;--code-punct:#475569;
+    --accent:#F59E0B;
+    --glass-bg:rgba(26,29,39,0.72);
+    --glass-border:rgba(255,255,255,0.06);
+    --glass-shadow:0 1px 0 rgba(255,255,255,0.04) inset, 0 10px 30px rgba(0,0,0,0.35);
+    --grid-line:rgba(255,255,255,0.025);
+
+    /* ─── Semantic category colours ─────────────────────────────────────── */
+    --clr-measure:    #F59E0B;  /* amber   — measures                */
+    --clr-column:     #3B82F6;  /* blue    — columns                 */
+    --clr-source:     #10B981;  /* emerald — source tables           */
+    --clr-success:    #22C55E;  /* green   — "good" status, active   */
+    --clr-upstream:   #A78BFA;  /* light purple — upstream / deps    */
+    --clr-downstream: #38BDF8;  /* sky     — downstream (distinct from upstream purple) */
+    --clr-function:   #14B8A6;  /* teal    — UDFs                    */
+    --clr-calc:       #A855F7;  /* violet  — calculated columns      */
+    --clr-slicer:     #EC4899;  /* pink    — slicer fields           */
+    --clr-unused:     #EF4444;  /* red     — unused / danger         */
+    --clr-indirect:   #94A3B8;  /* slate   — indirect (neutral)      */
+    --clr-variable:   #F97316;  /* orange  — DAX named variables     */
+
+    /* Soft (≈12%) and mid (≈30%) alphas paired with each category colour.
+       Kept as rgba literals because var() can't participate in channel-level
+       blending — these are the recurring rgb() triples from above. */
+    --clr-measure-soft:   rgba(245,158,11,.12);  --clr-measure-mid:   rgba(245,158,11,.30);
+    --clr-column-soft:    rgba(59,130,246,.12);  --clr-column-mid:    rgba(59,130,246,.30);
+    --clr-source-soft:    rgba(16,185,129,.12);  --clr-source-mid:    rgba(16,185,129,.30);
+    --clr-success-soft:   rgba(34,197,94,.12);   --clr-success-mid:   rgba(34,197,94,.30);
+    --clr-upstream-soft:  rgba(167,139,250,.12); --clr-upstream-mid:  rgba(167,139,250,.30);
+    --clr-downstream-soft:rgba(56,189,248,.12);  --clr-downstream-mid:rgba(56,189,248,.30);
+    --clr-function-soft:  rgba(20,184,166,.12);  --clr-function-mid:  rgba(20,184,166,.30);
+    --clr-calc-soft:      rgba(168,85,247,.12);  --clr-calc-mid:      rgba(168,85,247,.30);
+    --clr-slicer-soft:    rgba(236,72,153,.12);  --clr-slicer-mid:    rgba(236,72,153,.30);
+    --clr-unused-soft:    rgba(239,68,68,.12);   --clr-unused-mid:    rgba(239,68,68,.30);
+    --clr-indirect-soft:  rgba(148,163,184,.12); --clr-indirect-mid:  rgba(148,163,184,.30);
+    --clr-variable-soft:  rgba(249,115,22,.12);  --clr-variable-mid:  rgba(249,115,22,.30);
+
+    /* ─── Typography scale ──────────────────────────────────────────────── */
+    --fs-xs:10px;  --fs-sm:11px;  --fs-md:13px;  --fs-lg:14px;
+    --fs-xl:16px;  --fs-2xl:20px; --fs-3xl:26px;
+
+    /* ─── Spacing scale ─────────────────────────────────────────────────── */
+    --space-1:2px;  --space-2:4px;  --space-3:6px;  --space-4:8px;  --space-5:12px;
+    --space-6:16px; --space-7:20px; --space-8:24px; --space-9:32px; --space-10:48px;
+
+    /* ─── Radius scale ──────────────────────────────────────────────────── */
+    --radius-sm:4px;    /* chips, badges, small controls */
+    --radius-md:8px;    /* inputs, buttons, small cards  */
+    --radius-lg:12px;   /* main cards                    */
+    --radius-pill:999px;
+  }
+  [data-theme="light"]{
+    --bg:#F1F5F9;--surface:#FFFFFF;--surface-alt:#F1F5F9;--surface-deep:#FFFFFF;--surface-center:#FFFBEB;
+    --border:#E2E8F0;--border-soft:#F1F5F9;--border-row:#F1F5F9;
+    --text:#0F172A;--text-body:#1E293B;--text-muted:#475569;--text-dim:#64748B;--text-faint:#94A3B8;--text-fainter:#CBD5E1;
+    --row-hover:#F1F5F9;--hover-border:#94A3B8;
+    --chip-dep-bg:rgba(139,92,246,.08);--chip-dep-bd:rgba(139,92,246,.3);--chip-dep-tx:#6D28D9;--chip-dep-hover:rgba(139,92,246,.15);
+    --chip-used-bg:rgba(59,130,246,.08);--chip-used-bd:rgba(59,130,246,.25);--chip-used-tx:#1D4ED8;
+    --code-name:#1D4ED8;--code-type:#6D28D9;--code-punct:#94A3B8;
+    --accent:#D97706;
+    --glass-bg:rgba(255,255,255,0.80);
+    --glass-border:rgba(15,23,42,0.06);
+    --glass-shadow:0 1px 2px rgba(15,23,42,0.04), 0 8px 24px rgba(15,23,42,0.06);
+    --grid-line:rgba(15,23,42,0.04);
+
+    /* Darker equivalents for AA contrast against the light canvas. */
+    --clr-measure:    #B45309;
+    --clr-column:     #1D4ED8;
+    --clr-source:     #047857;
+    --clr-success:    #15803D;
+    --clr-upstream:   #6D28D9;
+    --clr-downstream: #0284C7;  /* sky-600 — downstream, light-theme */
+    --clr-function:   #0F766E;
+    --clr-calc:       #7E22CE;
+    --clr-slicer:     #BE185D;
+    --clr-unused:     #B91C1C;
+    --clr-indirect:   #475569;
+    --clr-variable:   #C2410C;  /* orange-700 — AA contrast on light canvas */
+    --clr-measure-soft:   rgba(180,83,9,.10);    --clr-measure-mid:   rgba(180,83,9,.30);
+    --clr-column-soft:    rgba(29,78,216,.08);   --clr-column-mid:    rgba(29,78,216,.28);
+    --clr-source-soft:    rgba(4,120,87,.10);    --clr-source-mid:    rgba(4,120,87,.28);
+    --clr-success-soft:   rgba(21,128,61,.10);   --clr-success-mid:   rgba(21,128,61,.28);
+    --clr-upstream-soft:  rgba(109,40,217,.08);  --clr-upstream-mid:  rgba(109,40,217,.30);
+    --clr-downstream-soft:rgba(2,132,199,.10);   --clr-downstream-mid:rgba(2,132,199,.28);
+    --clr-function-soft:  rgba(15,118,110,.10);  --clr-function-mid:  rgba(15,118,110,.28);
+    --clr-calc-soft:      rgba(126,34,206,.08);  --clr-calc-mid:      rgba(126,34,206,.28);
+    --clr-slicer-soft:    rgba(190,24,93,.08);   --clr-slicer-mid:    rgba(190,24,93,.28);
+    --clr-unused-soft:    rgba(185,28,28,.10);   --clr-unused-mid:    rgba(185,28,28,.30);
+    --clr-indirect-soft:  rgba(71,85,105,.10);   --clr-indirect-mid:  rgba(71,85,105,.25);
+    --clr-variable-soft:  rgba(194,65,12,.10);   --clr-variable-mid:  rgba(194,65,12,.28);
+  }
+  body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(--text-body);min-height:100vh;padding-bottom:48px;position:relative;overflow-x:hidden;transition:background .2s,color .2s}
+
+  /* Fixed, full-viewport background layers (behind content).
+     body::before = three animated radial "blobs" (drift via background-position).
+     body::after  = blueprint grid, masked so it fades at the edges. */
+  body::before{
+    content:"";
+    position:fixed;inset:0;z-index:-2;pointer-events:none;
+    background:
+      radial-gradient(800px 800px at 15% 20%, rgba(245,158,11,0.05) 0%, transparent 60%),
+      radial-gradient(800px 800px at 85% 60%, rgba(59,130,246,0.05) 0%, transparent 60%),
+      radial-gradient(800px 800px at 40% 110%, rgba(139,92,246,0.05) 0%, transparent 60%);
+    animation:bg-drift 24s ease-in-out infinite alternate;
+    will-change:background-position;
+  }
+  body::after{
+    content:"";
+    position:fixed;inset:0;z-index:-1;pointer-events:none;
+    background-image:
+      linear-gradient(var(--grid-line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+    background-size:40px 40px;
+    -webkit-mask-image:radial-gradient(ellipse at center, black 25%, transparent 80%);
+            mask-image:radial-gradient(ellipse at center, black 25%, transparent 80%);
+  }
+  @keyframes bg-drift{
+    0%   {background-position:0% 0%, 0% 0%, 0% 0%;}
+    100% {background-position:3% -2%, -2% 3%, 2% 2%;}
+  }
+  @media (prefers-reduced-motion: reduce){
+    body::before{animation:none;}
+  }
+
+  /* Global scrollbar + focus ring (applied app-wide, not just MD panes). */
+  ::-webkit-scrollbar{width:10px;height:10px;}
+  ::-webkit-scrollbar-thumb{background:var(--border);border-radius:5px;}
+  ::-webkit-scrollbar-track{background:transparent;}
+  :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px;}
+
+  .mono{font-family:'JetBrains Mono',monospace}
+  .container{max-width:1400px;margin:0 auto;padding:var(--space-7) var(--space-8);position:relative;z-index:1}
+  .tab{white-space:nowrap}
+  .header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
+  .header-left .top{display:flex;align-items:center;gap:10px}
+  /* Shared "Usage Map" pill — used in the header and the refresh-bar.
+     Matches the launcher badge in app.ts. */
+  .usage-map-badge{display:inline-block;font:10px/1 'JetBrains Mono',monospace;font-weight:600;letter-spacing:.15em;text-transform:uppercase;padding:4px 10px;border-radius:999px;color:var(--accent);background:rgba(245,158,11,0.05);border:1px solid rgba(245,158,11,0.18);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+  [data-theme="light"] .usage-map-badge{background:rgba(245,158,11,0.08);border-color:rgba(245,158,11,0.28)}
+
+  /* ─── Shared in-table badge component ─────────────────────────────────── */
+  /* Single base + one modifier per semantic role. Replaces the ad-hoc
+     .pk-badge / .fk-badge / .calc-col-badge / .hid-col-badge / .hidden-badge
+     / .slicer-badge / .calc-group-pill / .trel-dir.in|.out rules and the
+     inline-styled INDIRECT / UNUSED spans. */
+  .badge{display:inline-block;font:9px/1 'JetBrains Mono',monospace;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:2px 6px;border-radius:var(--radius-sm);border:1px solid transparent;vertical-align:middle;white-space:nowrap;margin-left:var(--space-2)}
+  .badge--pk        {background:var(--clr-measure-soft);   color:var(--clr-measure);   border-color:var(--clr-measure-mid);}
+  .badge--pk-inf    {background:transparent;                color:var(--clr-measure);   border:1px dashed var(--clr-measure-mid);}
+  .badge--fk        {background:var(--clr-column-soft);    color:var(--clr-column);    border-color:var(--clr-column-mid);}
+  .badge--calc      {background:var(--clr-calc-soft);      color:var(--clr-calc);      border-color:var(--clr-calc-mid);}
+  .badge--hidden    {background:var(--clr-upstream-soft);  color:var(--clr-upstream);  border-color:var(--clr-upstream-mid);}
+  .badge--hid-col   {background:rgba(100,116,139,.12);     color:var(--text-dim);      border-color:rgba(100,116,139,.25);}
+  .badge--slicer    {background:var(--clr-slicer-soft);    color:var(--clr-slicer);    border-color:transparent;}
+  .badge--unused    {background:var(--clr-unused-soft);    color:var(--clr-unused);    border-color:transparent;}
+  .badge--success   {background:var(--clr-success-soft);   color:var(--clr-success);   border-color:transparent;}
+  .badge--indirect  {background:rgba(100,116,139,.15);     color:var(--clr-indirect);  border-color:transparent;}
+  .badge--direction-out{background:var(--clr-success-soft); color:var(--clr-success);  border-color:var(--clr-success-mid);}
+  .badge--direction-in {background:var(--clr-column-soft);  color:var(--clr-column);   border-color:var(--clr-column-mid);}
+  .header-sep{font-size:13px;color:var(--text-fainter)}
+  /* Report name — gradient-text title matching the launcher h1. */
+  .header-sub{font-size:18px;font-weight:700;letter-spacing:-0.01em;background:linear-gradient(180deg, var(--text) 0%, var(--text-muted) 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .timestamp{font-size:10px;color:var(--text-fainter);font-family:'JetBrains Mono',monospace;margin-top:4px}
+  .header-actions{display:flex;gap:6px;align-items:center}
+  .theme-btn{padding:6px 10px;font-size:13px;line-height:1;border:1px solid var(--border);border-radius:6px;cursor:pointer;background:var(--surface);color:var(--text-dim);transition:all .15s}
+  .theme-btn:hover{background:var(--border);color:var(--text);border-color:var(--accent)}
+  .refresh-btn{padding:6px 14px;font-size:11px;font-family:'JetBrains Mono',monospace;border:1px solid var(--border);border-radius:6px;cursor:pointer;background:var(--surface);color:var(--text-dim);transition:all .15s}
+  .refresh-btn:hover{background:var(--border);color:var(--text);border-color:var(--accent)}
+  .summary{display:grid;grid-template-columns:repeat(5,1fr);gap:var(--space-5);margin-bottom:var(--space-7);align-items:stretch}
+  .stat-detail{font-size:var(--fs-sm);color:var(--text-faint);margin-top:var(--space-1);font-family:'JetBrains Mono',monospace}
+  .stat{background:var(--glass-bg);-webkit-backdrop-filter:blur(16px) saturate(130%);backdrop-filter:blur(16px) saturate(130%);border-radius:var(--radius-lg);border:1px solid var(--glass-border);box-shadow:var(--glass-shadow);padding:var(--space-6) var(--space-6);text-align:center;min-height:90px;display:flex;flex-direction:column;justify-content:center}
+  .stat-value{font-size:var(--fs-3xl);line-height:1.1;font-weight:700;color:var(--text);font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums}
+  .stat-value.good{color:var(--clr-success)}.stat-value.warn{color:var(--clr-measure)}.stat-value.danger{color:var(--clr-unused)}
+  .stat-label{font-size:var(--fs-sm);color:var(--text-dim);margin-top:var(--space-2);text-transform:uppercase;letter-spacing:.08em;font-weight:600}
+  /* Sticky tab bar — flushes under the header when scrolling long tabs. */
+  .tabs{display:flex;gap:2px;margin-bottom:var(--space-6);border-bottom:1px solid var(--border-soft);position:sticky;top:0;z-index:10;background:var(--bg);padding-top:var(--space-5);margin-top:calc(var(--space-5) * -1)}
+  .tab{padding:var(--space-4) var(--space-6);font-size:var(--fs-md);border:none;border-top-left-radius:var(--radius-md);border-top-right-radius:var(--radius-md);border-bottom:2px solid transparent;cursor:pointer;background:transparent;color:var(--text-dim);font-family:inherit;font-weight:500;transition:background .15s,color .15s,border-color .15s}
+  .tab.active{background:var(--surface);color:var(--text);border-bottom-color:var(--accent)}
+  .tab:hover:not(.active){background:rgba(255,255,255,0.03);color:var(--text-muted)}
+  [data-theme="light"] .tab:hover:not(.active){background:rgba(15,23,42,0.03)}
+  /* Tab count pill — distinct from the shared .badge component used in table rows. */
+  .tab-count{font:var(--fs-xs)/1 'JetBrains Mono',monospace;background:var(--border);color:var(--text-muted);padding:1px 6px;border-radius:var(--radius-pill);margin-left:var(--space-3);display:inline-block}
+  .tab-count.warn{background:var(--clr-measure-soft);color:var(--clr-measure)}
+  .panel{display:none}.panel.active{display:block}
+  .search-row{display:flex;gap:var(--space-5);margin-bottom:var(--space-6);align-items:center}
+  .search-input{flex:1;padding:var(--space-4) var(--space-5);font-size:var(--fs-md);font-family:inherit;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);color:var(--text-body);outline:none;transition:border-color .15s}
+  .search-input:focus{border-color:var(--accent)}
+  .search-input::placeholder{color:var(--text-faint)}
+  .filter-btn{padding:6px 12px;font-size:11px;border:1px solid var(--border);border-radius:6px;cursor:pointer;background:var(--surface);color:var(--text-dim);font-family:inherit;transition:all .15s}
+  .filter-btn:hover,.filter-btn.active{background:var(--border);color:var(--text)}
+  .filter-btn.active{border-color:var(--accent);color:var(--accent)}
+  .table-wrap{overflow-x:auto;width:100%}
+  .data-table{width:100%;border-collapse:collapse}
+  .data-table th{text-align:left;padding:var(--space-5) var(--space-5);font-size:var(--fs-sm);color:var(--text-dim);text-transform:uppercase;letter-spacing:.08em;border-bottom:1px solid var(--border);font-weight:600;cursor:pointer;user-select:none;white-space:nowrap}
+  .data-table th:hover{color:var(--text-muted)}
+  .data-table td{padding:var(--space-5) var(--space-5);font-size:var(--fs-lg);border-bottom:1px solid var(--border-row);vertical-align:top}
+  .data-table tr{transition:background .1s}
+  .data-table tr:hover{background:var(--row-hover)}
+  .data-table tr.unused{opacity:.5}
+  .data-table tr.unused td:first-child{border-left:3px solid var(--clr-unused);padding-left:9px}
+  .data-table tr.indirect{opacity:.7}
+  .data-table tr.indirect td:first-child{border-left:3px solid var(--clr-indirect);padding-left:9px}
+  .field-name{font-weight:600;color:var(--text);cursor:pointer;transition:color .15s;text-decoration:underline;text-decoration-color:var(--border);text-underline-offset:2px}
+  .field-name:hover{color:var(--accent);text-decoration-color:var(--accent)}
+  .field-table{font-size:11px;color:var(--text-dim);font-family:'JetBrains Mono',monospace}
+  .usage-count{font-family:'JetBrains Mono',monospace;font-weight:600}
+  .usage-count.zero{color:var(--clr-unused)}.usage-count.low{color:var(--clr-measure)}.usage-count.good{color:var(--clr-success)}
+  .dep-chip{display:inline-block;font-size:10px;padding:1px 6px;border-radius:4px;margin:1px 2px;font-family:'JetBrains Mono',monospace;background:var(--chip-dep-bg);color:var(--chip-dep-tx);border:1px solid var(--chip-dep-bd);cursor:pointer;transition:all .15s}
+  .dep-chip:hover{background:var(--chip-dep-hover);border-color:var(--chip-dep-tx)}
+  .used-chip{display:inline-block;font-size:10px;padding:1px 6px;border-radius:4px;margin:1px 2px;background:var(--chip-used-bg);color:var(--chip-used-tx);border:1px solid var(--chip-used-bd)}
+  /* Previous .pk-badge / .fk-badge / .hid-col-badge / .calc-col-badge /
+     .hidden-badge / .slicer-badge CSS rules + their [data-theme="light"]
+     overrides have been replaced by the .badge + .badge--* component
+     above. Removed to keep one source of truth. */
+
+  .tcol-row{display:grid;grid-template-columns:1fr 140px 220px;gap:12px;padding:6px 10px;border-radius:6px;align-items:center;font-size:12px;border-bottom:1px solid var(--border-row)}
+  .tcol-row:last-child{border-bottom:none}
+  .tcol-row:hover{background:var(--surface-alt)}
+  .tcol-name{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text-body);font-weight:500;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .tcol-name:hover{color:var(--accent)}
+  .tcol-type{font-size:11px;color:var(--text-dim);font-family:'JetBrains Mono',monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .tcol-fk{font-size:11px;font-family:'JetBrains Mono',monospace;line-height:1.6;white-space:normal;overflow:hidden}
+  .tcol-fk .arrow{color:var(--text-faint);margin:0 4px}
+  .tcol-fk .rel-out{color:var(--clr-success)}
+  .tcol-fk .rel-in{color:var(--chip-used-tx)}
+  .tcol-fk .rel-inactive{opacity:.55;font-style:italic}
+  /* .pk-badge.inferred replaced by .badge.badge--pk-inf */
+  .trel-row{display:flex;align-items:center;gap:10px;padding:6px 10px;border-radius:6px;font-size:12px;font-family:'JetBrains Mono',monospace;color:var(--text-body)}
+  .trel-row:hover{background:var(--surface-alt)}
+  /* .trel-dir.out / .trel-dir.in replaced by .badge--direction-out / .badge--direction-in */
+  .trel-inactive{opacity:.55;font-style:italic}
+  .format-str{font-size:11px;color:var(--text-faint);font-family:'JetBrains Mono',monospace}
+
+  .lineage-back{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-dim);cursor:pointer;margin-bottom:16px;transition:color .15s}
+  .lineage-back:hover{color:var(--accent)}
+  .lineage-hero{background:var(--glass-bg);-webkit-backdrop-filter:blur(16px) saturate(130%);backdrop-filter:blur(16px) saturate(130%);border-radius:var(--radius-lg);border:1px solid var(--glass-border);box-shadow:var(--glass-shadow);padding:var(--space-7);margin-bottom:var(--space-6)}
+  .lineage-hero-title{font-size:20px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:10px}
+  .lineage-hero-title .dot{width:12px;height:12px;border-radius:50%;flex-shrink:0}
+  .lineage-hero-meta{font-size:12px;color:var(--text-dim);margin-top:6px;font-family:'JetBrains Mono',monospace}
+  .lineage-dax{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text-muted);background:var(--surface-alt);padding:10px 12px;border-radius:6px;border:1px solid var(--border);margin-top:12px;white-space:pre-wrap;word-break:normal;overflow-x:auto;line-height:1.6}
+
+  .lineage-flow-row{display:flex;gap:0;align-items:flex-start}
+  .lineage-flow-col{flex:1;display:flex;flex-direction:column;gap:6px;padding:0 8px}
+  .lineage-flow-col-label{font-size:10px;color:var(--text-fainter);text-transform:uppercase;letter-spacing:.08em;text-align:center;margin-bottom:6px;font-weight:600}
+  .lineage-arrow-col{display:flex;align-items:flex-start;justify-content:center;color:var(--accent);opacity:.5;font-size:22px;flex-shrink:0;width:32px;padding-top:36px}
+
+  .lc{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);padding:var(--space-5) var(--space-6);transition:all .15s}
+  .lc:hover{border-color:var(--hover-border)}
+  .lc.clickable{cursor:pointer}
+  .lc.clickable:hover{border-color:var(--accent)}
+  .lc .lc-name{font-size:13px;font-weight:600;color:var(--text)}
+  .lc .lc-sub{font-size:10px;color:var(--text-dim);font-family:'JetBrains Mono',monospace;margin-top:2px}
+  .lc .lc-role{font-size:10px;color:var(--text-faint);margin-top:3px}
+  .lc.upstream{border-left:3px solid var(--clr-upstream)}
+  .lc.source{border-left:3px solid var(--clr-source)}
+  .lc.center{border-left:3px solid var(--clr-measure);background:var(--surface-center)}
+  .lc.center.col-type{border-left-color:var(--accent)}
+  .lc.downstream{border-left:3px solid var(--clr-downstream)}
+  .lc.empty{border-style:dashed;opacity:.4}
+  .lc.udf{border-left:3px solid var(--clr-function)}
+  .lc.feeds{border-left:3px solid var(--clr-measure);background:rgba(245,158,11,.04)}
+
+  .feeds-label{font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;margin-top:10px;margin-bottom:4px;font-weight:600}
+
+  /* Tables-tab grouping — wraps page-cards into collapsible kind
+     sections: Data Tables / Measure Tables / Field Parameters /
+     Composite Model Proxies / Calculation Groups. Group-level
+     collapse is independent of the individual card-level collapse. */
+  .table-group{margin-bottom:var(--space-5)}
+  .table-group-header{display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;user-select:none;
+    background:var(--surface-alt);border:1px solid var(--border-soft);border-radius:var(--radius-md);
+    transition:background .12s,border-color .12s}
+  .table-group-header:hover{background:var(--row-hover);border-color:var(--hover-border)}
+  .table-group-chev::before{content:"▸";display:inline-block;color:var(--text-faint);font-size:11px;transition:transform .15s;width:10px}
+  .table-group.open .table-group-chev::before{transform:rotate(90deg)}
+  .table-group-icon{font-size:14px;color:var(--text-dim);width:18px;text-align:center;flex-shrink:0}
+  .table-group-title{font-size:13px;font-weight:700;color:var(--text);letter-spacing:.01em}
+  .table-group-meta{margin-left:auto;font-size:11px;color:var(--text-faint);font-family:'JetBrains Mono',monospace}
+  .table-group-body{padding-top:10px}
+  .table-group-body:empty{padding:0}
+
+  .page-card{background:var(--glass-bg);-webkit-backdrop-filter:blur(16px) saturate(130%);backdrop-filter:blur(16px) saturate(130%);border-radius:var(--radius-lg);border:1px solid var(--glass-border);box-shadow:var(--glass-shadow);margin-bottom:var(--space-5);overflow:hidden;transition:border-color .15s}
+  .page-card:hover{border-color:var(--hover-border)}
+  .page-header{padding:var(--space-6) var(--space-6);cursor:pointer;display:flex;align-items:center;gap:var(--space-6);user-select:none}
+  .page-name{font-size:16px;font-weight:700;color:var(--text);flex:1}
+  .page-stats{display:flex;gap:12px;align-items:center}
+  .page-stat{text-align:center}
+  .page-stat-val{font-size:16px;font-weight:700;font-family:'JetBrains Mono',monospace}
+  .page-stat-label{font-size:9px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.05em}
+  /* Disclosure triangle — matches the <details>/<summary> pattern used in
+     rendered MD. Arrow supplied via ::before so templates can leave the span
+     empty (no hard-coded arrow chars to maintain). */
+  .page-expand{color:var(--text-faint);font-size:12px;flex-shrink:0;display:inline-block}
+  .page-expand::before{content:"▸";display:inline-block;transition:transform .15s;line-height:1}
+  .page-card.open .page-expand::before{transform:rotate(90deg)}
+  .page-body{max-height:0;overflow:hidden;transition:max-height .3s ease}
+  .page-card.open .page-body{max-height:2000px}
+  .page-body-inner{padding:0 var(--space-6) var(--space-6)}
+  .page-section{margin-bottom:12px}
+  .page-section-title{font-size:10px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.06em;font-weight:600;margin-bottom:6px;display:flex;align-items:center;gap:8px}
+  .page-section-title .line{flex:1;height:1px;background:var(--border-soft)}
+  .page-visual-row{display:flex;align-items:center;gap:10px;padding:6px 10px;border-radius:6px;transition:background .1s;margin-bottom:2px}
+  .page-visual-row:hover{background:var(--surface-alt)}
+  .page-visual-type{font-size:11px;color:var(--text-dim);font-family:'JetBrains Mono',monospace;width:150px;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .page-visual-title{font-size:13px;font-weight:600;color:var(--text-body);flex:0 0 220px;min-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .page-visual-bindings{display:flex;flex-wrap:wrap;gap:3px}
+  .page-type-summary{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+  .page-type-chip{font-size:10px;padding:3px 8px;border-radius:4px;background:var(--surface-alt);color:var(--text-muted);border:1px solid var(--border);font-family:'JetBrains Mono',monospace}
+
+  .ci-card{padding:10px 12px;border-radius:6px;background:var(--surface-alt);border:1px solid var(--border);margin-bottom:6px}
+  .ci-head{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+  .ci-ord{font-size:11px;color:var(--text-faint);font-weight:600;min-width:20px}
+  .ci-name{font-size:13px;font-weight:600;color:var(--text-body)}
+
+  .desc-line{font-size:11px;color:var(--text-dim);font-style:italic;margin-top:3px;line-height:1.4}
+  .desc-muted{font-size:11px;color:var(--text-faint);line-height:1.4}
+  .field-name[data-desc]{cursor:help}
+
+  .has-tip{position:relative;cursor:help}
+  .has-tip::after{content:attr(data-tooltip);position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);background:var(--surface);color:var(--text);border:1px solid var(--border);padding:8px 12px;border-radius:6px;font-size:11px;font-weight:400;white-space:normal;width:max-content;max-width:240px;text-align:left;pointer-events:none;opacity:0;transition:opacity .15s;z-index:1000;box-shadow:0 8px 24px rgba(0,0,0,.4);line-height:1.5;text-transform:none;letter-spacing:0}
+  .has-tip::before{content:"";position:absolute;bottom:calc(100% + 2px);left:50%;transform:translateX(-50%);border:6px solid transparent;border-top-color:var(--border);pointer-events:none;opacity:0;transition:opacity .15s;z-index:1000}
+  .has-tip:hover::after,.has-tip:hover::before{opacity:1}
+  .summary .stat.has-tip:first-child::after{left:0;transform:none}
+  .summary .stat.has-tip:first-child::before{left:24px}
+  .summary .stat.has-tip:last-child::after{left:auto;right:0;transform:none}
+  .summary .stat.has-tip:last-child::before{left:auto;right:24px;transform:none}
+
+  .lineage-dax{position:relative}
+  .copy-btn{position:absolute;top:6px;right:6px;width:24px;height:24px;padding:0;font-size:12px;line-height:1;border:1px solid var(--border);border-radius:4px;cursor:pointer;background:var(--surface);color:var(--text-dim);opacity:.4;transition:all .15s;font-family:'JetBrains Mono',monospace;display:flex;align-items:center;justify-content:center}
+  .copy-btn:hover,.lineage-dax:hover .copy-btn{opacity:1}
+  .copy-btn:hover{color:var(--text);background:var(--border);border-color:var(--accent)}
+  .copy-btn.copied{color:var(--clr-success);border-color:var(--clr-success);opacity:1}
+
+  /* Footer bar — branding (left) · refresh status (center) · version meta (right). */
+  .refresh-bar{position:fixed;bottom:0;left:0;right:0;min-height:28px;background:var(--surface-deep);border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:var(--space-6);padding:0 var(--space-6);font-size:var(--fs-sm);font-family:'JetBrains Mono',monospace;color:var(--text-dim);z-index:999}
+  .refresh-bar .rb-left,
+  .refresh-bar .rb-center,
+  .refresh-bar .rb-right{display:flex;align-items:center;gap:8px;white-space:nowrap}
+  .refresh-bar .rb-left{justify-content:flex-start}
+  .refresh-bar .rb-center{flex:1;justify-content:center}
+  .refresh-bar .rb-right{justify-content:flex-end;color:var(--text-fainter);font-size:10px;font-variant-numeric:tabular-nums}
+  .refresh-bar .rb-sep{color:var(--text-fainter)}
+  .refresh-bar .rb-report{color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;max-width:28vw}
+  .refresh-bar .timer{color:var(--text-muted)}
+  .refresh-bar .dot{width:6px;height:6px;border-radius:50%;background:var(--text-fainter);display:inline-block}
+  .refresh-bar .dot.stale{background:var(--clr-measure)}
+  .refresh-bar button{padding:2px 10px;font-size:10px;font-family:'JetBrains Mono',monospace;border:1px solid var(--border);border-radius:4px;cursor:pointer;background:var(--surface);color:var(--text-dim);transition:all .15s}
+  .refresh-bar button:hover{background:var(--border);color:var(--text);border-color:var(--accent)}
+  @media (max-width: 900px){ .refresh-bar .rb-right{display:none} }
+  @media (max-width: 700px){ .refresh-bar .rb-left{display:none} }
+
+  /* Panel footer — end-of-list beat under each data panel. */
+  .panel-footer{
+    margin:var(--space-5) 0 var(--space-2);
+    padding:var(--space-5) var(--space-6);
+    font:var(--fs-sm)/1.5 'JetBrains Mono',monospace;
+    color:var(--text-faint);
+    border-top:1px dashed var(--border-soft);
+    display:flex;
+    justify-content:space-between;
+    gap:var(--space-5);
+    flex-wrap:wrap;
+  }
+  .panel-footer .right{color:var(--text-fainter)}
+
+  .md-source{font-family:'JetBrains Mono',monospace;font-size:var(--fs-md);line-height:1.55;color:var(--text-body);background:var(--glass-bg);-webkit-backdrop-filter:blur(16px) saturate(130%);backdrop-filter:blur(16px) saturate(130%);border:1px solid var(--glass-border);box-shadow:var(--glass-shadow);border-radius:var(--radius-lg);padding:var(--space-6) var(--space-6);white-space:pre-wrap;word-break:break-word;max-height:72vh;overflow:auto;tab-size:2}
+
+  .md-rendered{font-family:'DM Sans',system-ui,sans-serif;font-size:var(--fs-lg);line-height:1.6;color:var(--text-body);background:var(--glass-bg);-webkit-backdrop-filter:blur(16px) saturate(130%);backdrop-filter:blur(16px) saturate(130%);border:1px solid var(--glass-border);box-shadow:var(--glass-shadow);border-radius:var(--radius-lg);padding:var(--space-7) var(--space-8);max-height:72vh;overflow:auto}
+  /* Heading scale aligned with the shared typography tokens so the MD view
+     matches the dashboard's visual hierarchy. */
+  .md-rendered h1{font-size:var(--fs-3xl);font-weight:700;margin:0 0 var(--space-5);color:var(--text);border-bottom:1px solid var(--border);padding-bottom:var(--space-3)}
+  .md-rendered h2{font-size:var(--fs-2xl);font-weight:700;margin:var(--space-8) 0 var(--space-4);color:var(--text);border-bottom:1px solid var(--border-soft);padding-bottom:var(--space-2)}
+  .md-rendered h3{font-size:var(--fs-xl);font-weight:600;margin:var(--space-6) 0 var(--space-3);color:var(--text)}
+  .md-rendered h4{font-size:var(--fs-lg);font-weight:600;margin:var(--space-5) 0 var(--space-2);color:var(--text-muted)}
+  .md-rendered p{margin:var(--space-3) 0}
+  .md-rendered ul{padding-left:22px;margin:var(--space-3) 0}
+  .md-rendered li{margin:var(--space-1) 0}
+  /* Section dividers — dashed to match .panel-footer / other app breaks. */
+  .md-rendered hr{border:none;border-top:1px dashed var(--border-soft);margin:var(--space-7) 0}
+  .md-rendered blockquote{border-left:3px solid var(--accent);background:var(--surface-alt);padding:var(--space-3) var(--space-5);margin:var(--space-4) 0;color:var(--text-muted);font-style:italic;border-radius:0 var(--radius-sm) var(--radius-sm) 0}
+  /* A blockquote placed directly after an h1/h2 is a "summary paragraph" —
+     drop the italic + muted treatment so the intro reads as plain prose. */
+  .md-rendered h1 + blockquote,
+  .md-rendered h2 + blockquote{font-style:normal;color:var(--text-body)}
+
+  /* Chip component — soft pill used in MD for "Used by" / "Depends on" /
+     entity lists. Matches the dashboard Functions-tab measure chips. */
+  .md-rendered .chip{display:inline-block;font:var(--fs-sm)/1 'JetBrains Mono',monospace;padding:3px 9px;border-radius:var(--radius-pill);border:1px solid transparent;margin:2px 3px 2px 0;white-space:nowrap;vertical-align:middle}
+  .md-rendered .chip--measure{background:var(--clr-measure-soft);color:var(--clr-measure);border-color:var(--clr-measure-mid)}
+  .md-rendered .chip--column {background:var(--clr-column-soft); color:var(--clr-column); border-color:var(--clr-column-mid)}
+  .md-rendered .chip--function{background:var(--clr-function-soft);color:var(--clr-function);border-color:var(--clr-function-mid)}
+  .md-rendered .chip--neutral{background:rgba(100,116,139,.08);color:var(--text-muted);border-color:rgba(100,116,139,.25)}
+  /* Inline code uses the accent colour so it pops against body text. */
+  .md-rendered code{font-family:'JetBrains Mono',monospace;font-size:var(--fs-md);background:var(--surface-alt);color:var(--accent);padding:1px 5px;border-radius:var(--radius-sm);border:1px solid var(--border-soft)}
+  /* Fenced code blocks match the .lineage-dax treatment. */
+  .md-rendered pre{font-family:'JetBrains Mono',monospace;font-size:var(--fs-sm);color:var(--text-muted);background:var(--surface-alt);padding:var(--space-5) var(--space-5);border-radius:var(--radius-md);border:1px solid var(--border);margin:var(--space-4) 0;overflow-x:auto;line-height:1.55;white-space:pre;tab-size:2}
+  .md-rendered pre>code{background:transparent;border:none;padding:0;font-size:inherit;color:inherit;font-family:inherit}
+  .md-rendered pre.md-code[data-lang]{position:relative}
+  .md-rendered pre.md-code[data-lang]::before{content:attr(data-lang);position:absolute;top:6px;right:10px;font-size:9px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--text-fainter)}
+  .md-rendered a{color:var(--accent);text-decoration:none}
+  .md-rendered a:hover{text-decoration:underline}
+  .md-rendered del{opacity:.35}
+  .md-rendered strong{color:var(--text)}
+  /* Tables in rendered MD now match the .data-table styling used in
+     Measures / Columns / Sources tabs for visual consistency. */
+  .md-rendered table{border-collapse:collapse;margin:var(--space-5) 0;font-size:var(--fs-md);width:100%}
+  .md-rendered th{text-align:left;padding:var(--space-4) var(--space-5);font-size:var(--fs-xs);color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;font-weight:600;border-bottom:1px solid var(--border);background:transparent;white-space:nowrap}
+  .md-rendered td{padding:var(--space-4) var(--space-5);font-size:var(--fs-md);border-bottom:1px solid var(--border-row);vertical-align:top}
+  .md-rendered tr:hover{background:var(--row-hover)}
+  /* Front-matter metadata tables (the two-column "| | |" pattern) have an
+     empty header row — collapse it so the first data row isn't preceded by
+     blank header cells. */
+  .md-rendered th:empty{padding:0;border:0;line-height:0;font-size:0}
+  .md-rendered details{border:1px solid var(--border);border-radius:6px;padding:0;margin:6px 0;background:var(--surface-alt)}
+  .md-rendered details[open]{background:var(--surface)}
+  .md-rendered details>summary{cursor:pointer;padding:8px 12px;font-weight:500;list-style:none;color:var(--text-body);border-radius:6px;user-select:none}
+  .md-rendered details>summary::-webkit-details-marker{display:none}
+  .md-rendered details>summary::before{content:"▸";display:inline-block;width:14px;color:var(--text-faint);font-size:10px;transition:transform .15s}
+  .md-rendered details[open]>summary::before{transform:rotate(90deg)}
+  .md-rendered details>summary:hover{background:var(--row-hover)}
+  .md-rendered details>*:not(summary){margin-left:18px;margin-right:12px}
+  .md-rendered details>*:first-of-type:not(summary){margin-top:8px}
+  .md-rendered details>*:last-child:not(summary){margin-bottom:10px}
+  .md-rendered ol{padding-left:22px;margin:6px 0}
+  .md-rendered ol>li{margin:2px 0}
+  .md-rendered ol ul{margin:2px 0 6px}
+
+  @media(max-width:768px){.summary{grid-template-columns:repeat(3,1fr)}.lineage-flow-row{flex-direction:column}.lineage-arrow-col{transform:rotate(90deg);padding:8px 0;width:100%}}
+
+  /* ── DAX syntax highlighter (vendor/dax-highlight) ───────────────── */
+  /*!
+ * dax-highlight.css — theme for dax-highlight.js
+ *
+ * All colors are exposed as CSS custom properties on `.code-dax` so you
+ * can retheme a single block or the whole site without editing this file.
+ *
+ * Default palette: dark theme, cool-neutral surface, pastel tokens.
+ * See :root block below for a light-theme override pattern.
+ */
+
+.code-dax {
+  /* Base */
+  --dax-fg:        rgba(240, 245, 255, 0.94);
+  --dax-bg:        transparent;
+  --dax-comment:   rgba(255, 255, 255, 0.55);
+
+  /* Semantic token colors */
+  --dax-keyword:   #8ab4ff;  /* VAR RETURN IF SWITCH TRUE FALSE IN AND OR NOT BLANK */
+  --dax-function:  #7fd1ff;  /* SUM(, CALCULATE(, FILTER( … */
+  --dax-variable:  #f7c97a;  /* _myVar, or the name after VAR */
+  --dax-measure:   #c4b5fd;  /* [Measure Name] */
+  --dax-ref:       #b6e3a7;  /* 'Table'[Column] */
+  --dax-string:    #f5a97f;  /* "text" */
+  --dax-number:    #f9d976;  /* 123, 12.5 */
+
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  color: var(--dax-fg);
+  background: var(--dax-bg);
+  line-height: 1.55;
+  tab-size: 2;
+}
+
+/* When dropped inside a <pre>, let the <pre> own the scrolling + padding */
+pre > code.code-dax {
+  display: block;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+}
+
+/* Token styles */
+.code-dax .dax-k { color: var(--dax-keyword);  font-weight: 700; }
+.code-dax .dax-f { color: var(--dax-function); font-weight: 600; }
+.code-dax .dax-v { color: var(--dax-variable); font-weight: 600; }
+.code-dax .dax-m { color: var(--dax-measure); }
+.code-dax .dax-r { color: var(--dax-ref); }
+.code-dax .dax-s { color: var(--dax-string); }
+.code-dax .dax-n { color: var(--dax-number); }
+.code-dax .dax-c { color: var(--dax-comment); font-style: italic; }
+
+/* --------------------------------------------------------------------------
+ * Optional: light-theme override
+ * Uncomment the block below (and/or add a class toggle) to support light mode.
+ * --------------------------------------------------------------------------
+
+@media (prefers-color-scheme: light) {
+  .code-dax {
+    --dax-fg:       #1e293b;
+    --dax-comment:  #64748b;
+    --dax-keyword:  #2563eb;
+    --dax-function: #0891b2;
+    --dax-variable: #b45309;
+    --dax-measure:  #7c3aed;
+    --dax-ref:      #15803d;
+    --dax-string:   #c2410c;
+    --dax-number:   #a16207;
+  }
+}
+ */
+
+
+  /* ── DAX palette: Power BI Desktop native colours ─────────────────── */
+  /* Mirrors the DAX formula bar in Power BI Desktop: blue keywords,
+     red functions, red table references, blue bare column/measure
+     refs, green numbers, red strings, muted-green comments, default-
+     text variables. Two palettes — one for each theme — because PB
+     Desktop is always light-mode and those colours (navy / crimson /
+     forest) don't have the contrast we need on our dark canvas.
+     Variable (`_name` / ident after VAR) stays on --clr-variable
+     (orange) — PB Desktop leaves variables in default text which on
+     our themes already works (--text handles it), but the orange
+     distinguishes them more clearly in a long VAR/RETURN block. */
+  .code-dax {
+    /* Dark theme defaults — bright for AA contrast on #0B0D11 */
+    --dax-fg:        var(--text);
+    --dax-comment:   #6A9955;  /* muted forest — VS Code's comment colour */
+    --dax-keyword:   #569CD6;  /* bright blue — VAR RETURN IF SWITCH TRUE FALSE BLANK IN AND OR NOT */
+    --dax-function:  #DCDCAA;  /* pale yellow — SUM( CALCULATE( FILTER( … */
+    --dax-variable:  var(--clr-variable);  /* orange — _name / ident after VAR */
+    --dax-measure:   #9CDCFE;  /* light blue — bare [Measure] / [Column] refs */
+    --dax-ref:       #CE9178;  /* warm orange-red — 'Table'[Column] */
+    --dax-string:    #CE9178;  /* warm orange-red — string literals */
+    --dax-number:    #B5CEA8;  /* pale green — numeric literals */
+  }
+  [data-theme="light"] .code-dax {
+    /* Light theme: Power BI Desktop's exact DAX palette */
+    --dax-fg:        #212121;
+    --dax-comment:   #008000;  /* PB green */
+    --dax-keyword:   #035AC2;  /* PB blue */
+    --dax-function:  #C41E3A;  /* PB crimson */
+    --dax-variable:  var(--clr-variable);
+    --dax-measure:   #035AC2;  /* PB blue — bare [Measure]/[Column] */
+    --dax-ref:       #A31515;  /* PB dark red — 'Table'[Column] */
+    --dax-string:    #A31515;
+    --dax-number:    #098658;  /* PB dark green */
+  }
+  /* When embedded in our .lineage-dax block, inherit the block's
+     monospace font / size from the existing rule and add our token
+     classes on top. */
+  .lineage-dax.code-dax { font-family: inherit; line-height: inherit; tab-size: 2; }
+  .lineage-dax .dax-k, .lineage-dax .dax-f, .lineage-dax .dax-v,
+  .lineage-dax .dax-m, .lineage-dax .dax-r, .lineage-dax .dax-s,
+  .lineage-dax .dax-n, .lineage-dax .dax-c {
+    /* Spans need no further layout tweaks — inherit .lineage-dax
+       monospace styling; the colour rules from .code-dax .dax-*
+       already apply. */
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <div class="header-left">
+      <div class="top"><span class="usage-map-badge">Usage Map</span><span class="header-sep">|</span><span class="header-sub">(browser)</span></div>
+      <div class="timestamp">Generated: 2026-04-19 10:08</div>
+    </div>
+    <div class="header-actions">
+      <button class="theme-btn" id="theme-btn" data-action="theme" title="Toggle light/dark theme" aria-label="Toggle theme">☾</button>
+      <button class="refresh-btn" data-action="reload">↻ Refresh</button>
+    </div>
+  </div>
+  <div class="summary" id="summary"></div>
+  <div class="tabs" id="tabs"></div>
+
+  <div class="panel" id="panel-measures">
+    <div class="search-row">
+      <input class="search-input" placeholder="Search measures..." data-action="filter" data-entity="measures">
+      <button class="filter-btn" id="btn-unused-m" data-action="unused-filter" data-entity="measures">Not on visual</button>
+    </div>
+    <div class="table-wrap"><table class="data-table"><thead><tr>
+      <th data-action="sort" data-table="measures" data-key="name">Measure ↕</th><th data-action="sort" data-table="measures" data-key="table">Table ↕</th>
+      <th data-action="sort" data-table="measures" data-key="usageCount">Used ↕</th><th data-action="sort" data-table="measures" data-key="pageCount">Pages ↕</th>
+      <th>Dependencies</th><th>Used In</th><th>Format</th>
+    </tr></thead><tbody id="tbody-measures"></tbody></table></div>
+    <div class="panel-footer" id="footer-measures"></div>
+  </div>
+
+  <div class="panel" id="panel-columns">
+    <div class="search-row">
+      <input class="search-input" placeholder="Search columns..." data-action="filter" data-entity="columns">
+      <button class="filter-btn" id="btn-unused-c" data-action="unused-filter" data-entity="columns">Not on visual</button>
+    </div>
+    <div class="table-wrap"><table class="data-table"><thead><tr>
+      <th data-action="sort" data-table="columns" data-key="name">Column ↕</th><th data-action="sort" data-table="columns" data-key="table">Table ↕</th>
+      <th data-action="sort" data-table="columns" data-key="dataType">Type ↕</th><th data-action="sort" data-table="columns" data-key="usageCount">Used ↕</th>
+      <th data-action="sort" data-table="columns" data-key="pageCount">Pages ↕</th><th>Used In</th>
+    </tr></thead><tbody id="tbody-columns"></tbody></table></div>
+    <div class="panel-footer" id="footer-columns"></div>
+  </div>
+
+  <div class="panel" id="panel-tables"><div id="tables-content"></div></div>
+  <div class="panel" id="panel-relationships"><div id="relationships-content"></div></div>
+  <div class="panel" id="panel-sources"><div id="sources-content"></div></div>
+  <div class="panel" id="panel-functions"><div id="functions-content"></div></div>
+  <div class="panel" id="panel-calcgroups"><div id="calcgroups-content"></div></div>
+  <div class="panel" id="panel-pages"><div id="pages-content"></div></div>
+  <div class="panel" id="panel-lineage"><div id="lineage-content"></div></div>
+  <div class="panel" id="panel-unused"><div id="unused-content"></div></div>
+  <div class="panel" id="panel-docs">
+    <div class="search-row">
+      <div style="display:flex;gap:4px;flex-wrap:wrap">
+        <button class="filter-btn active" id="md-tab-model" data-action="md-tab" data-md="model">Model</button>
+        <button class="filter-btn" id="md-tab-datadict" data-action="md-tab" data-md="datadict">Data Dictionary</button>
+        <button class="filter-btn" id="md-tab-measures" data-action="md-tab" data-md="measures">Measures</button>
+        <button class="filter-btn" id="md-tab-functions" data-action="md-tab" data-md="functions">Functions</button>
+        <button class="filter-btn" id="md-tab-calcgroups" data-action="md-tab" data-md="calcgroups">Calc Groups</button>
+        <button class="filter-btn" id="md-tab-quality" data-action="md-tab" data-md="quality">Quality</button>
+      </div>
+      <div style="flex:1;color:var(--text-dim);font-size:12px;margin-left:8px" id="md-subtitle">Semantic-model documentation (no DAX)</div>
+      <div style="display:flex;gap:4px">
+        <button class="filter-btn active" id="md-mode-rendered" data-action="md-mode" data-mode="rendered">Rendered</button>
+        <button class="filter-btn" id="md-mode-raw" data-action="md-mode" data-mode="raw">Raw</button>
+      </div>
+      <button class="filter-btn" data-action="md-expand-all" title="Expand all collapsed sections">⊕ All</button>
+      <button class="filter-btn" data-action="md-collapse-all" title="Collapse all sections">⊖ All</button>
+      <button class="filter-btn" id="md-copy-btn" data-action="md-copy">⎘ Copy</button>
+      <button class="filter-btn" data-action="md-download">⤓ Download</button>
+    </div>
+    <div id="md-rendered" class="md-rendered"></div>
+    <pre id="md-source" class="md-source" style="display:none"></pre>
+    <div class="panel-footer" id="footer-docs"></div>
+  </div>
+</div>
+
+<!-- Footer bar — branding · status · version (CSS hides right on ≤900, left on ≤700). -->
+<div class="refresh-bar" id="refresh-bar">
+  <div class="rb-left">
+    <span class="usage-map-badge">Usage Map</span>
+    <span class="rb-sep">|</span>
+    <span class="rb-report">(browser)</span>
+  </div>
+  <div class="rb-center">
+    <span class="dot"></span>
+    <span class="timer">Last scan 2026-04-19 10:08</span>
+    <button data-action="reload">Re-scan</button>
+  </div>
+  <div class="rb-right">v0<span class="rb-sep">·</span>local<span class="rb-sep">·</span>no data leaves your machine</div>
+</div>
+
+<!-- DAX syntax highlighter (vendor/dax-highlight) — exposes window.DaxHighlight -->
+<script>/*!
+ * dax-highlight — tiny, dependency-free syntax highlighter for DAX
+ *
+ * Works as:
+ *   • Plain <script> — exposes window.DaxHighlight
+ *   • ES module     — import { highlightDax, highlightAll } from "./dax-highlight.js"
+ *   • CommonJS      — const { highlightDax, highlightAll } = require("./dax-highlight.js")
+ *
+ * Pair with dax-highlight.css for theming.
+ *
+ * Usage:
+ *   // 1. Auto-highlight every <pre><code class="language-dax"> in the page
+ *   DaxHighlight.highlightAll();
+ *
+ *   // 2. Highlight a specific element
+ *   DaxHighlight.highlightElement(document.querySelector("pre code"));
+ *
+ *   // 3. Get highlighted HTML from raw DAX source
+ *   const html = DaxHighlight.highlightDax("SUM(Sales[Amount])");
+ *
+ *   // 4. Extend the known-function list
+ *   DaxHighlight.addFunctions(["MYCUSTOMFUNC", "COMPANY_METRIC"]);
+ */
+
+(function (root, factory) {
+  "use strict";
+  const api = factory();
+  if (typeof module === "object" && module.exports) {
+    module.exports = api;                    // CommonJS
+  } else if (typeof define === "function" && define.amd) {
+    define([], () => api);                   // AMD
+  } else {
+    root.DaxHighlight = api;                 // <script> global
+  }
+})(typeof self !== "undefined" ? self : this, function () {
+  "use strict";
+
+  // --------------------------------------------------------------------------
+  // Known tokens
+  // --------------------------------------------------------------------------
+
+  const DAX_KEYWORDS = new Set([
+    "VAR", "RETURN", "IF", "SWITCH", "TRUE", "FALSE", "BLANK",
+    "IN", "NOT", "AND", "OR",
+  ]);
+
+  const DAX_FUNCTIONS = new Set([
+    // Date & time
+    "CALENDAR", "DATE", "DATEDIFF", "DATEVALUE", "DAY", "WEEKNUM", "MONTH", "QUARTER",
+    "YEAR", "NOW", "TODAY", "HOUR", "MINUTE", "SECOND", "TIME", "EOMONTH", "EDATE",
+
+    // Time intelligence
+    "DATEADD", "DATESBETWEEN", "DATESINPERIOD", "DATESMTD", "DATESQTD", "DATESYTD",
+    "TOTALMTD", "TOTALQTD", "TOTALYTD", "SAMEPERIODLASTYEAR",
+    "PREVIOUSDAY", "PREVIOUSMONTH", "PREVIOUSQUARTER", "PREVIOUSYEAR",
+    "NEXTDAY", "NEXTMONTH", "NEXTQUARTER", "NEXTYEAR",
+    "STARTOFMONTH", "ENDOFMONTH", "STARTOFQUARTER", "ENDOFQUARTER",
+    "STARTOFYEAR", "ENDOFYEAR", "PARALLELPERIOD", "FIRSTDATE", "LASTDATE",
+
+    // Information
+    "COLUMNSTATISTICS", "HASONEVALUE", "HASONEFILTER",
+    "ISBLANK", "ISLOGICAL", "ISNUMBER", "ISTEXT", "ISERROR", "IFERROR",
+    "ISFILTERED", "ISCROSSFILTERED", "ISINSCOPE", "ISSELECTEDMEASURE",
+    "SELECTEDVALUE", "SELECTEDMEASURE", "USERPRINCIPALNAME", "USERNAME",
+
+    // Math & statistical
+    "SUM", "SUMX", "AVERAGE", "AVERAGEX", "MEDIAN", "MEDIANX", "GEOMEAN", "GEOMEANX",
+    "COUNT", "COUNTA", "COUNTX", "COUNTAX", "COUNTBLANK", "DIVIDE",
+    "MIN", "MINX", "MAX", "MAXX", "COUNTROWS", "DISTINCTCOUNT", "DISTINCTCOUNTNOBLANK",
+    "RANKX", "RANK", "TOPN", "ABS", "ROUND", "ROUNDUP", "ROUNDDOWN", "INT", "TRUNC",
+    "CEILING", "FLOOR", "MOD", "POWER", "SQRT", "EXP", "LN", "LOG", "LOG10",
+    "STDEV.P", "STDEV.S", "VAR.P", "VAR.S",
+
+    // Filter
+    "FILTER", "CALCULATE", "CALCULATETABLE",
+    "ALL", "ALLEXCEPT", "ALLSELECTED", "ALLNOBLANKROW", "REMOVEFILTERS",
+    "KEEPFILTERS", "EARLIER", "EARLIEST",
+    "VALUES", "USERELATIONSHIP", "TREATAS",
+
+    // Relationship
+    "CROSSFILTER", "RELATED", "RELATEDTABLE", "LOOKUPVALUE",
+
+    // Table manipulation
+    "SUMMARIZE", "SUMMARIZECOLUMNS", "DISTINCT", "ADDCOLUMNS", "SELECTCOLUMNS",
+    "GROUPBY", "INTERSECT", "NATURALINNERJOIN", "NATURALLEFTOUTERJOIN", "UNION",
+    "EXCEPT", "ROW", "GENERATE", "GENERATEALL", "CROSSJOIN", "ADDMISSINGITEMS",
+
+    // Text
+    "EXACT", "FIND", "SEARCH", "FORMAT", "LEFT", "RIGHT", "MID", "LEN",
+    "LOWER", "UPPER", "PROPER", "TRIM", "CONCATENATE", "CONCATENATEX",
+    "SUBSTITUTE", "REPLACE", "REPT", "UNICHAR", "VALUE",
+  ]);
+
+  // --------------------------------------------------------------------------
+  // Helpers
+  // --------------------------------------------------------------------------
+
+  function escapeHtml(s) {
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+
+  function isLetter(ch) { return !!ch && /[A-Za-z_]/.test(ch); }
+  function isDigit(ch)  { return !!ch && /[0-9]/.test(ch); }
+  function isWord(ch)   { return !!ch && /[A-Za-z0-9_]/.test(ch); }
+
+  function wrap(cls, value) {
+    return `<span class="${cls}">${escapeHtml(value)}</span>`;
+  }
+
+  // --------------------------------------------------------------------------
+  // Tokenizer
+  //
+  // Class legend (pair with dax-highlight.css):
+  //   dax-k  keyword       (VAR, RETURN, IF, SWITCH, TRUE, FALSE, IN, AND, OR, NOT, BLANK)
+  //   dax-f  function      (known DAX function immediately followed by `(`)
+  //   dax-v  variable      (identifier after VAR, or any identifier starting with `_`)
+  //   dax-m  measure/col   ([Sales Amount])
+  //   dax-r  table[col]    ('Sales'[Amount] or Sales[Amount])
+  //   dax-s  string        ("text")
+  //   dax-c  comment       (// line or /* block */)
+  //   dax-n  number        (123, 12.5)
+  // --------------------------------------------------------------------------
+
+  function highlightDax(source) {
+    const s = String(source || "");
+    let i = 0;
+    let out = "";
+    let expectVarName = false;
+
+    while (i < s.length) {
+      const ch = s[i];
+      const next = s[i + 1] || "";
+
+      // Line comment
+      if (ch === "/" && next === "/") {
+        const start = i;
+        i += 2;
+        while (i < s.length && s[i] !== "\n") i++;
+        out += wrap("dax-c", s.slice(start, i));
+        continue;
+      }
+
+      // Block comment
+      if (ch === "/" && next === "*") {
+        const start = i;
+        i += 2;
+        while (i < s.length - 1 && !(s[i] === "*" && s[i + 1] === "/")) i++;
+        if (i < s.length - 1) i += 2;
+        out += wrap("dax-c", s.slice(start, i));
+        continue;
+      }
+
+      // String literal ("..." with doubled-quote escape)
+      if (ch === "\"") {
+        const start = i;
+        i++;
+        while (i < s.length) {
+          if (s[i] === "\"") {
+            if (s[i + 1] === "\"") { i += 2; continue; }
+            i++;
+            break;
+          }
+          i++;
+        }
+        out += wrap("dax-s", s.slice(start, i));
+        continue;
+      }
+
+      // 'Quoted table'[Column] reference (column part optional)
+      if (ch === "'") {
+        const start = i;
+        i++;
+        while (i < s.length) {
+          if (s[i] === "'") {
+            if (s[i + 1] === "'") { i += 2; continue; }
+            i++;
+            break;
+          }
+          i++;
+        }
+        if (s[i] === "[") {
+          i++;
+          while (i < s.length && s[i] !== "]") i++;
+          if (s[i] === "]") i++;
+          out += wrap("dax-r", s.slice(start, i));
+        } else {
+          out += escapeHtml(s.slice(start, i));
+        }
+        continue;
+      }
+
+      // [Measure or Column] reference (no preceding table name)
+      if (ch === "[") {
+        const start = i;
+        i++;
+        while (i < s.length && s[i] !== "]") i++;
+        if (s[i] === "]") i++;
+        out += wrap("dax-m", s.slice(start, i));
+        continue;
+      }
+
+      // Numeric literal
+      if (isDigit(ch)) {
+        const start = i;
+        i++;
+        while (i < s.length && (isDigit(s[i]) || s[i] === ".")) i++;
+        out += wrap("dax-n", s.slice(start, i));
+        continue;
+      }
+
+      // Identifier / keyword / function / variable
+      if (isLetter(ch)) {
+        const start = i;
+        i++;
+        while (i < s.length && isWord(s[i])) i++;
+        const ident = s.slice(start, i);
+        const upper = ident.toUpperCase();
+
+        if (expectVarName) {
+          out += wrap("dax-v", ident);
+          expectVarName = false;
+          continue;
+        }
+
+        if (DAX_KEYWORDS.has(upper)) {
+          out += wrap("dax-k", ident);
+          if (upper === "VAR") expectVarName = true;
+          continue;
+        }
+
+        // Identifiers starting with _ are variables by convention
+        if (ident.startsWith("_")) {
+          out += wrap("dax-v", ident);
+          continue;
+        }
+
+        // Function call: identifier followed (after whitespace) by `(`
+        let j = i;
+        while (j < s.length && /\s/.test(s[j])) j++;
+        if (s[j] === "(") {
+          if (DAX_FUNCTIONS.has(upper)) {
+            out += wrap("dax-f", ident);
+          } else {
+            out += escapeHtml(ident);
+          }
+        } else {
+          out += escapeHtml(ident);
+        }
+        continue;
+      }
+
+      // Any other character
+      out += escapeHtml(ch);
+      i++;
+    }
+
+    return out;
+  }
+
+  // --------------------------------------------------------------------------
+  // DOM helpers
+  // --------------------------------------------------------------------------
+
+  /** Highlight a single <code> element in-place. */
+  function highlightElement(codeEl) {
+    if (!codeEl || codeEl.__daxHighlighted) return;
+    const raw = codeEl.textContent || "";
+    codeEl.innerHTML = highlightDax(raw);
+    codeEl.classList.add("code-dax");
+    codeEl.__daxHighlighted = true;
+  }
+
+  /**
+   * Scan the DOM for DAX code blocks and highlight them.
+   *
+   * Default selector matches markdown-it / marked / showdown output:
+   *   <pre><code class="language-dax">…</code></pre>
+   *   <pre><code class="lang-dax">…</code></pre>
+   *
+   * @param {ParentNode} [root=document]     Where to search
+   * @param {string}     [selector]          Override selector
+   */
+  function highlightAll(root, selector) {
+    const scope = root || document;
+    const sel = selector || "pre code.language-dax, pre code.lang-dax, code.code-dax";
+    scope.querySelectorAll(sel).forEach(highlightElement);
+  }
+
+  /** Add custom DAX function names that should be highlighted as functions. */
+  function addFunctions(names) {
+    (names || []).forEach(n => DAX_FUNCTIONS.add(String(n).toUpperCase()));
+  }
+
+  /** Add custom DAX keywords. */
+  function addKeywords(names) {
+    (names || []).forEach(n => DAX_KEYWORDS.add(String(n).toUpperCase()));
+  }
+
+  return {
+    highlightDax,
+    highlightElement,
+    highlightAll,
+    addFunctions,
+    addKeywords,
+  };
+});
+</script>
+<script>
+const DATA={"measures":[],"columns":[],"relationships":[],"functions":[],"calcGroups":[],"tables":[],"pages":[],"hiddenPages":[],"allPages":[],"expressions":[],"compatibilityLevel":null,"modelProperties":{"name":"(no model loaded)","description":"","culture":"","sourceQueryCulture":"","discourageImplicitMeasures":false,"valueFilterBehavior":"","cultures":[],"defaultPowerBIDataSourceVersion":""},"totals":{"measuresInModel":0,"measuresDirect":0,"measuresIndirect":0,"measuresUnused":0,"columnsInModel":0,"columnsDirect":0,"columnsIndirect":0,"columnsUnused":0,"relationships":0,"functions":0,"calcGroups":0,"tables":0,"pages":0,"visuals":0}};
+const MARKDOWN="";
+const MARKDOWN_MEASURES="";
+const MARKDOWN_FUNCTIONS="";
+const MARKDOWN_CALCGROUPS="";
+const MARKDOWN_QUALITY="";
+const MARKDOWN_DATADICT="";
+const REPORT_NAME="(browser)";
+const APP_VERSION="0";
+const GENERATED_AT="2026-04-19 10:08";
+
+// Client runtime — extracted to src/client/main.ts in Stop 5, inlined here from dist/client/main.js.
+/**
+ * Client-side escape + classifier helpers.
+ *
+ * Carved out of src/client/main.ts as a type-safe module during
+ * Stop 5 pass 2. Four pure string functions, no DOM access, no
+ * state. Compiled alongside the rest of the client as a SCRIPT
+ * (no imports, no exports) and concatenated into the inline
+ * <script> block by src/html-generator.ts BEFORE main.js — so the
+ * symbols defined here are already in scope by the time main.js's
+ * code runs.
+ *
+ * Paired with the SERVER-side helpers at src/render/safe.ts, which
+ * cover the same contexts from the TypeScript generator's side. The
+ * client versions exist independently because the server's code
+ * can't run in the browser (import paths, Node crypto deps, etc.).
+ */
+/**
+ * HTML text context. Escape the five HTML-sensitive characters so
+ * the returned string is safe to splice into element body text OR
+ * into a double-quoted attribute value.
+ *
+ * Null / undefined collapse to empty string. Non-strings coerce via
+ * `String()` — mirrors the server-side helper's tolerance.
+ */
+function escHtml(s) {
+    return String(s == null ? "" : s)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+}
+/**
+ * HTML attribute context. Functionally identical to escHtml today
+ * (same five-character table works for both). Kept as a separate
+ * name so call sites self-document the context and we can diverge
+ * later if we add URL-context escaping for href/src attributes.
+ */
+function escAttr(s) { return escHtml(s); }
+/**
+ * Status-class helper. Maps a measure/column `status` value to the
+ * CSS class name used on the row wrapper — empty string for the
+ * "direct" case (no class added).
+ */
+function sc(s) {
+    return s === "unused" ? "unused" : s === "indirect" ? "indirect" : "";
+}
+/**
+ * Usage-count classifier for the coloured count pills. Zero usage
+ * gets the "zero" (red) pill, 1 gets "low" (amber), ≥ 2 gets "good"
+ * (green). Used for `usageCount` and `pageCount` cells across every
+ * data table in the dashboard.
+ */
+function uc(n) {
+    return n === 0 ? "zero" : n <= 1 ? "low" : "good";
+}
+
+/**
+ * Client-side Markdown renderer for the Docs tab.
+ *
+ * First module carved out of the monolithic src/client/main.ts during
+ * Stop 5 pass 2. Kept as a SCRIPT file (no imports, no exports) so
+ * tsc emits it as a plain browser-ready .js that concatenates with
+ * main.ts into the same classic <script> in the generated HTML.
+ *
+ * Scope: exactly what the dashboard needs, no more. Supports:
+ *   - Headings (# … ######)
+ *   - Paragraphs (blank-line separated)
+ *   - Bold **…**, italic _…_, strikethrough ~~…~~
+ *   - Inline code `…`
+ *   - Fenced code blocks ``` / ```lang … ```
+ *   - Ordered + unordered lists (1 level of nesting)
+ *   - Blockquotes > …
+ *   - Horizontal rule ---
+ *   - Pipe tables
+ *   - Link [text](url)
+ *   - Raw <details>/<summary>/<a id="…"> passthrough
+ *   - Styled <span class="…"> passthrough for badges / chips
+ *
+ * It is NOT a general-purpose markdown renderer. It is tuned to the
+ * output of src/md-generator.ts on the server side and will happily
+ * mangle anything outside that vocabulary.
+ *
+ * Type safety: all three public functions take `string` and return
+ * `string`. The private `mdParseTable` takes `string[]`. Unlike
+ * main.ts, this module compiles without @ts-nocheck.
+ */
+// Escape the five HTML-sensitive characters. The markdown tokens that
+// SHOULD become HTML (pipe tables, asterisks, etc.) are unescaped again
+// by the inline renderer below, restricted to the specific tags the
+// dashboard emits.
+function mdEscapeHtml(s) {
+    return String(s)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+}
+/**
+ * Render inline markdown (bold / italic / links / inline code / etc.)
+ * plus a handful of dashboard-specific tags that need to pass through.
+ */
+function mdInline(s) {
+    // Preserve inline code spans first via a null-byte placeholder —
+    // otherwise backticks would collide with the template-literal escape
+    // table below. The placeholder survives mdEscapeHtml because NUL is
+    // not one of the five escaped chars.
+    const codes = [];
+    s = s.replace(/`([^`]+)`/g, (_m, c) => {
+        codes.push(c);
+        return "\u0000" + (codes.length - 1) + "\u0000";
+    });
+    s = mdEscapeHtml(s);
+    // Restore the specific inline HTML tags the server emits and we want
+    // to render through. Opening / closing forms of: details, summary,
+    // strong, small, br, and <a id="…">/</a>.
+    s = s.replace(/&lt;(\/?)(details|summary|strong|small|br)(\s*\/?)&gt;/g, (_m, slash, tag, tail) => "<" + slash + tag + tail + ">");
+    s = s.replace(/&lt;a id=&quot;([^&]*)&quot;&gt;/g, (_m, id) => '<a id="' + id + '">');
+    s = s.replace(/&lt;\/a&gt;/g, "</a>");
+    // <span class="…"> passthrough so badges and chip pills render as
+    // their styled components instead of escaped text. Attribute is
+    // restricted to class= to limit the surface; mdEscapeHtml has
+    // already neutralised &, <, > in the class value.
+    s = s.replace(/&lt;span class=&quot;([^&]*)&quot;&gt;/g, (_m, cls) => '<span class="' + cls + '">');
+    s = s.replace(/&lt;\/span&gt;/g, "</span>");
+    // Bold ** **
+    s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+    // Italic _ _ with word-boundary-ish neighbours so interior
+    // underscores inside identifiers don't match.
+    s = s.replace(/(^|[\s(>])_([^_]+)_(?=$|[\s.,;:!?)<])/g, "$1<em>$2</em>");
+    // Strikethrough ~~ ~~
+    s = s.replace(/~~([^~]+)~~/g, "<del>$1</del>");
+    // Links [text](url)
+    s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_m, t, u) => '<a href="' + u + '">' + t + "</a>");
+    // Restore the code spans we stashed at the top.
+    s = s.replace(/\u0000(\d+)\u0000/g, (_m, i) => "<code>" + mdEscapeHtml(codes[parseInt(i, 10)]) + "</code>");
+    return s;
+}
+/**
+ * Parse a pipe table: header | separator | row+.
+ */
+function mdParseTable(block) {
+    const head = block[0].trim().replace(/^\||\|$/g, "").split("|").map(c => c.trim());
+    const rows = block.slice(2).map(ln => ln.trim().replace(/^\||\|$/g, "").split("|").map(c => c.trim()));
+    let html = "<table><thead><tr>";
+    head.forEach(h => { html += "<th>" + mdInline(h) + "</th>"; });
+    html += "</tr></thead><tbody>";
+    rows.forEach(r => {
+        html += "<tr>";
+        r.forEach(c => { html += "<td>" + mdInline(c) + "</td>"; });
+        html += "</tr>";
+    });
+    html += "</tbody></table>";
+    return html;
+}
+/**
+ * Render a full markdown document to HTML. Line-level state machine —
+ * no tokenizer, no AST. Block types recognised in order of precedence:
+ *
+ *   1. Raw <details>/<summary>/<a> tag passthrough
+ *   2. Headings
+ *   3. Horizontal rule
+ *   4. Blank line (paragraph break)
+ *   5. Blockquote
+ *   6. Fenced code block
+ *   7. Ordered list (with nested bullets)
+ *   8. Bullet list
+ *   9. Pipe table
+ *  10. Default: accumulate into paragraph
+ */
+function mdRender(md) {
+    if (!md)
+        return "";
+    const lines = md.split(/\r?\n/);
+    const out = [];
+    let i = 0;
+    let paraBuf = [];
+    const flushPara = () => {
+        if (paraBuf.length === 0)
+            return;
+        const joined = paraBuf.join(" ").trim();
+        if (joined)
+            out.push("<p>" + mdInline(joined) + "</p>");
+        paraBuf = [];
+    };
+    while (i < lines.length) {
+        const ln = lines[i];
+        // Raw HTML passthrough (whole line is one of the tags we produce).
+        if (/^\s*<(\/?)(details|summary|a)(\s|>|\/>)/.test(ln)) {
+            flushPara();
+            out.push(ln);
+            i++;
+            continue;
+        }
+        // Headings
+        const h = /^(#{1,6})\s+(.+)$/.exec(ln);
+        if (h) {
+            flushPara();
+            out.push("<h" + h[1].length + ">" + mdInline(h[2]) + "</h" + h[1].length + ">");
+            i++;
+            continue;
+        }
+        // HR
+        if (/^---+$/.test(ln.trim())) {
+            flushPara();
+            out.push("<hr>");
+            i++;
+            continue;
+        }
+        // Blank line
+        if (/^\s*$/.test(ln)) {
+            flushPara();
+            i++;
+            continue;
+        }
+        // Blockquote (consecutive > lines)
+        if (/^>\s?/.test(ln)) {
+            flushPara();
+            const qBuf = [];
+            while (i < lines.length && /^>\s?/.test(lines[i])) {
+                qBuf.push(lines[i].replace(/^>\s?/, ""));
+                i++;
+            }
+            out.push("<blockquote>" + mdInline(qBuf.join(" ")) + "</blockquote>");
+            continue;
+        }
+        // Fenced code block: ``` or ```lang … ```
+        // Content is rendered verbatim (HTML-escaped, not Markdown-processed)
+        // so DAX bodies and signatures don't accidentally trigger inline-code
+        // styling or get their asterisks interpreted as bold markers.
+        if (/^\s*```/.test(ln)) {
+            flushPara();
+            const langLine = ln.trim();
+            const lang = langLine.replace(/^```/, "").trim();
+            const codeLines = [];
+            i++;
+            while (i < lines.length && !/^\s*```\s*$/.test(lines[i])) {
+                codeLines.push(lines[i]);
+                i++;
+            }
+            if (i < lines.length)
+                i++; // skip closing fence
+            const langAttr = lang ? ' data-lang="' + mdEscapeHtml(lang) + '"' : "";
+            out.push('<pre class="md-code"' + langAttr + '><code>' + mdEscapeHtml(codeLines.join("\n")) + "</code></pre>");
+            continue;
+        }
+        // Numbered list (ordered). Supports indented bullets nested under each item.
+        if (/^\s*\d+\.\s+/.test(ln)) {
+            flushPara();
+            const olItems = [];
+            while (i < lines.length) {
+                const cur = lines[i];
+                if (/^\s*\d+\.\s+/.test(cur)) {
+                    olItems.push({ text: cur.replace(/^\s*\d+\.\s+/, ""), subs: [] });
+                    i++;
+                }
+                else if (/^\s{2,}[-*]\s+/.test(cur) && olItems.length > 0) {
+                    olItems[olItems.length - 1].subs.push(cur.replace(/^\s*[-*]\s+/, ""));
+                    i++;
+                }
+                else {
+                    break;
+                }
+            }
+            const olHtml = "<ol>" + olItems.map(it => {
+                let li = "<li>" + mdInline(it.text);
+                if (it.subs.length > 0) {
+                    li += "<ul>" + it.subs.map(sub => "<li>" + mdInline(sub) + "</li>").join("") + "</ul>";
+                }
+                return li + "</li>";
+            }).join("") + "</ol>";
+            out.push(olHtml);
+            continue;
+        }
+        // Bullet list
+        if (/^\s*[-*]\s+/.test(ln)) {
+            flushPara();
+            const items = [];
+            while (i < lines.length && /^\s*[-*]\s+/.test(lines[i])) {
+                items.push(lines[i].replace(/^\s*[-*]\s+/, ""));
+                i++;
+            }
+            out.push("<ul>" + items.map(x => "<li>" + mdInline(x) + "</li>").join("") + "</ul>");
+            continue;
+        }
+        // Pipe table: header line followed by a separator line of dashes+pipes
+        if (/^\s*\|.*\|\s*$/.test(ln) && i + 1 < lines.length && /^\s*\|[\s:\-|]+\|\s*$/.test(lines[i + 1])) {
+            flushPara();
+            const block = [ln, lines[i + 1]];
+            i += 2;
+            while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) {
+                block.push(lines[i]);
+                i++;
+            }
+            out.push(mdParseTable(block));
+            continue;
+        }
+        // Default: accumulate into paragraph
+        paraBuf.push(ln);
+        i++;
+    }
+    flushPara();
+    return out.join("\n");
+}
+
+/**
+ * Power BI Lineage — client-side dashboard runtime.
+ *
+ * Moved out of the embedded <script> block in src/html-generator.ts
+ * during the Stop-5 client split. Still a single file for now; the
+ * follow-up PRs will carve this into panels/ components/ render/
+ * state/ modules without another mechanical-extraction turn.
+ *
+ * Globals (DATA, MARKDOWN*, REPORT_NAME, APP_VERSION, GENERATED_AT,
+ * DaxHighlight) are declared ambiently in ./globals.d.ts — the server
+ * injects them into the same <script> block just before this file's
+ * compiled output is inlined.
+ *
+ * This file is written intentionally as a *script* (no imports, no
+ * exports), so TypeScript emits it as a plain browser-ready .js that
+ * runs top-to-bottom. The bootstrap call at the very bottom kicks
+ * everything off once the DOM is ready.
+ */
+// @ts-nocheck -- Client is untyped JS by origin; the Stop-5 follow-up
+// will tighten this panel by panel. Leaving errors off for the initial
+// carve keeps the diff review-able.
+let activeMd = "model";
+let mdViewMode = "rendered";
+// escHtml, escAttr, sc, uc live in src/client/render/escape.ts now
+// (Stop 5 pass 2). They're compiled as a separate script file and
+// concatenated into the same inline <script> before this one, so
+// the top-level function declarations are already in scope.
+function toggleTheme() {
+    var cur = document.documentElement.getAttribute('data-theme') || 'dark';
+    var next = cur === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    try {
+        localStorage.setItem('usage-theme', next);
+    }
+    catch (e) { }
+    var btn = document.getElementById('theme-btn');
+    if (btn)
+        btn.textContent = next === 'dark' ? '☾' : '☀';
+}
+// Colourise every .lineage-dax block that hasn't been highlighted
+// yet. Safe to call repeatedly — DaxHighlight.highlightElement is
+// idempotent via a __daxHighlighted flag, and we filter on the
+// .code-dax class the highlighter adds on first pass.
+//
+// MUST run BEFORE addCopyButtons — the highlighter replaces innerHTML,
+// which would wipe any already-appended copy button. Current order:
+//   1. renderX() sets innerHTML with raw DAX
+//   2. highlightDaxBlocks() replaces innerHTML with coloured spans
+//   3. addCopyButtons() appends the ⎘ button to the highlighted block
+function highlightDaxBlocks() {
+    if (typeof DaxHighlight === 'undefined')
+        return; // vendor script not loaded
+    DaxHighlight.highlightAll(document, '.lineage-dax:not(.code-dax)');
+    // Markdown-rendered code blocks also get highlighted (the Docs tab
+    // renders ```dax fences into <pre><code class="language-dax">).
+    DaxHighlight.highlightAll(document, 'pre code.language-dax:not(.code-dax)');
+}
+function addCopyButtons() {
+    highlightDaxBlocks();
+    document.querySelectorAll('.lineage-dax:not([data-copy-wired])').forEach(function (el) {
+        el.setAttribute('data-copy-wired', '1');
+        var dax = el.textContent;
+        el.setAttribute('data-dax', dax);
+        var btn = document.createElement('button');
+        btn.className = 'copy-btn';
+        btn.textContent = '⎘';
+        btn.title = 'Copy DAX';
+        btn.onclick = function (e) {
+            e.stopPropagation();
+            var text = el.getAttribute('data-dax') || '';
+            function ok() { btn.textContent = '✓'; btn.classList.add('copied'); setTimeout(function () { btn.textContent = '⎘'; btn.classList.remove('copied'); }, 1500); }
+            function fallback() {
+                var ta = document.createElement('textarea');
+                ta.value = text;
+                ta.style.position = 'fixed';
+                ta.style.opacity = '0';
+                document.body.appendChild(ta);
+                ta.select();
+                var success = false;
+                try {
+                    success = document.execCommand('copy');
+                }
+                catch (err) { }
+                document.body.removeChild(ta);
+                if (success)
+                    ok();
+                else {
+                    btn.textContent = '✗';
+                    setTimeout(function () { btn.textContent = '⎘'; }, 1500);
+                }
+            }
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(ok).catch(fallback);
+            }
+            else {
+                fallback();
+            }
+        };
+        el.appendChild(btn);
+    });
+}
+(function () { var t = document.documentElement.getAttribute('data-theme') || 'dark'; var btn = document.getElementById('theme-btn'); if (btn)
+    btn.textContent = t === 'dark' ? '☾' : '☀'; })();
+let activeTab = "measures", lastTab = "measures";
+let sortState = { measures: { key: "usageCount", desc: true }, columns: { key: "usageCount", desc: true } };
+let showUnusedOnly = { measures: false, columns: false };
+let searchTerms = { measures: "", columns: "" };
+let openPages = new Set();
+let openTables = new Set();
+// Page data is built server-side now (data-builder.ts) so we get the
+// full page list — including text-only / empty pages that have no
+// data-field bindings. Previously this was recomputed in the client
+// from measure/column usedIn lists, which silently dropped any page
+// whose visuals didn't touch the model (producing -ve "visible" counts
+// when hiddenPages > bound pages).
+const pageData = (DATA.pages || []).slice();
+// ─────────────────────────────────────────────────────────────────────
+// Event delegation — one document-level click listener dispatches to
+// action handlers based on [data-action] markers.
+//
+// WHY: every inline click handler used to splice a field name
+// directly into a JS string literal. A measure named
+//   foo'),alert(1),('bar
+// would break out and execute. We now put the name in [data-name]
+// (HTML-attribute encoded, safe) and read it via element.dataset.name
+// — the browser decodes it back to a plain string with no parsing of
+// user content as JS.
+//
+// Adding a new action:
+//   1. Add a case below with the handler call.
+//   2. Render the target element with a data-action attribute set to
+//      the verb plus any data-* attributes the case reads.
+//   3. Use escAttr(userValue) when the value comes from the model.
+//
+// .closest() walks from e.target upwards and returns the innermost
+// [data-action] element, so a chip inside a page-header fires the
+// chip's action without bubbling to the parent's toggle — no need
+// for event.stopPropagation() at each site.
+// ─────────────────────────────────────────────────────────────────────
+document.addEventListener('click', function (e) {
+    var el = e.target.closest && e.target.closest('[data-action]');
+    if (!el)
+        return;
+    var a = el.getAttribute('data-action');
+    var d = el.dataset;
+    switch (a) {
+        case 'lineage':
+            navigateLineage(d.type, d.name);
+            break;
+        case 'tab':
+            switchTab(d.tab);
+            break;
+        case 'md-tab':
+            switchMd(d.md);
+            break;
+        case 'md-mode':
+            switchMdMode(d.mode);
+            break;
+        case 'sort':
+            sortTable(d.table, d.key);
+            break;
+        case 'unused-filter':
+            toggleUnused(d.entity);
+            break;
+        case 'theme':
+            toggleTheme();
+            break;
+        case 'reload':
+            location.reload();
+            break;
+        case 'md-expand-all':
+            expandAllDetails();
+            break;
+        case 'md-collapse-all':
+            collapseAllDetails();
+            break;
+        case 'md-copy':
+            copyMarkdown();
+            break;
+        case 'md-download':
+            downloadMarkdown();
+            break;
+        case 'page-toggle':
+            togglePage(d.name);
+            break;
+        case 'table-toggle':
+            toggleTableCard(d.name);
+            break;
+        case 'table-group-toggle':
+            toggleTableGroup(d.group);
+            break;
+        case 'orphan-toggle':
+            toggleOrphanSection(d.section);
+            break;
+        case 'toggle-auto-date':
+            toggleAutoDate();
+            break;
+        case 'card-toggle':
+            el.parentElement.classList.toggle('open');
+            break;
+    }
+});
+// Parallel delegator for input events — the Measures and Columns tab
+// search boxes used to carry inline `oninput="filterTable(...)"`
+// attributes. Stop 4 migrated every click handler to data-action but
+// missed the oninput ones; this closes the "no inline handlers"
+// invariant. Same structural guarantee: user text reaches
+// filterTable via HTMLInputElement.value (browser-decoded, safe).
+document.addEventListener('input', function (e) {
+    var el = e.target.closest && e.target.closest('[data-action]');
+    if (!el)
+        return;
+    var a = el.getAttribute('data-action');
+    var d = el.dataset;
+    switch (a) {
+        case 'filter':
+            filterTable(d.entity, el.value);
+            break;
+    }
+});
+// uc — see src/client/render/escape.ts
+function renderSummary() {
+    const t = DATA.totals;
+    const totalOrphan = t.measuresUnused + t.columnsUnused;
+    const hiddenCount = (DATA.hiddenPages || []).length;
+    const visibleCount = t.pages - hiddenCount;
+    const tipDirect = `Fields bound to at least one visual (data well, filter, or conditional formatting). ${t.measuresDirect} measures · ${t.columnsDirect} columns.`;
+    const tipIndirect = `Not on any visual, but referenced by direct measures via DAX or used in a relationship — keep these. ${t.measuresIndirect} measures · ${t.columnsIndirect} columns.`;
+    const tipUnused = `Not referenced anywhere in the report — safe to remove. ${t.measuresUnused} measures · ${t.columnsUnused} columns.`;
+    const tipPages = `Total pages in the report. ${visibleCount} visible · ${hiddenCount} hidden (tooltip / drillthrough / nav-suppressed).`;
+    const tipVisuals = `Total visuals across all pages.`;
+    document.getElementById("summary").innerHTML = `
+    <div class="stat has-tip" data-tooltip="${tipDirect}"><div class="stat-value good">${t.measuresDirect + t.columnsDirect}</div><div class="stat-label">Direct</div><div class="stat-detail">${t.measuresDirect}M · ${t.columnsDirect}C</div></div>
+    <div class="stat has-tip" data-tooltip="${tipIndirect}"><div class="stat-value ${t.measuresIndirect + t.columnsIndirect > 0 ? 'warn' : ''}">${t.measuresIndirect + t.columnsIndirect}</div><div class="stat-label">Indirect</div><div class="stat-detail">${t.measuresIndirect}M · ${t.columnsIndirect}C</div></div>
+    <div class="stat has-tip" data-tooltip="${tipUnused}"><div class="stat-value ${totalOrphan > 0 ? 'danger' : ''}">${totalOrphan}</div><div class="stat-label">Unused</div><div class="stat-detail">${t.measuresUnused}M · ${t.columnsUnused}C</div></div>
+    <div class="stat has-tip" data-tooltip="${tipPages}"><div class="stat-value">${t.pages}</div><div class="stat-label">Pages</div><div class="stat-detail">${visibleCount}V · ${hiddenCount}H</div></div>
+    <div class="stat has-tip" data-tooltip="${tipVisuals}"><div class="stat-value">${t.visuals}</div><div class="stat-label">Visuals</div></div>
+  `;
+}
+// Auto-generated `LocalDateTable_<guid>` / `DateTableTemplate_<guid>`
+// tables are infrastructure, not user content. We hide them from
+// default counts and rendering; a toggle on the Tables / Sources tab
+// lets users opt into seeing them. On the H&S composite model this
+// cuts 10 noise entries out of the 53-table list.
+let showAutoDate = false;
+function visibleTables() { return (DATA.tables || []).filter(t => showAutoDate || t.origin !== "auto-date"); }
+function autoDateCount() { return (DATA.tables || []).filter(t => t.origin === "auto-date").length; }
+function toggleAutoDate() { showAutoDate = !showAutoDate; renderTabs(); renderTables(); renderSources(); }
+function renderTabs() {
+    const um = DATA.totals.measuresUnused + DATA.totals.columnsUnused;
+    const vt = visibleTables();
+    const adc = autoDateCount();
+    // Bottom-up build order: data foundations first, then calculation logic,
+    // then consumption (pages), then analysis (unused/lineage), then docs.
+    document.getElementById("tabs").innerHTML = [
+        // Data layer
+        { id: "sources", l: "Sources", b: vt.filter(function (t) { return (t.partitions || []).length > 0; }).length },
+        { id: "tables", l: "Tables", b: vt.length },
+        { id: "columns", l: "Columns", b: DATA.columns.length },
+        { id: "relationships", l: "Relationships", b: DATA.relationships.length },
+        // Calculation layer
+        { id: "measures", l: "Measures", b: DATA.measures.length },
+        { id: "calcgroups", l: "Calc Groups", b: DATA.calcGroups.length },
+        { id: "functions", l: "Functions", b: DATA.functions.filter(f => !f.name.endsWith('.About')).length },
+        // Consumption
+        { id: "pages", l: "Pages", b: pageData.length },
+        // Analysis
+        { id: "unused", l: "Unused", b: um, w: um > 0 },
+        { id: "lineage", l: "Lineage", b: null },
+        // Output
+        { id: "docs", l: "Docs", b: null }
+    ].map(t => `<button class="tab ${activeTab === t.id ? 'active' : ''}" data-action="tab" data-tab="${t.id}">${t.l}${t.b !== null ? `<span class="tab-count ${t.w ? 'warn' : ''}">${t.b}</span>` : ''}</button>`).join("");
+}
+// Shared panel-footer writer. Each render* function calls this at the end
+// with its own count string on the left and (optionally) a sort / meta on
+// the right. Writes into a target element by id; silent if absent.
+function setPanelFooter(id, leftHtml, rightHtml) {
+    var el = document.getElementById(id);
+    if (!el)
+        return;
+    var left = '<div class="left">' + leftHtml + '</div>';
+    var right = rightHtml ? '<div class="right">' + rightHtml + '</div>' : '';
+    el.innerHTML = left + right;
+}
+function sortIndicator(state) {
+    if (!state || !state.key)
+        return "";
+    return 'Sorted by ' + state.key + ' ' + (state.desc ? '↓' : '↑');
+}
+function switchTab(id) {
+    if (id !== "lineage")
+        lastTab = id;
+    activeTab = id;
+    renderTabs();
+    document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
+    document.getElementById("panel-" + id).classList.add("active");
+    if (id === "lineage" && !document.getElementById("lineage-content").innerHTML.trim())
+        document.getElementById("lineage-content").innerHTML = '<div style="text-align:center;padding:60px 20px;color:var(--text-faint)"><div style="font-size:16px;margin-bottom:8px">Click a measure or column name to view its lineage</div><div style="font-size:12px">Go to the Measures or Columns tab and click any field name</div></div>';
+    // Functions + Calc Groups tabs display DAX bodies. Running through
+    // addCopyButtons() here (which also highlights) colourises any new
+    // blocks that weren't highlighted at initial render.
+    if (id === "functions" || id === "calcgroups" || id === "lineage")
+        addCopyButtons();
+}
+// sc — see src/client/render/escape.ts
+function renderMeasures() {
+    let items = [...DATA.measures];
+    const s = sortState.measures;
+    items.sort((a, b) => { let av = a[s.key], bv = b[s.key]; if (typeof av === 'string')
+        return s.desc ? bv.localeCompare(av) : av.localeCompare(bv); return s.desc ? bv - av : av - bv; });
+    if (showUnusedOnly.measures)
+        items = items.filter(m => m.status !== 'direct');
+    if (searchTerms.measures) {
+        const q = searchTerms.measures.toLowerCase();
+        items = items.filter(m => m.name.toLowerCase().includes(q) || m.table.toLowerCase().includes(q));
+    }
+    document.getElementById("tbody-measures").innerHTML = items.map(m => {
+        const deps = m.daxDependencies.map(d => `<span class="dep-chip" data-action="lineage" data-type="measure" data-name="${escAttr(d)}">${escHtml(d)}</span>`).join("") || '<span style="color:var(--text-faint)">—</span>';
+        const pages = [...new Set(m.usedIn.map(u => u.pageName))];
+        const used = pages.map(p => `<span class="used-chip">${escHtml(p)}</span>`).join("") || '<span style="color:var(--text-faint)">—</span>';
+        const statusBadge = m.status === 'indirect' ? '<span class="badge badge--indirect">↻ INDIRECT</span>' : m.status === 'unused' ? '<span class="badge badge--unused">⚠ UNUSED</span>' : '';
+        const nameAttr = m.description ? ' title="' + escAttr(m.description) + '" data-desc="1"' : '';
+        const descRow = m.description ? '<div class="desc-muted" style="margin-top:2px;font-size:11px">' + escHtml(m.description) + '</div>' : '';
+        return `<tr class="${sc(m.status)}"><td><span class="field-name"${nameAttr} data-action="lineage" data-type="measure" data-name="${escAttr(m.name)}">${escHtml(m.name)}</span>${statusBadge}${descRow}</td><td><span class="field-table">${escHtml(m.table)}</span></td><td><span class="usage-count ${uc(m.usageCount)}">${m.usageCount}</span></td><td><span class="usage-count ${uc(m.pageCount)}">${m.pageCount}</span></td><td>${deps}</td><td>${used}</td><td><span class="format-str">${escHtml(m.formatString || '—')}</span></td></tr>`;
+    }).join("");
+    setPanelFooter("footer-measures", "Showing " + items.length + " of " + DATA.measures.length + " measures · " + DATA.totals.measuresUnused + " unused · " + DATA.totals.measuresIndirect + " indirect", sortIndicator(sortState.measures));
+}
+function renderColumns() {
+    let items = [...DATA.columns];
+    const s = sortState.columns;
+    items.sort((a, b) => { let av = a[s.key], bv = b[s.key]; if (typeof av === 'string')
+        return s.desc ? bv.localeCompare(av) : av.localeCompare(bv); return s.desc ? bv - av : av - bv; });
+    if (showUnusedOnly.columns)
+        items = items.filter(c => c.status !== 'direct');
+    if (searchTerms.columns) {
+        const q = searchTerms.columns.toLowerCase();
+        items = items.filter(c => c.name.toLowerCase().includes(q) || c.table.toLowerCase().includes(q));
+    }
+    document.getElementById("tbody-columns").innerHTML = items.map(c => {
+        const pages = [...new Set(c.usedIn.map(u => u.pageName))];
+        const used = pages.map(p => `<span class="used-chip">${escHtml(p)}</span>`).join("") || '<span style="color:var(--text-faint)">—</span>';
+        // SLICER badge intentionally omitted here — it now lives on the per-column
+        // row inside the Tables tab, next to PK/FK/CALC/HIDDEN, where it's more
+        // useful in context.
+        const statusBadge = c.status === 'indirect' ? '<span class="badge badge--indirect">↻ INDIRECT</span>' : c.status === 'unused' ? '<span class="badge badge--unused">⚠ UNUSED</span>' : '';
+        const cNameAttr = c.description ? ' title="' + escAttr(c.description) + '" data-desc="1"' : '';
+        const cDescRow = c.description ? '<div class="desc-muted" style="margin-top:2px;font-size:11px">' + escHtml(c.description) + '</div>' : '';
+        return `<tr class="${sc(c.status)}"><td><span class="field-name"${cNameAttr} data-action="lineage" data-type="column" data-name="${escAttr(c.name)}">${escHtml(c.name)}</span>${statusBadge}${cDescRow}</td><td><span class="field-table">${escHtml(c.table)}</span></td><td><span class="mono" style="font-size:11px;color:#64748B">${escHtml(c.dataType)}</span></td><td><span class="usage-count ${uc(c.usageCount)}">${c.usageCount}</span></td><td><span class="usage-count ${uc(c.pageCount)}">${c.pageCount}</span></td><td>${used}</td></tr>`;
+    }).join("");
+    setPanelFooter("footer-columns", "Showing " + items.length + " of " + DATA.columns.length + " columns · " + DATA.totals.columnsUnused + " unused", sortIndicator(sortState.columns));
+}
+function navigateLineage(type, name) {
+    lastTab = activeTab !== "lineage" ? activeTab : lastTab;
+    activeTab = "lineage";
+    renderTabs();
+    document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
+    document.getElementById("panel-lineage").classList.add("active");
+    const el = document.getElementById("lineage-content");
+    const backTab = type === "column" ? "columns" : "measures";
+    if (type === "measure") {
+        const m = DATA.measures.find(x => x.name === name);
+        if (!m) {
+            el.innerHTML = '<div style="color:var(--clr-unused);padding:20px">Measure not found</div>';
+            return;
+        }
+        const upstream = m.daxDependencies.map(d => {
+            const dep = DATA.measures.find(x => x.name === d);
+            return dep || { name: d, table: "?", formatString: "" };
+        });
+        const usedFuncs = DATA.functions.filter(f => !f.name.endsWith('.About') && (m.daxExpression.includes("'" + f.name + "'") || m.daxExpression.includes(f.name + '(')));
+        const feedsInto = DATA.measures.filter(x => x.daxDependencies.includes(m.name));
+        // EXTERNALMEASURE proxy is now detected server-side (data-builder.ts)
+        // and attached to the measure as a structured `externalProxy` field.
+        // The regex fallback stays for back-compat with older DATA payloads.
+        let proxy = m.externalProxy;
+        if (!proxy) {
+            const extMatch = (m.daxExpression || '').match(/EXTERNALMEASURE\s*\(\s*"([^"]*)"\s*,\s*(\w+)\s*,\s*"DirectQuery to AS - ([^"]+)"\s*\)/i);
+            if (extMatch)
+                proxy = { remoteName: extMatch[1], type: extMatch[2], externalModel: extMatch[3], cluster: null };
+        }
+        const extModel = proxy ? proxy.externalModel : null;
+        const extRemoteName = proxy ? proxy.remoteName : null;
+        el.innerHTML = `
+      <div class="lineage-back" data-action="tab" data-tab="${escAttr(backTab)}">← Back to ${backTab === 'measures' ? 'Measures' : 'Columns'}</div>
+      <div class="lineage-hero">
+        <div class="lineage-hero-title"><span class="dot" style="background:var(--clr-measure)"></span>${escHtml(m.name)}</div>
+        <div class="lineage-hero-meta">${escHtml(m.table)} · ${escHtml(m.formatString || '—')} · ${m.usageCount} visual${m.usageCount !== 1 ? 's' : ''} · ${m.pageCount} page${m.pageCount !== 1 ? 's' : ''}</div>
+        ${m.description ? '<div class="desc-line" style="margin-top:8px;font-size:13px">' + escHtml(m.description) + '</div>' : ''}
+        <div class="lineage-dax">${escHtml(m.daxExpression)}</div>
+      </div>
+      <div class="lineage-flow-row">
+        <div class="lineage-flow-col">
+          <div class="lineage-flow-col-label" style="color:var(--clr-upstream)">↑ Upstream</div>
+          ${usedFuncs.map(f => `
+            <div class="lc udf clickable" style="margin-bottom:4px" data-action="tab" data-tab="functions">
+              <div class="lc-name" style="color:var(--clr-function)">ƒ ${escHtml(f.name)}</div>
+              <div class="lc-sub">Function · ${f.parameters ? f.parameters.split(',').length + ' param' + (f.parameters.split(',').length !== 1 ? 's' : '') : 'no params'}</div>
+            </div>`).join("")}
+          ${extModel ? `
+          <div class="lc" style="border-left:3px solid var(--clr-function);margin-bottom:4px;background:var(--clr-function-soft)">
+            <div class="lc-name" style="color:var(--clr-function)">⊡ ${escHtml(extModel)}</div>
+            <div class="lc-sub">External semantic model · EXTERNALMEASURE${extRemoteName && extRemoteName !== m.name ? ' · remote name "' + escHtml(extRemoteName) + '"' : ''}</div>
+          </div>` : ''}
+          <div class="lc source" style="margin-bottom:4px">
+            <div class="lc-name" style="color:var(--clr-source)">⬡ ${escHtml(m.table)}</div>
+            <div class="lc-sub">Source table</div>
+          </div>
+          ${upstream.length ? upstream.map(u => `
+            <div class="lc upstream clickable" data-action="lineage" data-type="measure" data-name="${escAttr(u.name)}">
+              <div class="lc-name">${escHtml(u.name)}</div>
+              <div class="lc-sub">${escHtml(u.table)} · ${escHtml(u.formatString || '')}</div>
+            </div>`).join("") : `${(usedFuncs.length || extModel) ? '' : `<div class="lc upstream empty"><div class="lc-name">No dependencies</div><div class="lc-sub">Base measure</div></div>`}`}
+        </div>
+        <div class="lineage-arrow-col">→</div>
+        <div class="lineage-flow-col">
+          <div class="lineage-flow-col-label" style="color:var(--clr-measure)">● This Measure</div>
+          <div class="lc center">
+            <div class="lc-name">${escHtml(m.name)}</div>
+            <div class="lc-sub">${escHtml(m.daxExpression.length > 50 ? m.daxExpression.substring(0, 50) + '…' : m.daxExpression)}</div>
+          </div>
+          ${feedsInto.length ? `
+            <div class="feeds-label">Feeds into</div>
+            ${feedsInto.map(f => `
+              <div class="lc feeds clickable" data-action="lineage" data-type="measure" data-name="${escAttr(f.name)}">
+                <div class="lc-name">${escHtml(f.name)}</div>
+                <div class="lc-sub">${escHtml(f.formatString || '')} · ${f.usageCount} visual${f.usageCount !== 1 ? 's' : ''}</div>
+              </div>`).join("")}
+          ` : ''}
+        </div>
+        <div class="lineage-arrow-col">→</div>
+        <div class="lineage-flow-col">
+          <div class="lineage-flow-col-label" style="color:var(--clr-downstream)">↓ Downstream</div>
+          ${m.usedIn.length ? m.usedIn.map(d => `
+            <div class="lc downstream">
+              <div class="lc-name">${escHtml(d.visualTitle)}</div>
+              <div class="lc-sub">${escHtml(d.visualType)} · ${escHtml(d.bindingRole)}</div>
+              <div class="lc-role">${escHtml(d.pageName)}</div>
+            </div>`).join("") : `<div class="lc downstream empty"><div class="lc-name" style="color:var(--clr-unused)">Not used</div><div class="lc-sub">Orphaned measure</div></div>`}
+        </div>
+      </div>`;
+        addCopyButtons();
+    }
+    else if (type === "column") {
+        const c = DATA.columns.find(x => x.name === name);
+        if (!c) {
+            el.innerHTML = '<div style="color:var(--clr-unused);padding:20px">Column not found</div>';
+            return;
+        }
+        const colRef = c.table + '[' + c.name + ']';
+        const related = DATA.measures.filter(m => m.daxExpression.includes(colRef) || m.daxExpression.includes('[' + c.name + ']'));
+        el.innerHTML = `
+      <div class="lineage-back" data-action="tab" data-tab="columns">← Back to Columns</div>
+      <div class="lineage-hero">
+        <div class="lineage-hero-title"><span class="dot" style="background:var(--clr-column)"></span>${escHtml(c.name)}</div>
+        <div class="lineage-hero-meta">${escHtml(c.table)} · ${escHtml(c.dataType)} · ${c.usageCount} visual${c.usageCount !== 1 ? 's' : ''} · ${c.pageCount} page${c.pageCount !== 1 ? 's' : ''}</div>
+        ${c.description ? '<div class="desc-line" style="margin-top:8px;font-size:13px">' + escHtml(c.description) + '</div>' : ''}
+      </div>
+      <div class="lineage-flow-row">
+        <div class="lineage-flow-col">
+          <div class="lineage-flow-col-label" style="color:var(--clr-source)">↑ Source</div>
+          <div class="lc source">
+            <div class="lc-name" style="color:var(--clr-source)">⬡ ${escHtml(c.table)}</div>
+            <div class="lc-sub">${escHtml(c.dataType)}</div>
+          </div>
+        </div>
+        <div class="lineage-arrow-col">→</div>
+        <div class="lineage-flow-col">
+          <div class="lineage-flow-col-label" style="color:var(--clr-column)">● This Column</div>
+          <div class="lc center col-type">
+            <div class="lc-name">${escHtml(c.name)}</div>
+            <div class="lc-sub">${escHtml(c.table)}[${escHtml(c.name)}]</div>
+          </div>
+          ${related.length ? `
+            <div class="feeds-label">Measures referencing ${escHtml(c.name)}</div>
+            ${related.map(m => `
+              <div class="lc feeds clickable" data-action="lineage" data-type="measure" data-name="${escAttr(m.name)}">
+                <div class="lc-name">${escHtml(m.name)}</div>
+                <div class="lc-sub">${escHtml(m.formatString || '')} · ${m.usageCount} visual${m.usageCount !== 1 ? 's' : ''}</div>
+              </div>`).join("")}
+          ` : ''}
+        </div>
+        <div class="lineage-arrow-col">→</div>
+        <div class="lineage-flow-col">
+          <div class="lineage-flow-col-label" style="color:var(--clr-downstream)">↓ Downstream</div>
+          ${c.usedIn.length ? c.usedIn.map(d => `
+            <div class="lc downstream">
+              <div class="lc-name">${escHtml(d.visualTitle)}</div>
+              <div class="lc-sub">${escHtml(d.visualType)} · ${escHtml(d.bindingRole)}</div>
+              <div class="lc-role">${escHtml(d.pageName)}</div>
+            </div>`).join("") : `<div class="lc downstream empty"><div class="lc-name" style="color:var(--clr-unused)">Not used</div><div class="lc-sub">Orphaned column</div></div>`}
+        </div>
+      </div>`;
+    }
+}
+function renderPages() {
+    const FC = { measure: "#F59E0B", column: "#3B82F6" };
+    const hiddenSet = new Set(DATA.hiddenPages || []);
+    document.getElementById("pages-content").innerHTML = pageData.map(p => {
+        const isOpen = openPages.has(p.name);
+        const hiddenBadge = hiddenSet.has(p.name) ? '<span class="badge badge--hidden" title="This page is marked HiddenInViewMode — typically a tooltip, drillthrough, or nav-suppressed page">👁 HIDDEN</span>' : '';
+        const typeChips = Object.entries(p.typeCounts).map(([t, c]) => `<span class="page-type-chip">${c}× ${escHtml(t)}</span>`).join("");
+        const visualRows = p.visuals.map(v => {
+            const bindingChips = v.bindings.map(b => {
+                const color = b.fieldType === "measure" ? FC.measure : FC.column;
+                return `<span class="dep-chip" style="background:${color}15;color:${color};border-color:${color}30;cursor:pointer" data-action="lineage" data-type="${escAttr(b.fieldType)}" data-name="${escAttr(b.fieldName)}">${escHtml(b.fieldName)}</span>`;
+            }).join("");
+            return `<div class="page-visual-row">
+        <span class="page-visual-type">${escHtml(v.type)}</span>
+        <span class="page-visual-title">${escHtml(v.title)}</span>
+        <div class="page-visual-bindings">${bindingChips}</div>
+      </div>`;
+        }).join("");
+        const measureChips = p.measures.map(m => `<span class="dep-chip" style="background:rgba(245,158,11,.1);color:var(--clr-measure);border-color:rgba(245,158,11,.2);cursor:pointer" data-action="lineage" data-type="measure" data-name="${escAttr(m)}">${escHtml(m)}</span>`).join("");
+        const columnChips = p.columns.map(c => `<span class="dep-chip" style="background:rgba(59,130,246,.1);color:var(--clr-column);border-color:rgba(59,130,246,.2);cursor:pointer" data-action="lineage" data-type="column" data-name="${escAttr(c)}">${escHtml(c)}</span>`).join("");
+        return `<div class="page-card ${isOpen ? 'open' : ''}">
+      <div class="page-header" data-action="page-toggle" data-name="${escAttr(p.name)}">
+        <div class="page-name">${escHtml(p.name)}${hiddenBadge}</div>
+        <div class="page-stats">
+          <div class="page-stat"><div class="page-stat-val" style="color:var(--clr-downstream)">${p.visualCount}</div><div class="page-stat-label">Visuals</div></div>
+          <div class="page-stat"><div class="page-stat-val" style="color:var(--clr-measure)">${p.measureCount}</div><div class="page-stat-label">Measures</div></div>
+          <div class="page-stat"><div class="page-stat-val" style="color:var(--clr-column)">${p.columnCount}</div><div class="page-stat-label">Columns</div></div>
+          <div class="page-stat"><div class="page-stat-val" style="color:var(--clr-slicer)">${p.slicerCount}</div><div class="page-stat-label">Slicers</div></div>
+        </div>
+        <span class="page-expand" aria-hidden="true"></span>
+      </div>
+      <div class="page-body"><div class="page-body-inner">
+        <div class="page-section">
+          <div class="page-section-title">Visual types<span class="line"></span></div>
+          <div class="page-type-summary">${typeChips}</div>
+        </div>
+        <div class="page-section">
+          <div class="page-section-title">Measures (${p.measureCount})<span class="line"></span></div>
+          <div style="display:flex;flex-wrap:wrap;gap:4px">${measureChips || '<span style="color:#475569;font-size:12px">None</span>'}</div>
+        </div>
+        <div class="page-section">
+          <div class="page-section-title">Columns (${p.columnCount})<span class="line"></span></div>
+          <div style="display:flex;flex-wrap:wrap;gap:4px">${columnChips || '<span style="color:#475569;font-size:12px">None</span>'}</div>
+        </div>
+        <div class="page-section">
+          <div class="page-section-title">Visuals (${p.visualCount})<span class="line"></span></div>
+          ${visualRows || (p.visualCount > 0 ? '<span style="color:#475569;font-size:12px">No data-bound visuals on this page — text, shape, or image only.</span>' : '<span style="color:#475569;font-size:12px">Empty page.</span>')}
+        </div>
+      </div></div>
+    </div>`;
+    }).join("");
+    var hiddenCount = (DATA.hiddenPages || []).length;
+    var visibleCount = pageData.length - hiddenCount;
+    var totalVisuals = pageData.reduce(function (a, p) { return a + (p.visualCount || 0); }, 0);
+    var pf = document.getElementById("pages-content");
+    if (pf)
+        pf.insertAdjacentHTML("beforeend", '<div class="panel-footer"><div class="left">' +
+            pageData.length + ' pages · ' + visibleCount + ' visible · ' + hiddenCount + ' hidden · ' + totalVisuals + ' visuals' +
+            '</div></div>');
+}
+function togglePage(name) {
+    if (openPages.has(name))
+        openPages.delete(name);
+    else
+        openPages.add(name);
+    renderPages();
+}
+function toggleTableCard(name) {
+    if (openTables.has(name))
+        openTables.delete(name);
+    else
+        openTables.add(name);
+    renderTables();
+}
+// Classify a table into one of five mutually exclusive groups for the
+// Tables-tab sectioning. Order of checks matters because a calc-group
+// table could also technically have a "measure" name etc. — we take
+// the most-specific category first.
+function tableGroupKey(t) {
+    if (t.parameterKind === 'field')
+        return 'field-param';
+    if (t.parameterKind === 'compositeModelProxy')
+        return 'proxy';
+    if (t.isCalcGroup)
+        return 'calcgroup';
+    // "Measure home" tables — host measures with (usually) one placeholder
+    // column. Heuristic matches `_measures`, `_Rollup_measures`, etc.
+    if ((t.measureCount || 0) > 0 && (t.columnCount || 0) <= 1 && /measure/i.test(t.name))
+        return 'measure';
+    return 'data';
+}
+// Display metadata for each group. `defaultOpen:true` means the group
+// body is visible on first load (the user can still collapse it).
+const TABLE_GROUPS = [
+    { key: 'data', label: 'Data Tables', defaultOpen: false, icon: '▦' },
+    { key: 'measure', label: 'Measure Tables', defaultOpen: false, icon: 'ƒ' },
+    { key: 'field-param', label: 'Field Parameters', defaultOpen: false, icon: '▣' },
+    { key: 'proxy', label: 'Composite Model Proxies', defaultOpen: false, icon: '◈' },
+    { key: 'calcgroup', label: 'Calculation Groups', defaultOpen: false, icon: '🧮' },
+];
+// Track which groups the user has toggled away from their default.
+// Default state is derived per-group; this set stores the flips.
+var flippedTableGroups = new Set();
+function isTableGroupOpen(key) {
+    const def = (TABLE_GROUPS.find(g => g.key === key) || {}).defaultOpen;
+    return flippedTableGroups.has(key) ? !def : def;
+}
+function toggleTableGroup(key) {
+    if (flippedTableGroups.has(key))
+        flippedTableGroups.delete(key);
+    else
+        flippedTableGroups.add(key);
+    renderTables();
+}
+function renderTables() {
+    const tables = visibleTables();
+    // Precompute slicer lookup once per render so the per-row badge stays cheap.
+    // TableColumnData doesn't carry isSlicerField — it lives on the flat ModelColumn.
+    const slicerSet = new Set((DATA.columns || []).filter(c => c.isSlicerField).map(c => c.table + '|' + c.name));
+    // Partition visible tables into the five groups.
+    const byGroup = new Map(TABLE_GROUPS.map(g => [g.key, []]));
+    for (const t of tables) {
+        const k = tableGroupKey(t);
+        byGroup.get(k).push(t);
+    }
+    function cardHtml(t) {
+        const isOpen = openTables.has(t.name);
+        const colRows = t.columns.map(c => {
+            const badges = [];
+            if (c.isKey)
+                badges.push('<span class="badge badge--pk" title="Primary key — isKey:true set in the model">🔑 PK</span>');
+            else if (c.isInferredPK)
+                badges.push('<span class="badge badge--pk-inf" title="Inferred primary key — this column is on the one-side of at least one relationship">🗝 PK</span>');
+            if (c.isFK)
+                badges.push('<span class="badge badge--fk" title="Foreign key — used as fromColumn in a relationship">🔗 FK</span>');
+            if (c.isCalculated)
+                badges.push('<span class="badge badge--calc" title="Calculated column">🧮 CALC</span>');
+            if (c.isHidden)
+                badges.push('<span class="badge badge--hid-col" title="isHidden:true">👁 HIDDEN</span>');
+            if (slicerSet.has(t.name + '|' + c.name))
+                badges.push('<span class="badge badge--slicer" title="Bound to at least one slicer visual">🎚 SLICER</span>');
+            const statusClass = c.status === 'unused' ? 'zero' : c.status === 'indirect' ? 'low' : 'good';
+            // Relationship column: FK target (outgoing) or incoming PK refs, or both if the column is a bridge
+            const parts = [];
+            if (c.isFK && c.fkTarget)
+                parts.push(`<span class="rel-out">→ ${escHtml(c.fkTarget.table)}[${escHtml(c.fkTarget.column)}]</span>`);
+            if (c.incomingRefs && c.incomingRefs.length > 0) {
+                const refs = c.incomingRefs.map(r => `<span class="rel-in${r.isActive ? '' : ' rel-inactive'}">← ${escHtml(r.table)}[${escHtml(r.column)}]${r.isActive ? '' : ' <span style="font-size:9px;opacity:.7">(inactive)</span>'}</span>`).join('<span style="color:var(--text-fainter);margin:0 4px">·</span>');
+                parts.push(refs);
+            }
+            const relText = parts.length ? parts.join('<br>') : '<span style="color:var(--text-fainter)">—</span>';
+            const colDesc = c.description ? '<div class="desc-muted" style="margin-top:3px">' + escHtml(c.description) + '</div>' : '';
+            return `<div class="tcol-row">
+        <div>
+          <span class="tcol-name" data-action="lineage" data-type="column" data-name="${escAttr(c.name)}">${escHtml(c.name)}</span>${badges.join('')}
+          <span class="usage-count ${statusClass}" style="margin-left:8px;font-size:10px">${c.usageCount}</span>
+          ${colDesc}
+        </div>
+        <div class="tcol-type">${escHtml(c.dataType)}</div>
+        <div class="tcol-fk">${relText}</div>
+      </div>`;
+        }).join("") || '<div style="padding:8px 10px;color:var(--text-faint);font-size:12px">No columns</div>';
+        const measureList = t.measures.map(m => {
+            const cls = m.status === 'unused' ? 'zero' : m.status === 'indirect' ? 'low' : 'good';
+            return `<span class="dep-chip" style="background:rgba(245,158,11,.1);color:var(--clr-measure);border-color:rgba(245,158,11,.2);cursor:pointer" data-action="lineage" data-type="measure" data-name="${escAttr(m.name)}">${escHtml(m.name)} <span class="usage-count ${cls}" style="margin-left:4px;font-size:9px">${m.usageCount}</span></span>`;
+        }).join("") || '<span style="color:var(--text-faint);font-size:12px">None</span>';
+        const relRows = t.relationships.map(r => {
+            const dirClass = r.direction === 'outgoing' ? 'badge--direction-out' : 'badge--direction-in';
+            const dirLabel = r.direction === 'outgoing' ? 'FK →' : '← PK';
+            const inactive = r.isActive ? '' : ' trel-inactive';
+            const arrow = r.direction === 'outgoing' ? '→' : '←';
+            const other = r.direction === 'outgoing' ? `${escHtml(r.toTable)}[${escHtml(r.toColumn)}]` : `${escHtml(r.fromTable)}[${escHtml(r.fromColumn)}]`;
+            const self = r.direction === 'outgoing' ? `[${escHtml(r.fromColumn)}]` : `[${escHtml(r.toColumn)}]`;
+            return `<div class="trel-row${inactive}">
+        <span class="badge ${dirClass}">${dirLabel}</span>
+        <span>${self} <span style="color:var(--text-faint)">${arrow}</span> ${other}</span>
+        ${r.isActive ? '' : '<span style="font-size:9px;color:var(--text-dim);margin-left:4px">(inactive)</span>'}
+      </div>`;
+        }).join("") || '<div style="padding:8px 10px;color:var(--text-faint);font-size:12px">No relationships</div>';
+        const tableDesc = t.description ? '<div class="desc-line">' + escHtml(t.description) + '</div>' : '';
+        return `<div class="page-card ${isOpen ? 'open' : ''}">
+      <div class="page-header" data-action="table-toggle" data-name="${escAttr(t.name)}">
+        <div style="flex:1;min-width:0">
+          <div class="page-name">${escHtml(t.name)}</div>
+          ${tableDesc}
+        </div>
+        <div class="page-stats">
+          <div class="page-stat"><div class="page-stat-val" style="color:var(--clr-column)">${t.columnCount}</div><div class="page-stat-label">Columns</div></div>
+          <div class="page-stat"><div class="page-stat-val" style="color:var(--clr-measure)">${t.measureCount}</div><div class="page-stat-label">Measures</div></div>
+          <div class="page-stat"><div class="page-stat-val" style="color:var(--clr-measure)">${t.keyCount}</div><div class="page-stat-label">Keys</div></div>
+          <div class="page-stat"><div class="page-stat-val" style="color:var(--clr-column)">${t.fkCount}</div><div class="page-stat-label">FKs</div></div>
+        </div>
+        <span class="page-expand" aria-hidden="true"></span>
+      </div>
+      <div class="page-body"><div class="page-body-inner">
+        <div class="page-section">
+          <div class="page-section-title">Columns (${t.columnCount})<span class="line"></span></div>
+          <div class="tcol-row" style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-dim);font-weight:600;border-bottom:1px solid var(--border);padding-bottom:4px">
+            <div>Name</div><div>Type</div><div>Relationship</div>
+          </div>
+          ${colRows}
+        </div>
+        <div class="page-section">
+          <div class="page-section-title">Measures (${t.measureCount})<span class="line"></span></div>
+          <div style="display:flex;flex-wrap:wrap;gap:4px">${measureList}</div>
+        </div>
+        <div class="page-section">
+          <div class="page-section-title">Relationships (${t.relationships.length})<span class="line"></span></div>
+          ${relRows}
+        </div>
+      </div></div>
+    </div>`;
+    } // end cardHtml
+    // Render the grouped sections. Sort tables alphabetically within
+    // each group; the group order comes from TABLE_GROUPS. Empty
+    // groups are omitted so the UI doesn't show empty "0 tables"
+    // section headers for models that have no parameters / proxies.
+    const sectionsHtml = TABLE_GROUPS.map(g => {
+        const groupTables = (byGroup.get(g.key) || []).slice().sort((a, b) => a.name.localeCompare(b.name));
+        if (groupTables.length === 0)
+            return '';
+        const open = isTableGroupOpen(g.key);
+        const groupCols = groupTables.reduce((a, t) => a + (t.columnCount || 0), 0);
+        const groupMs = groupTables.reduce((a, t) => a + (t.measureCount || 0), 0);
+        const metaParts = [groupTables.length + ' table' + (groupTables.length === 1 ? '' : 's')];
+        if (groupCols > 0)
+            metaParts.push(groupCols + ' col' + (groupCols === 1 ? '' : 's'));
+        if (groupMs > 0)
+            metaParts.push(groupMs + ' measure' + (groupMs === 1 ? '' : 's'));
+        const bodyHtml = open ? groupTables.map(cardHtml).join("") : '';
+        return `<div class="table-group ${open ? 'open' : ''}">
+      <div class="table-group-header" data-action="table-group-toggle" data-group="${escAttr(g.key)}">
+        <span class="table-group-chev" aria-hidden="true"></span>
+        <span class="table-group-icon">${g.icon}</span>
+        <span class="table-group-title">${escHtml(g.label)}</span>
+        <span class="table-group-meta">${metaParts.join(' · ')}</span>
+      </div>
+      <div class="table-group-body">${bodyHtml}</div>
+    </div>`;
+    }).join("");
+    document.getElementById("tables-content").innerHTML =
+        sectionsHtml || '<div style="text-align:center;padding:60px 20px;color:var(--text-faint);font-size:13px">No tables found</div>';
+    var totalCols = tables.reduce(function (a, t) { return a + (t.columnCount || 0); }, 0);
+    var totalMs = tables.reduce(function (a, t) { return a + (t.measureCount || 0); }, 0);
+    var adc = autoDateCount();
+    var pf = document.getElementById("tables-content");
+    if (pf) {
+        // Footer shows visible-table totals + a toggle for the auto-date
+        // tables Power BI generates as calendar infrastructure. The toggle
+        // is only rendered when the model actually has some to hide/show.
+        var autoToggle = adc > 0
+            ? '<button class="filter-btn' + (showAutoDate ? ' active' : '') + '" data-action="toggle-auto-date" title="' +
+                (showAutoDate ? 'Hide' : 'Show') + ' LocalDateTable_* and DateTableTemplate_* auto-generated tables">' +
+                (showAutoDate ? 'Hide' : 'Show') + ' auto-date (' + adc + ')</button>'
+            : '';
+        pf.insertAdjacentHTML("beforeend", '<div class="panel-footer"><div class="left">' +
+            tables.length + ' tables · ' + totalCols + ' columns · ' + totalMs + ' measures' +
+            (adc > 0 && !showAutoDate ? ' · <span style="color:var(--text-faint)">+' + adc + ' auto-date hidden</span>' : '') +
+            '</div><div class="right">' + autoToggle + '</div></div>');
+    }
+}
+var openOrphanSections = new Set();
+function toggleOrphanSection(id) { if (openOrphanSections.has(id))
+    openOrphanSections.delete(id);
+else
+    openOrphanSections.add(id); renderUnused(); }
+function orphanSection(id, title, subtitle, color, count, countLabel, items) {
+    const isOpen = openOrphanSections.has(id);
+    return `<div class="page-card ${isOpen ? 'open' : ''}" style="border-left:3px solid ${color}">
+    <div class="page-header" data-action="orphan-toggle" data-section="${escAttr(id)}">
+      <div style="flex:1">
+        <div class="page-name" style="font-size:14px">${escHtml(title)}</div>
+        <div style="font-size:11px;color:#64748B;margin-top:2px">${escHtml(subtitle)}</div>
+      </div>
+      <div class="page-stats">
+        <div class="page-stat"><div class="page-stat-val" style="color:${color}">${count}</div><div class="page-stat-label">${escHtml(countLabel)}</div></div>
+      </div>
+      <span class="page-expand" aria-hidden="true"></span>
+    </div>
+    <div class="page-body"><div class="page-body-inner">
+      <div style="display:flex;flex-wrap:wrap;gap:8px">${items}</div>
+    </div></div>
+  </div>`;
+}
+function renderUnused() {
+    const unusedM = DATA.measures.filter(m => m.status === 'unused'), indirectM = DATA.measures.filter(m => m.status === 'indirect');
+    const unusedC = DATA.columns.filter(c => c.status === 'unused'), indirectC = DATA.columns.filter(c => c.status === 'indirect');
+    const pureOrphanM = unusedM.filter(m => !m.dependedOnBy.length);
+    const chainOrphanM = unusedM.filter(m => m.dependedOnBy.length > 0);
+    let h = '';
+    if (pureOrphanM.length)
+        h += orphanSection('pure-m', 'Unused Measures — Not Referenced Anywhere', 'No visual uses them and no other measure references them — safe to remove', 'var(--clr-unused)', pureOrphanM.length, 'Measures', pureOrphanM.map(m => `<div class="lc clickable" style="border-left:3px solid var(--clr-unused);flex:0 0 auto" data-action="lineage" data-type="measure" data-name="${escAttr(m.name)}"><div class="lc-name">${escHtml(m.name)}</div><div class="lc-sub">${escHtml(m.table)} · ${escHtml(m.formatString || '')}</div></div>`).join(""));
+    if (chainOrphanM.length)
+        h += orphanSection('chain-m', 'Unused Measures — Dead Chain', 'Other measures depend on them, but the full chain never reaches any visual', 'var(--clr-unused)', chainOrphanM.length, 'Measures', chainOrphanM.map(m => `<div class="lc clickable" style="border-left:3px solid var(--clr-unused);flex:0 0 auto" data-action="lineage" data-type="measure" data-name="${escAttr(m.name)}"><div class="lc-name">${escHtml(m.name)}</div><div class="lc-sub">${escHtml(m.table)} · ${escHtml(m.formatString || '')} · depended on by ${m.dependedOnBy.length}</div></div>`).join(""));
+    if (unusedC.length)
+        h += orphanSection('orphan-c', 'Unused Columns', 'No visual, measure, or relationship uses them — safe to hide or remove', 'var(--clr-unused)', unusedC.length, 'Columns', unusedC.map(c => `<div class="lc clickable" style="border-left:3px solid var(--clr-unused);flex:0 0 auto" data-action="lineage" data-type="column" data-name="${escAttr(c.name)}"><div class="lc-name">${escHtml(c.name)}</div><div class="lc-sub">${escHtml(c.table)} · ${escHtml(c.dataType)}</div></div>`).join(""));
+    if (indirectM.length)
+        h += orphanSection('indirect-m', 'Indirect Measures', 'Not on any visual, but used inside other measures that are — keep these', 'var(--clr-indirect)', indirectM.length, 'Measures', indirectM.map(m => `<div class="lc clickable" style="border-left:3px solid var(--clr-indirect);flex:0 0 auto" data-action="lineage" data-type="measure" data-name="${escAttr(m.name)}"><div class="lc-name">${escHtml(m.name)}</div><div class="lc-sub">${escHtml(m.table)} · ${escHtml(m.formatString || '')}</div></div>`).join(""));
+    if (indirectC.length)
+        h += orphanSection('indirect-c', 'Indirect Columns', 'Not on any visual, but used in a relationship or measure DAX — keep these', 'var(--clr-indirect)', indirectC.length, 'Columns', indirectC.map(c => `<div class="lc clickable" style="border-left:3px solid var(--clr-indirect);flex:0 0 auto" data-action="lineage" data-type="column" data-name="${escAttr(c.name)}"><div class="lc-name">${escHtml(c.name)}</div><div class="lc-sub">${escHtml(c.table)} · ${escHtml(c.dataType)}</div></div>`).join(""));
+    if (!unusedM.length && !unusedC.length && !indirectM.length && !indirectC.length)
+        h = '<div style="text-align:center;padding:40px;color:var(--clr-success);font-weight:600">All fields are in use ✓</div>';
+    var totalUnused = unusedM.length + unusedC.length;
+    h += '<div class="panel-footer"><div class="left">' +
+        (totalUnused ? totalUnused + ' unused items · safe to review for removal' : 'No unused items to review') +
+        '</div></div>';
+    document.getElementById("unused-content").innerHTML = h;
+}
+function renderSources() {
+    var host = document.getElementById("sources-content");
+    if (!host)
+        return;
+    // ── Model properties card (top of the tab) ────────────────────────────────
+    var mp = DATA.modelProperties || {};
+    var culturesLabel = (mp.cultures && mp.cultures.length > 0) ? mp.cultures.join(", ") : (mp.culture || "\u2014");
+    var implicitLabel = mp.discourageImplicitMeasures ? "Discouraged" : "Allowed";
+    var valueFilterLabel = mp.valueFilterBehavior || "Automatic (default)";
+    var compatLevel = DATA.compatibilityLevel != null ? DATA.compatibilityLevel : "\u2014";
+    var modelDesc = mp.description ? '<div class="desc-line" style="margin-top:8px;font-size:13px">' + escHtml(mp.description) + '</div>' : '';
+    var propsRows = '<tr><td><strong>Compatibility level</strong></td><td>' + escHtml(String(compatLevel)) + '</td></tr>' +
+        '<tr><td><strong>Cultures</strong></td><td>' + escHtml(culturesLabel) + '</td></tr>' +
+        '<tr><td><strong>Implicit measures</strong></td><td>' + escHtml(implicitLabel) + '</td></tr>' +
+        '<tr><td><strong>Value filter behavior</strong></td><td>' + escHtml(valueFilterLabel) + '</td></tr>';
+    if (mp.sourceQueryCulture) {
+        propsRows += '<tr><td><strong>Source query culture</strong></td><td>' + escHtml(mp.sourceQueryCulture) + '</td></tr>';
+    }
+    if (mp.defaultPowerBIDataSourceVersion) {
+        propsRows += '<tr><td><strong>Datasource version</strong></td><td>' + escHtml(mp.defaultPowerBIDataSourceVersion) + '</td></tr>';
+    }
+    var modelPropsCard = '<div class="page-card" style="margin-bottom:14px">' +
+        '<div class="page-header" style="cursor:default"><div style="flex:1">' +
+        '<div class="page-name" style="font-size:14px">Model properties</div>' +
+        '<div style="font-size:11px;color:var(--text-dim);margin-top:2px">Top-level metadata from <code>model.tmdl</code> / <code>database.tmdl</code> / <code>cultures/</code>. Server and Database name are runtime-only and not stored in the files.</div>' +
+        modelDesc +
+        '</div></div>' +
+        '<div style="padding:0 18px 14px">' +
+        '<table class="data-table"><tbody>' + propsRows + '</tbody></table>' +
+        '</div>' +
+        '</div>';
+    var tablesWithSources = visibleTables().filter(function (t) { return (t.partitions || []).length > 0; });
+    var modeCounts = {};
+    var totalParts = 0;
+    tablesWithSources.forEach(function (t) {
+        (t.partitions || []).forEach(function (p) {
+            var m = (p.mode || "import").toLowerCase();
+            modeCounts[m] = (modeCounts[m] || 0) + 1;
+            totalParts++;
+        });
+    });
+    var modeChips = Object.keys(modeCounts).sort(function (a, b) { return modeCounts[b] - modeCounts[a]; }).map(function (m) {
+        return '<span class="dep-chip" style="background:rgba(59,130,246,.1);color:var(--clr-column);border-color:rgba(59,130,246,.2)">' + modeCounts[m] + '\u00d7 ' + escHtml(m) + '</span>';
+    }).join('');
+    var compatLine = DATA.compatibilityLevel
+        ? '<div style="font-size:11px;color:var(--text-dim);margin-top:6px">Compatibility level: <strong style="color:var(--text)">' + DATA.compatibilityLevel + '</strong></div>'
+        : '';
+    var summary = '<div class="page-card" style="margin-bottom:14px">' +
+        '<div class="page-header" style="cursor:default">' +
+        '<div style="flex:1">' +
+        '<div class="page-name" style="font-size:14px">Storage modes</div>' +
+        '<div style="font-size:11px;color:var(--text-dim);margin-top:2px">' + tablesWithSources.length + ' table' + (tablesWithSources.length === 1 ? '' : 's') + ' with sources · ' + totalParts + ' partition' + (totalParts === 1 ? '' : 's') + '</div>' +
+        '<div style="margin-top:8px">' + (modeChips || '<span style="color:var(--text-faint)">None</span>') + '</div>' +
+        compatLine +
+        '</div>' +
+        '</div>' +
+        '</div>';
+    // Parameters / expressions block
+    var exprBlock = "";
+    if ((DATA.expressions || []).length > 0) {
+        var rows = DATA.expressions.map(function (e) {
+            var kind = e.kind === "parameter" ? "Parameter" : "M expression";
+            var val = String(e.value || "");
+            if (val.length > 120)
+                val = val.substring(0, 117) + "\u2026";
+            var desc = e.description ? '<div class="desc-muted" style="margin-top:3px;font-size:11px">' + escHtml(e.description) + '</div>' : '';
+            return '<tr><td><strong>' + escHtml(e.name) + '</strong>' + desc + '</td><td><span class="field-table">' + kind + '</span></td><td><code style="font-size:11px;color:var(--code-name)">' + escHtml(val) + '</code></td></tr>';
+        }).join('');
+        exprBlock =
+            '<div class="page-card" style="margin-bottom:14px">' +
+                '<div class="page-header" style="cursor:default"><div style="flex:1">' +
+                '<div class="page-name" style="font-size:14px">Parameters &amp; expressions</div>' +
+                '<div style="font-size:11px;color:var(--text-dim);margin-top:2px">Top-level M expressions defined in <code>expressions.tmdl</code></div>' +
+                '</div></div>' +
+                '<div style="padding:0 18px 14px">' +
+                '<table class="data-table"><thead><tr><th>Name</th><th>Kind</th><th>Value</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+                '</div>' +
+                '</div>';
+    }
+    // Per-table sources
+    var perTableBlock = "";
+    if (tablesWithSources.length > 0) {
+        var sourceRows = "";
+        tablesWithSources.forEach(function (t) {
+            (t.partitions || []).forEach(function (p) {
+                var loc = p.sourceLocation ? '<code style="font-size:11px;color:var(--text-muted);word-break:break-all">' + escHtml(p.sourceLocation) + '</code>' : '<span style="color:var(--text-faint)">\u2014</span>';
+                sourceRows +=
+                    '<tr>' +
+                        '<td><strong>' + escHtml(t.name) + '</strong></td>' +
+                        '<td><span class="dep-chip" style="background:rgba(34,197,94,.1);color:var(--clr-success);border-color:rgba(34,197,94,.2)">' + escHtml(p.mode || 'import') + '</span></td>' +
+                        '<td><span class="dep-chip" style="background:rgba(168,85,247,.1);color:var(--clr-calc);border-color:rgba(168,85,247,.2)">' + escHtml(p.sourceType || 'Unknown') + '</span></td>' +
+                        '<td>' + loc + '</td>' +
+                        '</tr>';
+            });
+        });
+        perTableBlock =
+            '<div class="page-card">' +
+                '<div class="page-header" style="cursor:default"><div style="flex:1">' +
+                '<div class="page-name" style="font-size:14px">Per-table sources</div>' +
+                '<div style="font-size:11px;color:var(--text-dim);margin-top:2px">Source type is inferred from the M code; location is the first string literal in the partition source.</div>' +
+                '</div></div>' +
+                '<div style="padding:0 18px 14px">' +
+                '<table class="data-table"><thead><tr><th>Table</th><th>Mode</th><th>Source type</th><th>Location</th></tr></thead><tbody>' + sourceRows + '</tbody></table>' +
+                '</div>' +
+                '</div>';
+    }
+    var sourcesFooter = '<div class="panel-footer"><div class="left">' +
+        tablesWithSources.length + ' source tables' +
+        '</div></div>';
+    if (tablesWithSources.length === 0 && (DATA.expressions || []).length === 0) {
+        // Even when there's no partition info, show the model properties card.
+        host.innerHTML = modelPropsCard + '<div style="text-align:center;padding:40px 20px;color:var(--text-faint);font-size:13px">No partition or expression information found in this model.</div>' + sourcesFooter;
+        return;
+    }
+    host.innerHTML = modelPropsCard + summary + exprBlock + perTableBlock + sourcesFooter;
+}
+function renderRelationships() {
+    const rels = DATA.relationships;
+    var activeCount = rels.filter(function (r) { return r.isActive; }).length;
+    var inactiveCount = rels.length - activeCount;
+    var relFooter = '<div class="panel-footer"><div class="left">' +
+        rels.length + ' relationships · ' + activeCount + ' active · ' + inactiveCount + ' inactive' +
+        '</div></div>';
+    if (!rels.length) {
+        document.getElementById("relationships-content").innerHTML = '<div style="text-align:center;padding:40px;color:#6B7280">No relationships found in the model</div>' + relFooter;
+        return;
+    }
+    let h = '<div class="table-wrap"><table class="data-table"><thead><tr><th>From Table</th><th>From Column</th><th></th><th>To Table</th><th>To Column</th><th>Status</th></tr></thead><tbody>';
+    for (const r of rels) {
+        const statusColor = r.isActive ? 'var(--clr-success)' : 'var(--text-faint)';
+        const statusLabel = r.isActive ? 'Active' : 'Inactive';
+        h += `<tr>
+      <td style="font-weight:600">${r.fromTable}</td>
+      <td>${r.fromColumn}</td>
+      <td style="text-align:center;color:#6B7280;font-size:18px">→</td>
+      <td style="font-weight:600">${r.toTable}</td>
+      <td>${r.toColumn}</td>
+      <td><span style="color:${statusColor};font-size:12px;font-weight:500">${statusLabel}</span></td>
+    </tr>`;
+    }
+    h += '</tbody></table></div>' + relFooter;
+    document.getElementById("relationships-content").innerHTML = h;
+}
+function renderFunctions() {
+    const fns = DATA.functions.filter(f => !f.name.endsWith('.About'));
+    var fnsFooter = '<div class="panel-footer"><div class="left">' + fns.length + ' function' + (fns.length === 1 ? '' : 's') + '</div></div>';
+    if (!fns.length) {
+        document.getElementById("functions-content").innerHTML = '<div style="text-align:center;padding:40px;color:#6B7280">No user-defined functions found in the model</div>' + fnsFooter;
+        return;
+    }
+    let h = '<div style="display:flex;flex-direction:column;gap:12px">';
+    for (const f of fns) {
+        const refMeasures = DATA.measures.filter(m => m.daxExpression.includes("'" + f.name + "'") || m.daxExpression.includes(f.name + '('));
+        const params = f.parameters ? f.parameters.split(',').map(p => {
+            const parts = p.trim().split(/\s*:\s*/);
+            return parts.length >= 2 ? '<span style="color:var(--code-name)">' + parts[0].trim() + '</span> <span style="color:var(--code-punct)">:</span> <span style="color:var(--code-type)">' + parts.slice(1).join(':').trim() + '</span>' : '<span style="color:var(--code-name)">' + p.trim() + '</span>';
+        }).join('<span style="color:var(--code-punct)">, </span>') : '<span style="color:var(--code-punct);font-style:italic">none</span>';
+        const desc = f.description ? '<div style="font-size:11px;color:#64748B;margin-top:6px;line-height:1.4">' + f.description.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</div>' : '';
+        const expr = f.expression.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const measureChips = refMeasures.map(m => `<span class="dep-chip" style="background:rgba(245,158,11,.1);color:var(--clr-measure);border-color:rgba(245,158,11,.2);cursor:pointer" data-action="lineage" data-type="measure" data-name="${escAttr(m.name)}">${escHtml(m.name)}</span>`).join('');
+        h += `<div class="page-card">
+      <div class="page-header" data-action="card-toggle">
+        <div style="flex:1">
+          <div class="page-name" style="font-size:14px">${escHtml(f.name)}</div>
+          <div style="font-size:11px;color:#64748B;margin-top:2px;font-family:'JetBrains Mono',monospace">( ${params} )</div>
+        </div>
+        <div class="page-stats">
+          <div class="page-stat"><div class="page-stat-val" style="color:var(--clr-measure)">${refMeasures.length}</div><div class="page-stat-label">Measures</div></div>
+        </div>
+        <span class="page-expand" aria-hidden="true"></span>
+      </div>
+      <div class="page-body"><div class="page-body-inner">
+        ${desc}
+        ${refMeasures.length ? `<div style="margin-top:8px"><div style="font-size:10px;color:#475569;text-transform:uppercase;letter-spacing:.06em;font-weight:600;margin-bottom:6px">Measures using this function</div><div style="display:flex;flex-wrap:wrap;gap:4px">${measureChips}</div></div>` : ''}
+        <div class="lineage-dax" style="margin-top:8px;max-height:300px;overflow-y:auto">${expr}</div>
+      </div></div>
+    </div>`;
+    }
+    h += '</div>' + fnsFooter;
+    document.getElementById("functions-content").innerHTML = h;
+}
+function renderCalcGroups() {
+    const cgs = DATA.calcGroups;
+    var cgsFooter = '<div class="panel-footer"><div class="left">' + cgs.length + ' calc group' + (cgs.length === 1 ? '' : 's') + '</div></div>';
+    if (!cgs.length) {
+        document.getElementById("calcgroups-content").innerHTML = '<div style="text-align:center;padding:40px;color:#6B7280">No calculation groups found in the model</div>' + cgsFooter;
+        return;
+    }
+    let h = '<div style="display:flex;flex-direction:column;gap:12px">';
+    for (const cg of cgs) {
+        const desc = cg.description ? '<div style="font-size:11px;color:var(--text-dim);margin-top:4px">' + cg.description.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</div>' : '';
+        let items = '';
+        for (const item of cg.items) {
+            const expr = item.expression.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            const fmtBadge = item.formatStringExpression ? '<span class="mono" style="margin-left:8px;font-size:10px;color:var(--text-dim)">fmt: ' + item.formatStringExpression.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</span>' : '';
+            const itemDesc = item.description ? '<div style="font-size:11px;color:var(--text-dim);margin-bottom:4px">' + item.description.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</div>' : '';
+            items += `<div class="ci-card">
+        <div class="ci-head">
+          <span class="ci-ord">${item.ordinal}</span>
+          <span class="ci-name">${item.name}</span>${fmtBadge}
+        </div>${itemDesc}
+        <div class="lineage-dax" style="font-size:12px">${expr}</div>
+      </div>`;
+        }
+        h += `<div class="page-card">
+      <div class="page-header" data-action="card-toggle">
+        <div style="flex:1">
+          <div class="page-name" style="font-size:14px">${escHtml(cg.name)}</div>
+          ${desc}
+        </div>
+        <div class="page-stats">
+          <div class="page-stat"><div class="page-stat-val" style="color:var(--clr-upstream)">${cg.items.length}</div><div class="page-stat-label">Items</div></div>
+          <div class="page-stat"><div class="page-stat-val" style="color:#64748B">${cg.precedence}</div><div class="page-stat-label">Precedence</div></div>
+        </div>
+        <span class="page-expand" aria-hidden="true"></span>
+      </div>
+      <div class="page-body"><div class="page-body-inner">${items}</div></div>
+    </div>`;
+    }
+    h += '</div>' + cgsFooter;
+    document.getElementById("calcgroups-content").innerHTML = h;
+}
+function sortTable(t, k) { const s = sortState[t]; if (s.key === k)
+    s.desc = !s.desc;
+else {
+    s.key = k;
+    s.desc = true;
+} t === "measures" ? renderMeasures() : renderColumns(); }
+function filterTable(t, v) { searchTerms[t] = v; t === "measures" ? renderMeasures() : renderColumns(); }
+function toggleUnused(t) { showUnusedOnly[t] = !showUnusedOnly[t]; document.getElementById("btn-unused-" + (t === "measures" ? "m" : "c")).classList.toggle("active"); t === "measures" ? renderMeasures() : renderColumns(); }
+function currentMd() {
+    switch (activeMd) {
+        case "datadict": return MARKDOWN_DATADICT;
+        case "measures": return MARKDOWN_MEASURES;
+        case "functions": return MARKDOWN_FUNCTIONS;
+        case "calcgroups": return MARKDOWN_CALCGROUPS;
+        case "quality": return MARKDOWN_QUALITY;
+        default: return MARKDOWN;
+    }
+}
+function currentMdFilename() {
+    var suffix = "-semantic-model.md";
+    if (activeMd === "datadict")
+        suffix = "-data-dictionary.md";
+    else if (activeMd === "measures")
+        suffix = "-measures.md";
+    else if (activeMd === "functions")
+        suffix = "-functions.md";
+    else if (activeMd === "calcgroups")
+        suffix = "-calculation-groups.md";
+    else if (activeMd === "quality")
+        suffix = "-data-quality.md";
+    return REPORT_NAME + suffix;
+}
+function switchMd(which) {
+    activeMd = which;
+    var ids = ["model", "datadict", "measures", "functions", "calcgroups", "quality"];
+    ids.forEach(function (id) {
+        var el = document.getElementById("md-tab-" + id);
+        if (el)
+            el.classList.toggle("active", which === id);
+    });
+    var sub = document.getElementById("md-subtitle");
+    if (sub) {
+        if (which === "datadict")
+            sub.textContent = "Data dictionary reference \u00b7 per-table columns, constraints, hierarchies (no DAX expressions)";
+        else if (which === "measures")
+            sub.textContent = "Measures reference \u00b7 A\u2013Z alphabetical (no DAX expressions)";
+        else if (which === "functions")
+            sub.textContent = "Functions reference \u00b7 per-UDF parameters, descriptions and bodies";
+        else if (which === "calcgroups")
+            sub.textContent = "Calculation groups reference \u00b7 per-item descriptions and bodies";
+        else if (which === "quality")
+            sub.textContent = "Data quality review \u00b7 coverage, removal candidates, indirect entities, inactive relationships";
+        else
+            sub.textContent = "Semantic-model documentation (no DAX expressions)";
+    }
+    renderDocs();
+}
+function switchMdMode(mode) {
+    mdViewMode = mode;
+    var rb = document.getElementById("md-mode-rendered");
+    var wb = document.getElementById("md-mode-raw");
+    if (rb)
+        rb.classList.toggle("active", mode === "rendered");
+    if (wb)
+        wb.classList.toggle("active", mode === "raw");
+    var rendered = document.getElementById("md-rendered");
+    var source = document.getElementById("md-source");
+    if (rendered)
+        rendered.style.display = mode === "rendered" ? "" : "none";
+    if (source)
+        source.style.display = mode === "raw" ? "" : "none";
+    renderDocs();
+}
+function expandAllDetails() {
+    var host = document.getElementById("md-rendered");
+    if (!host)
+        return;
+    host.querySelectorAll("details").forEach(function (d) { d.open = true; });
+}
+function collapseAllDetails() {
+    var host = document.getElementById("md-rendered");
+    if (!host)
+        return;
+    host.querySelectorAll("details").forEach(function (d) { d.open = false; });
+}
+// ─── Markdown renderer ────────────────────────────────────────────────────
+// The mdEscapeHtml / mdInline / mdParseTable / mdRender quartet lives in
+// src/client/render/md.ts now (Stop 5 pass 2). That file is a separate
+// TypeScript SCRIPT (no imports, no exports) that gets compiled next to
+// this one and concatenated into the same inline <script> block by the
+// server-side generator. The symbols are therefore visible at runtime as
+// top-level globals, same as if they were still inline here.
+function renderDocs() {
+    var src = document.getElementById("md-source");
+    var rendered = document.getElementById("md-rendered");
+    var md = currentMd();
+    if (src)
+        src.textContent = md;
+    if (rendered) {
+        rendered.innerHTML = mdRender(md) +
+            '<hr style="border:none;border-top:1px dashed var(--border-soft);margin:18px 0 10px">' +
+            '<div style="font:11px/1.5 \'JetBrains Mono\',monospace;color:var(--text-faint);text-align:center">' +
+            'Generated by Power BI Lineage v' + APP_VERSION + ' · ' + GENERATED_AT + ' · ' + escHtml(REPORT_NAME) +
+            '</div>';
+        // Colourise any ```dax fenced blocks that mdRender produced —
+        // they land as <pre><code class="language-dax"> which the
+        // highlighter targets by default.
+        highlightDaxBlocks();
+    }
+    // Docs panel footer (outside .md-rendered) shows line / char totals.
+    var lineCount = md ? md.split(/\r?\n/).length : 0;
+    setPanelFooter("footer-docs", lineCount + ' lines · generated ' + GENERATED_AT, (md ? md.length : 0) + ' chars');
+}
+function copyMarkdown() {
+    var btn = document.getElementById("md-copy-btn");
+    var text = currentMd();
+    function ok() { if (btn) {
+        btn.textContent = "✓ Copied";
+        setTimeout(function () { btn.textContent = "⎘ Copy"; }, 1500);
+    } }
+    function fallback() {
+        var ta = document.createElement("textarea");
+        ta.value = text;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        var ok2 = false;
+        try {
+            ok2 = document.execCommand("copy");
+        }
+        catch (e) { }
+        document.body.removeChild(ta);
+        if (ok2)
+            ok();
+        else if (btn) {
+            btn.textContent = "✗ Failed";
+            setTimeout(function () { btn.textContent = "⎘ Copy"; }, 1500);
+        }
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(ok).catch(fallback);
+    }
+    else {
+        fallback();
+    }
+}
+function downloadMarkdown() {
+    var text = currentMd();
+    var blob = new Blob([text], { type: "text/markdown;charset=utf-8" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = currentMdFilename();
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+}
+renderSummary();
+renderTabs();
+renderMeasures();
+renderColumns();
+renderTables();
+renderRelationships();
+renderSources();
+renderFunctions();
+renderCalcGroups();
+renderPages();
+renderUnused();
+renderDocs();
+switchTab("measures");
+addCopyButtons();
+
+</script>
+<script type="importmap">
+{
+  "imports": {
+    "fs": "./browser/fs-shim.js",
+    "path": "./browser/path-shim.js"
+  }
+}
+</script>
+<style>
+  #br-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    background: rgba(11, 13, 17, 0.92);
+    -webkit-backdrop-filter: blur(12px);
+            backdrop-filter: blur(12px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'DM Sans', system-ui, -apple-system, Segoe UI, sans-serif;
+    color: #F9FAFB;
+    transition: opacity .18s ease;
+  }
+  #br-overlay.br-overlay--hidden { opacity: 0; pointer-events: none; }
+
+  .br-card {
+    max-width: 520px;
+    padding: 48px 40px;
+    background: rgba(17, 24, 39, 0.75);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 16px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    text-align: center;
+  }
+  .br-card h1 {
+    margin: 0 0 12px;
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    background: linear-gradient(180deg, #F9FAFB 0%, #9CA3AF 100%);
+    -webkit-background-clip: text;
+            background-clip: text;
+    color: transparent;
+  }
+  .br-card p { margin: 0 0 20px; color: #D1D5DB; font-size: 14px; line-height: 1.5; }
+  #br-pick {
+    display: inline-block;
+    padding: 12px 24px;
+    background: #F59E0B;
+    color: #0B0D11;
+    border: 0;
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform .1s, box-shadow .1s;
+  }
+  #br-pick:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(245,158,11,0.4); }
+  #br-pick:disabled { background: #4B5563; color: #9CA3AF; cursor: not-allowed; }
+  .br-status {
+    margin-top: 16px;
+    font-size: 12px;
+    min-height: 18px;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    color: #94A3B8;
+  }
+  .br-status--error { color: #F87171; }
+  .br-hint { margin-top: 24px; font-size: 11px; color: #6B7280; }
+</style>
+<div id="br-overlay">
+  <div class="br-card">
+    <h1>Power BI Lineage</h1>
+    <p>Open a PBIP project folder — the one that contains a <code>.Report</code> folder and its <code>.SemanticModel</code> sibling. Files stay on your machine; nothing is uploaded.</p>
+    <button id="br-pick" type="button">Open folder</button>
+    <div id="br-status" class="br-status" aria-live="polite"></div>
+    <div class="br-hint">Requires Chrome, Edge, or Opera (File System Access API)</div>
+  </div>
+</div>
+<script type="module" src="./browser/entry.js"></script>
+</body>
+</html>
