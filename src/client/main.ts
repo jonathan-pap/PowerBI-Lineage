@@ -998,16 +998,28 @@ function erdEdgeAnchor(cx: number, cy: number, w: number, h: number, tx: number,
 // nodes lack saved positions — that's intentional; the first render
 // arranges itself, then positions stick).
 function erdLayout(nodes: any[], edges: any[], width: number, height: number) {
-  // Seeded initial placement by role — gives the simulation a head
-  // start toward a star-schema-shaped layout instead of scrambling
-  // from random starts. Facts go dead centre, dimensions on an outer
-  // ring, bridges on a mid ring, and "island" kinds (disconnected /
-  // calc groups / proxies / field params / auto-date) off to the side
-  // so they don't get dragged into the main cluster.
-  const cx = width / 2, cy = height / 2;
-  const ringR = Math.min(width, height) * 0.35;
+  // Columnar layout — deterministic, predictable, readable. For a
+  // typical PBI semantic model this gives facts | bridges | dims as
+  // vertical lanes with relationship lines flowing rightward. Much
+  // cleaner than a force-directed result on star schemas.
+  //
+  // Column placement (left → right):
+  //   Facts         — the business processes
+  //   Bridges       — many-to-many junctions (if any)
+  //   Dimensions    — descriptive attributes
+  //   Islands       — calc groups / proxies / field params /
+  //                    disconnected / auto-date  (anything without
+  //                    active relationships in the main graph)
+  //
+  // Within each column nodes stack vertically. Dimensions get sorted
+  // by the mean Y of their connected facts so relationship lines
+  // stay approximately horizontal and don't cross.
+  //
+  // Saved positions take precedence — a user who drags a node to
+  // refine their layout doesn't get overruled on the next re-render.
+  // "Reset layout" clears saved positions and falls back to this
+  // algorithmic placement.
 
-  // Partition nodes by role for seeding
   const facts = nodes.filter(n => n.role === 'fact');
   const bridges = nodes.filter(n => n.role === 'bridge');
   const dims = nodes.filter(n => n.role === 'dimension');
@@ -1016,109 +1028,67 @@ function erdLayout(nodes: any[], edges: any[], width: number, height: number) {
     n.role === 'parameter'    || n.role === 'proxy' ||
     n.role === 'auto-date');
 
-  const placeRing = (group: any[], radius: number, startAngle: number) => {
-    if (group.length === 0) return;
-    const step = (Math.PI * 2) / group.length;
+  // Column x-coordinates — roughly evenly spaced. We anchor at x=0
+  // regardless of `width` so the viewBox math downstream handles a
+  // model wider than the viewport gracefully (it expands the bbox).
+  const COL_FACTS    = 0;
+  const COL_BRIDGES  = 420;
+  const COL_DIMS     = 840;
+  const COL_ISLANDS  = 1260;
+
+  // Vertical rhythm — row spacing tight enough to keep things compact
+  // but loose enough that labels breathe. Node height is 40; 70 gives
+  // ~30px gap between rows.
+  const ROW_H = 70;
+
+  // Alphabetical order within facts + bridges + islands. Dimensions
+  // get re-sorted below once we know the fact y-coords.
+  facts.sort((a, b) => a.name.localeCompare(b.name));
+  bridges.sort((a, b) => a.name.localeCompare(b.name));
+  islands.sort((a, b) => a.name.localeCompare(b.name));
+
+  // Place a column with even vertical spacing centred on y=0.
+  // Returns the final y-position each node landed at.
+  const placeColumn = (group: any[], colX: number) => {
+    const totalH = group.length * ROW_H;
+    const startY = -totalH / 2 + ROW_H / 2;
     group.forEach((n, i) => {
       const saved = erdNodePositions[n.id];
       if (saved) { n.x = saved.x; n.y = saved.y; return; }
-      const a = startAngle + i * step;
-      n.x = cx + Math.cos(a) * radius;
-      n.y = cy + Math.sin(a) * radius;
+      n.x = colX;
+      n.y = startY + i * ROW_H;
     });
   };
 
-  placeRing(facts,   facts.length > 1 ? 120 : 0, -Math.PI / 2);
-  placeRing(bridges, ringR * 0.6, Math.PI / 4);
-  placeRing(dims,    ringR * 1.15, 0);
+  placeColumn(facts, COL_FACTS);
+  placeColumn(bridges, COL_BRIDGES);
 
-  // Islands off in a column on the right — force repulsion will
-  // still nudge them apart but they start far from the main graph.
-  islands.forEach((n, i) => {
-    const saved = erdNodePositions[n.id];
-    if (saved) { n.x = saved.x; n.y = saved.y; return; }
-    n.x = cx + ringR * 1.8 + (i % 2) * 120;
-    n.y = cy - ringR * 0.8 + Math.floor(i / 2) * 70;
-  });
-
-  if (nodes.length < 2) return;
-
-  const nodeMap = new Map<string, any>(nodes.map(n => [n.id, n]));
-  // Tuned for readability over raw physics fidelity:
-  //   - Longer spring length spreads clusters so labels don't overlap
-  //   - Stronger spring K pulls connected tables into tight clusters
-  //   - Gravity (weak central pull) keeps the whole diagram from drifting
-  //   - Role affinity is left to the seeded placement above
-  const STEPS = 400;
-  const REPULSION = 22000;
-  const SPRING_LEN = 220;
-  const SPRING_K = 0.08;
-  const GRAVITY = 0.015;
-  const DAMP = 0.82;
-  const MAX_VEL = 60;
-  // Node-overlap avoidance: during the cooling phase we push nodes
-  // apart if their bounding boxes would overlap. Applied after the
-  // regular physics each step so it takes priority over spring pulls.
-  const OVERLAP_PAD = 16;
-
-  for (let step = 0; step < STEPS; step++) {
-    const temp = 1 - step / STEPS;
-    for (const n of nodes) { n._fx = 0; n._fy = 0; }
-
-    // Pairwise repulsion — O(n²). ~50 nodes → 1225 pairs/step × 400 = 490k ops.
-    for (let i = 0; i < nodes.length; i++) {
-      for (let j = i + 1; j < nodes.length; j++) {
-        const a = nodes[i], b = nodes[j];
-        const dx = a.x - b.x, dy = a.y - b.y;
-        const dist2 = dx * dx + dy * dy + 1;
-        const dist = Math.sqrt(dist2);
-        const force = REPULSION / dist2;
-        const fx = (dx / dist) * force;
-        const fy = (dy / dist) * force;
-        a._fx += fx; a._fy += fy;
-        b._fx -= fx; b._fy -= fy;
-      }
-    }
-
-    // Spring attraction along edges
+  // Dims — sort by mean Y of connected facts so lines stay tidy.
+  // A dim with no fact edges falls through to alphabetical tail.
+  const factY = new Map<string, number>(facts.map(f => [f.id, f.y]));
+  const meanFactY = (dim: any): number => {
+    let sum = 0, count = 0;
     for (const e of edges) {
-      const a = nodeMap.get(e.from);
-      const b = nodeMap.get(e.to);
-      if (!a || !b) continue;
-      const dx = b.x - a.x, dy = b.y - a.y;
-      const dist = Math.sqrt(dx * dx + dy * dy) + 0.01;
-      const disp = dist - SPRING_LEN;
-      const fx = (dx / dist) * disp * SPRING_K;
-      const fy = (dy / dist) * disp * SPRING_K;
-      a._fx += fx; a._fy += fy;
-      b._fx -= fx; b._fy -= fy;
+      if (e.from === dim.id && factY.has(e.to))   { sum += factY.get(e.to)!;   count++; }
+      if (e.to   === dim.id && factY.has(e.from)) { sum += factY.get(e.from)!; count++; }
     }
+    return count > 0 ? sum / count : Number.POSITIVE_INFINITY;
+  };
+  dims.sort((a, b) => {
+    const ya = meanFactY(a), yb = meanFactY(b);
+    if (ya !== yb) return ya - yb;
+    return a.name.localeCompare(b.name);
+  });
+  placeColumn(dims, COL_DIMS);
 
-    // Gravity — gentle pull toward the canvas centre so the graph
-    // doesn't drift off-screen after many iterations.
-    for (const n of nodes) {
-      n._fx += (cx - n.x) * GRAVITY;
-      n._fy += (cy - n.y) * GRAVITY;
-    }
+  // Islands — off to the far right, no sorting concern.
+  placeColumn(islands, COL_ISLANDS);
 
-    // Integrate with damping + cooling
-    for (const n of nodes) {
-      n.vx = (n.vx + n._fx) * DAMP;
-      n.vy = (n.vy + n._fy) * DAMP;
-      const speed = Math.sqrt(n.vx * n.vx + n.vy * n.vy);
-      if (speed > MAX_VEL) {
-        n.vx = (n.vx / speed) * MAX_VEL;
-        n.vy = (n.vy / speed) * MAX_VEL;
-      }
-      n.x += n.vx * temp;
-      n.y += n.vy * temp;
-    }
-  }
-
-  // Overlap resolution pass — a couple of additional sweeps without
-  // the rest of the physics. Pushes apart any pair whose rectangles
-  // are still touching after the main simulation.
-  for (let sweep = 0; sweep < 6; sweep++) {
+  // Overlap resolution (applies only to user-dragged nodes that
+  // might collide on re-render, since column placement itself
+  // spaces by ROW_H which exceeds node height).
+  const OVERLAP_PAD = 12;
+  for (let sweep = 0; sweep < 4; sweep++) {
     let moved = false;
     for (let i = 0; i < nodes.length; i++) {
       for (let j = i + 1; j < nodes.length; j++) {
@@ -1129,7 +1099,6 @@ function erdLayout(nodes: any[], edges: any[], width: number, height: number) {
         const overlapX = minDx - Math.abs(dx);
         const overlapY = minDy - Math.abs(dy);
         if (overlapX > 0 && overlapY > 0) {
-          // Push apart along the smaller overlap axis (cheaper move).
           if (overlapX < overlapY) {
             const shift = (overlapX / 2) * (dx >= 0 ? 1 : -1);
             a.x += shift; b.x -= shift;
@@ -1143,6 +1112,9 @@ function erdLayout(nodes: any[], edges: any[], width: number, height: number) {
     }
     if (!moved) break;
   }
+  // Keep the `width`/`height` params around for any future layout
+  // variants that want to scale relative to canvas size.
+  void width; void height;
 }
 
 function erdControls(nodes: any[], edges: any[]): string {
