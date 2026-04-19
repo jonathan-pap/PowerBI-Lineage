@@ -920,6 +920,10 @@ function renderRelationships(){
 
 // Saved per-node positions (populated after each layout run).
 var erdNodePositions: Record<string, {x:number,y:number}> = {};
+// Node sizes (width/height) keyed by node id — needed so the drag
+// handler can recompute edge-border anchors without having to re-
+// measure. Populated by each renderErd() pass.
+var erdNodeSizes: Record<string, {w:number,h:number}> = {};
 // Viewport transform (pan + zoom), persists across re-renders.
 var erdView = { tx: 0, ty: 0, scale: 1 };
 // Filter toggles — "noisy" kinds default off so the first view stays readable.
@@ -938,6 +942,14 @@ function erdRoleOf(t: any): string {
   return 'disconnected';
 }
 
+// Per-node width is driven by the label length; keeping w/h on each
+// node lets the edge-anchor math (below) clip lines to the rectangle
+// border instead of running through the node's body.
+const ERD_NODE_H = 40;
+function erdNodeWidth(name: string): number {
+  return Math.max(110, Math.min(220, (name.length * 7.2) + 24));
+}
+
 function erdBuildGraph() {
   const tables = (DATA.tables || []).filter((t: any) => {
     if (t.origin === 'auto-date') return erdFilters.autoDate;
@@ -950,6 +962,7 @@ function erdBuildGraph() {
     id: t.name, name: t.name, role: erdRoleOf(t),
     columnCount: t.columnCount || 0,
     measureCount: t.measureCount || 0,
+    w: erdNodeWidth(t.name), h: ERD_NODE_H,
     x: 0, y: 0, vx: 0, vy: 0, _fx: 0, _fy: 0,
   }));
   const visible = new Set(nodes.map((n: any) => n.id));
@@ -959,38 +972,100 @@ function erdBuildGraph() {
   return { nodes, edges };
 }
 
+/**
+ * Ray-rectangle intersection — returns the point where the ray from
+ * (cx, cy) toward (tx, ty) exits the axis-aligned rectangle of size
+ * (w, h) centred at (cx, cy). Used so relationship lines end at the
+ * node's border instead of at its centre (which hides the arrowhead
+ * inside the box and makes the diagram look crowded).
+ */
+function erdEdgeAnchor(cx: number, cy: number, w: number, h: number, tx: number, ty: number): {x:number,y:number} {
+  const dx = tx - cx;
+  const dy = ty - cy;
+  if (dx === 0 && dy === 0) return { x: cx, y: cy };
+  const hw = w / 2, hh = h / 2;
+  // Scale the ray so it hits the nearest border. abs-ratio picks the
+  // side (top/bottom vs left/right); the smaller scale wins because
+  // that's the first border the ray crosses.
+  const scaleX = dx !== 0 ? hw / Math.abs(dx) : Infinity;
+  const scaleY = dy !== 0 ? hh / Math.abs(dy) : Infinity;
+  const scale = Math.min(scaleX, scaleY);
+  return { x: cx + dx * scale, y: cy + dy * scale };
+}
+
 // Force-directed layout — pure JS, no deps. Deterministic given a
 // seeded RNG (we use Math.random, so layouts differ between runs when
 // nodes lack saved positions — that's intentional; the first render
 // arranges itself, then positions stick).
 function erdLayout(nodes: any[], edges: any[], width: number, height: number) {
-  // Seed positions: saved where available, otherwise a spiral around
-  // centre so all nodes start in-view even before the simulation runs.
+  // Seeded initial placement by role — gives the simulation a head
+  // start toward a star-schema-shaped layout instead of scrambling
+  // from random starts. Facts go dead centre, dimensions on an outer
+  // ring, bridges on a mid ring, and "island" kinds (disconnected /
+  // calc groups / proxies / field params / auto-date) off to the side
+  // so they don't get dragged into the main cluster.
   const cx = width / 2, cy = height / 2;
-  for (let i = 0; i < nodes.length; i++) {
-    const n = nodes[i];
+  const ringR = Math.min(width, height) * 0.35;
+
+  // Partition nodes by role for seeding
+  const facts = nodes.filter(n => n.role === 'fact');
+  const bridges = nodes.filter(n => n.role === 'bridge');
+  const dims = nodes.filter(n => n.role === 'dimension');
+  const islands = nodes.filter(n =>
+    n.role === 'disconnected' || n.role === 'calc-group' ||
+    n.role === 'parameter'    || n.role === 'proxy' ||
+    n.role === 'auto-date');
+
+  const placeRing = (group: any[], radius: number, startAngle: number) => {
+    if (group.length === 0) return;
+    const step = (Math.PI * 2) / group.length;
+    group.forEach((n, i) => {
+      const saved = erdNodePositions[n.id];
+      if (saved) { n.x = saved.x; n.y = saved.y; return; }
+      const a = startAngle + i * step;
+      n.x = cx + Math.cos(a) * radius;
+      n.y = cy + Math.sin(a) * radius;
+    });
+  };
+
+  placeRing(facts,   facts.length > 1 ? 120 : 0, -Math.PI / 2);
+  placeRing(bridges, ringR * 0.6, Math.PI / 4);
+  placeRing(dims,    ringR * 1.15, 0);
+
+  // Islands off in a column on the right — force repulsion will
+  // still nudge them apart but they start far from the main graph.
+  islands.forEach((n, i) => {
     const saved = erdNodePositions[n.id];
-    if (saved) { n.x = saved.x; n.y = saved.y; continue; }
-    const angle = i * 2.4;  // golden-angle-ish for even initial spread
-    const radius = 30 + Math.sqrt(i) * 35;
-    n.x = cx + Math.cos(angle) * radius;
-    n.y = cy + Math.sin(angle) * radius;
-  }
+    if (saved) { n.x = saved.x; n.y = saved.y; return; }
+    n.x = cx + ringR * 1.8 + (i % 2) * 120;
+    n.y = cy - ringR * 0.8 + Math.floor(i / 2) * 70;
+  });
+
   if (nodes.length < 2) return;
 
   const nodeMap = new Map<string, any>(nodes.map(n => [n.id, n]));
-  const STEPS = 300;
-  const REPULSION = 18000;
-  const SPRING_LEN = 180;
-  const SPRING_K = 0.04;
+  // Tuned for readability over raw physics fidelity:
+  //   - Longer spring length spreads clusters so labels don't overlap
+  //   - Stronger spring K pulls connected tables into tight clusters
+  //   - Gravity (weak central pull) keeps the whole diagram from drifting
+  //   - Role affinity is left to the seeded placement above
+  const STEPS = 400;
+  const REPULSION = 22000;
+  const SPRING_LEN = 220;
+  const SPRING_K = 0.08;
+  const GRAVITY = 0.015;
   const DAMP = 0.82;
   const MAX_VEL = 60;
+  // Node-overlap avoidance: during the cooling phase we push nodes
+  // apart if their bounding boxes would overlap. Applied after the
+  // regular physics each step so it takes priority over spring pulls.
+  const OVERLAP_PAD = 16;
 
   for (let step = 0; step < STEPS; step++) {
     const temp = 1 - step / STEPS;
-    // Reset accumulated forces for this tick
     for (const n of nodes) { n._fx = 0; n._fy = 0; }
-    // Pairwise repulsion — O(n²). ~50 nodes → 1225 pairs/step × 300 = 370k ops.
+
+    // Pairwise repulsion — O(n²). ~50 nodes → 1225 pairs/step × 400 = 490k ops.
     for (let i = 0; i < nodes.length; i++) {
       for (let j = i + 1; j < nodes.length; j++) {
         const a = nodes[i], b = nodes[j];
@@ -1004,6 +1079,7 @@ function erdLayout(nodes: any[], edges: any[], width: number, height: number) {
         b._fx -= fx; b._fy -= fy;
       }
     }
+
     // Spring attraction along edges
     for (const e of edges) {
       const a = nodeMap.get(e.from);
@@ -1017,6 +1093,14 @@ function erdLayout(nodes: any[], edges: any[], width: number, height: number) {
       a._fx += fx; a._fy += fy;
       b._fx -= fx; b._fy -= fy;
     }
+
+    // Gravity — gentle pull toward the canvas centre so the graph
+    // doesn't drift off-screen after many iterations.
+    for (const n of nodes) {
+      n._fx += (cx - n.x) * GRAVITY;
+      n._fy += (cy - n.y) * GRAVITY;
+    }
+
     // Integrate with damping + cooling
     for (const n of nodes) {
       n.vx = (n.vx + n._fx) * DAMP;
@@ -1029,6 +1113,35 @@ function erdLayout(nodes: any[], edges: any[], width: number, height: number) {
       n.x += n.vx * temp;
       n.y += n.vy * temp;
     }
+  }
+
+  // Overlap resolution pass — a couple of additional sweeps without
+  // the rest of the physics. Pushes apart any pair whose rectangles
+  // are still touching after the main simulation.
+  for (let sweep = 0; sweep < 6; sweep++) {
+    let moved = false;
+    for (let i = 0; i < nodes.length; i++) {
+      for (let j = i + 1; j < nodes.length; j++) {
+        const a = nodes[i], b = nodes[j];
+        const dx = a.x - b.x, dy = a.y - b.y;
+        const minDx = (a.w + b.w) / 2 + OVERLAP_PAD;
+        const minDy = (a.h + b.h) / 2 + OVERLAP_PAD;
+        const overlapX = minDx - Math.abs(dx);
+        const overlapY = minDy - Math.abs(dy);
+        if (overlapX > 0 && overlapY > 0) {
+          // Push apart along the smaller overlap axis (cheaper move).
+          if (overlapX < overlapY) {
+            const shift = (overlapX / 2) * (dx >= 0 ? 1 : -1);
+            a.x += shift; b.x -= shift;
+          } else {
+            const shift = (overlapY / 2) * (dy >= 0 ? 1 : -1);
+            a.y += shift; b.y -= shift;
+          }
+          moved = true;
+        }
+      }
+    }
+    if (!moved) break;
   }
 }
 
@@ -1092,7 +1205,10 @@ function renderErd() {
   erdLayout(nodes, edges, W, H);
 
   // Persist positions for next render
-  for (const n of nodes) erdNodePositions[n.id] = { x: n.x, y: n.y };
+  for (const n of nodes) {
+    erdNodePositions[n.id] = { x: n.x, y: n.y };
+    erdNodeSizes[n.id]     = { w: n.w, h: n.h };
+  }
 
   // Bounding box + viewBox padding
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -1109,25 +1225,25 @@ function renderErd() {
 
   const nodeMap = new Map<string, any>(nodes.map(n => [n.id, n]));
 
-  // Edges with arrow markers indicating direction (fromTable → toTable,
-  // which is many-to-one in Power BI). We use CSS-styled lines with a
-  // small circle at the "from" (many) end as a bullet so the arrow
-  // head at the "to" (one) end reads clearly.
+  // Edges anchor to the node's BORDER (not its centre) via
+  // erdEdgeAnchor — otherwise the line runs through the node's body
+  // and the arrowhead hides inside the target box.
   const edgeMarkup = edges.map((e: any) => {
     const a = nodeMap.get(e.from);
     const b = nodeMap.get(e.to);
     if (!a || !b) return '';
+    const aEdge = erdEdgeAnchor(a.x, a.y, a.w, a.h, b.x, b.y);
+    const bEdge = erdEdgeAnchor(b.x, b.y, b.w, b.h, a.x, a.y);
     const cls = 'erd-edge erd-edge--' + (e.active ? 'active' : 'inactive');
     return `<g class="${cls}" data-edge="${escAttr(e.from + '->' + e.to)}">
-      <line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}"
+      <line x1="${aEdge.x}" y1="${aEdge.y}" x2="${bEdge.x}" y2="${bEdge.y}"
         marker-end="url(#erd-arrow-${e.active ? 'active' : 'inactive'})" />
-      <circle cx="${a.x}" cy="${a.y}" r="3" />
+      <circle cx="${aEdge.x}" cy="${aEdge.y}" r="3" />
     </g>`;
   }).join('');
 
   const nodeMarkup = nodes.map((n: any) => {
-    const w = Math.max(110, Math.min(220, (n.name.length * 7.2) + 24));
-    const h = 40;
+    const w = n.w, h = n.h;
     const sub = (n.columnCount || 0) + 'c' + (n.measureCount > 0 ? ' · ' + n.measureCount + 'ƒ' : '');
     return `<g class="erd-node erd-role-${n.role}" data-node="${escAttr(n.id)}"
       transform="translate(${n.x - w/2},${n.y - h/2})">
@@ -1301,8 +1417,11 @@ function erdAttachInteractions(minX: number, minY: number, vbW: number, vbH: num
 }
 
 /** After dragging a node, update every edge that touches it in-place
- *  instead of re-rendering the whole SVG. Keeps drag smooth. */
+ *  instead of re-rendering the whole SVG. Keeps drag smooth. Both
+ *  endpoints are recomputed via erdEdgeAnchor so the line stays on
+ *  the rectangle borders (not the centres) even after drag. */
 function erdUpdateEdgesFor(nodeId: string, nx: number, ny: number) {
+  const draggedSize = erdNodeSizes[nodeId] || { w: 110, h: ERD_NODE_H };
   const edges = document.querySelectorAll('.erd-edge');
   for (const e of edges as unknown as SVGGElement[]) {
     const edgeId = e.getAttribute('data-edge') || '';
@@ -1311,14 +1430,26 @@ function erdUpdateEdgesFor(nodeId: string, nx: number, ny: number) {
     const line = e.querySelector('line');
     const dot = e.querySelector('circle');
     if (!line) continue;
-    if (from === nodeId) {
-      line.setAttribute('x1', String(nx));
-      line.setAttribute('y1', String(ny));
-      if (dot) { dot.setAttribute('cx', String(nx)); dot.setAttribute('cy', String(ny)); }
-    }
-    if (to === nodeId) {
-      line.setAttribute('x2', String(nx));
-      line.setAttribute('y2', String(ny));
+    // The *other* endpoint — its position hasn't moved, but its
+    // anchor point needs recomputing against the dragged node's new
+    // centre (the ray direction changed).
+    const otherId = from === nodeId ? to : from;
+    const otherPos = erdNodePositions[otherId];
+    const otherSize = erdNodeSizes[otherId];
+    if (!otherPos || !otherSize) continue;
+    // Dragged node's anchor — ray from (nx,ny) toward the other node
+    const draggedAnchor = erdEdgeAnchor(nx, ny, draggedSize.w, draggedSize.h, otherPos.x, otherPos.y);
+    // Other node's anchor — ray from its centre toward the dragged node
+    const otherAnchor = erdEdgeAnchor(otherPos.x, otherPos.y, otherSize.w, otherSize.h, nx, ny);
+    const fromAnchor = from === nodeId ? draggedAnchor : otherAnchor;
+    const toAnchor   = to   === nodeId ? draggedAnchor : otherAnchor;
+    line.setAttribute('x1', String(fromAnchor.x));
+    line.setAttribute('y1', String(fromAnchor.y));
+    line.setAttribute('x2', String(toAnchor.x));
+    line.setAttribute('y2', String(toAnchor.y));
+    if (dot) {
+      dot.setAttribute('cx', String(fromAnchor.x));
+      dot.setAttribute('cy', String(fromAnchor.y));
     }
   }
 }
