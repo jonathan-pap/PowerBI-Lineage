@@ -36,6 +36,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { buildFullData } from "../src/data-builder.js";
 import { parseModel, findSemanticModelPath } from "../src/model-parser.js";
+import { generateHTML } from "../src/html-generator.js";
 
 const FIXTURE = "test/Health_and_Safety.Report";
 const FIXTURE_EXISTS = fs.existsSync(path.resolve(FIXTURE));
@@ -276,4 +277,35 @@ test("Stop 6.8 — RawPartition.expressionSource populated on entity partitions"
   );
   assert.equal(dqP!.partitionKind, "entity",
     "DQ entity partition's partitionKind token should be 'entity'");
+});
+
+// ──────────────────────────────────────────────────────────────────────
+// Task 6: Tables-tab grouping — wires the classifiers into the client
+// ──────────────────────────────────────────────────────────────────────
+//
+// The classifiers are only useful if the client actually surfaces
+// them. These tests pin the five group labels + click action so a
+// silent regression in renderTables can't hide all proxies / params
+// under "Data Tables" again.
+
+test("Stop 6.9 — Tables tab renders all five kind-group labels", { skip: !FIXTURE_EXISTS }, () => {
+  const data = buildFullData(path.resolve(FIXTURE));
+  const html = generateHTML(data, "Health_and_Safety", "", "", "", "", "", "", "0");
+  for (const label of [
+    "Data Tables",
+    "Measure Tables",
+    "Field Parameters",
+    "Composite Model Proxies",
+  ]) {
+    assert.ok(
+      html.includes(label),
+      `Tables tab is missing the "${label}" group header on H&S — grouping regression`
+    );
+  }
+  // The group toggle action must be wired through the delegated
+  // click handler or the headers become inert.
+  assert.ok(
+    html.includes("table-group-toggle"),
+    "data-action='table-group-toggle' not present — group headers won't collapse/expand"
+  );
 });

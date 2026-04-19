@@ -143,6 +143,7 @@ document.addEventListener('click', function(e){
     case 'md-download':     downloadMarkdown(); break;
     case 'page-toggle':     togglePage(d.name); break;
     case 'table-toggle':    toggleTableCard(d.name); break;
+    case 'table-group-toggle': toggleTableGroup(d.group); break;
     case 'orphan-toggle':   toggleOrphanSection(d.section); break;
     case 'toggle-auto-date': toggleAutoDate(); break;
     case 'card-toggle':     el.parentElement.classList.toggle('open'); break;
@@ -507,12 +508,55 @@ function toggleTableCard(name){
   renderTables();
 }
 
+// Classify a table into one of five mutually exclusive groups for the
+// Tables-tab sectioning. Order of checks matters because a calc-group
+// table could also technically have a "measure" name etc. — we take
+// the most-specific category first.
+function tableGroupKey(t){
+  if(t.parameterKind==='field')return 'field-param';
+  if(t.parameterKind==='compositeModelProxy')return 'proxy';
+  if(t.isCalcGroup)return 'calcgroup';
+  // "Measure home" tables — host measures with (usually) one placeholder
+  // column. Heuristic matches `_measures`, `_Rollup_measures`, etc.
+  if((t.measureCount||0)>0 && (t.columnCount||0)<=1 && /measure/i.test(t.name))return 'measure';
+  return 'data';
+}
+// Display metadata for each group. `defaultOpen:true` means the group
+// body is visible on first load (the user can still collapse it).
+const TABLE_GROUPS=[
+  {key:'data',        label:'Data Tables',             defaultOpen:true,  icon:'▦'},
+  {key:'measure',     label:'Measure Tables',          defaultOpen:true,  icon:'ƒ'},
+  {key:'field-param', label:'Field Parameters',        defaultOpen:false, icon:'▣'},
+  {key:'proxy',       label:'Composite Model Proxies', defaultOpen:false, icon:'◈'},
+  {key:'calcgroup',   label:'Calculation Groups',      defaultOpen:false, icon:'🧮'},
+];
+// Track which groups the user has toggled away from their default.
+// Default state is derived per-group; this set stores the flips.
+var flippedTableGroups = new Set();
+function isTableGroupOpen(key){
+  const def = (TABLE_GROUPS.find(g=>g.key===key)||{}).defaultOpen;
+  return flippedTableGroups.has(key) ? !def : def;
+}
+function toggleTableGroup(key){
+  if(flippedTableGroups.has(key))flippedTableGroups.delete(key);
+  else flippedTableGroups.add(key);
+  renderTables();
+}
+
 function renderTables(){
   const tables=visibleTables();
   // Precompute slicer lookup once per render so the per-row badge stays cheap.
   // TableColumnData doesn't carry isSlicerField — it lives on the flat ModelColumn.
   const slicerSet=new Set((DATA.columns||[]).filter(c=>c.isSlicerField).map(c=>c.table+'|'+c.name));
-  document.getElementById("tables-content").innerHTML=tables.map(t=>{
+
+  // Partition visible tables into the five groups.
+  const byGroup = new Map(TABLE_GROUPS.map(g=>[g.key,[]]));
+  for(const t of tables){
+    const k = tableGroupKey(t);
+    byGroup.get(k).push(t);
+  }
+
+  function cardHtml(t){
     const isOpen=openTables.has(t.name);
 
     const colRows=t.columns.map(c=>{
@@ -596,7 +640,35 @@ function renderTables(){
         </div>
       </div></div>
     </div>`;
-  }).join("")||'<div style="text-align:center;padding:60px 20px;color:var(--text-faint);font-size:13px">No tables found</div>';
+  } // end cardHtml
+
+  // Render the grouped sections. Sort tables alphabetically within
+  // each group; the group order comes from TABLE_GROUPS. Empty
+  // groups are omitted so the UI doesn't show empty "0 tables"
+  // section headers for models that have no parameters / proxies.
+  const sectionsHtml = TABLE_GROUPS.map(g=>{
+    const groupTables = (byGroup.get(g.key)||[]).slice().sort((a,b)=>a.name.localeCompare(b.name));
+    if(groupTables.length===0)return '';
+    const open = isTableGroupOpen(g.key);
+    const groupCols = groupTables.reduce((a,t)=>a+(t.columnCount||0),0);
+    const groupMs  = groupTables.reduce((a,t)=>a+(t.measureCount||0),0);
+    const metaParts = [groupTables.length+' table'+(groupTables.length===1?'':'s')];
+    if(groupCols>0) metaParts.push(groupCols+' col'+(groupCols===1?'':'s'));
+    if(groupMs>0)   metaParts.push(groupMs+' measure'+(groupMs===1?'':'s'));
+    const bodyHtml = open ? groupTables.map(cardHtml).join("") : '';
+    return `<div class="table-group ${open?'open':''}">
+      <div class="table-group-header" data-action="table-group-toggle" data-group="${escAttr(g.key)}">
+        <span class="table-group-chev" aria-hidden="true"></span>
+        <span class="table-group-icon">${g.icon}</span>
+        <span class="table-group-title">${escHtml(g.label)}</span>
+        <span class="table-group-meta">${metaParts.join(' · ')}</span>
+      </div>
+      <div class="table-group-body">${bodyHtml}</div>
+    </div>`;
+  }).join("");
+  document.getElementById("tables-content").innerHTML =
+    sectionsHtml || '<div style="text-align:center;padding:60px 20px;color:var(--text-faint);font-size:13px">No tables found</div>';
+
   var totalCols=tables.reduce(function(a,t){return a+(t.columnCount||0);},0);
   var totalMs=tables.reduce(function(a,t){return a+(t.measureCount||0);},0);
   var adc=autoDateCount();

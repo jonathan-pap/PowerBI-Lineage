@@ -269,6 +269,23 @@
 
   .feeds-label{font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;margin-top:10px;margin-bottom:4px;font-weight:600}
 
+  /* Tables-tab grouping — wraps page-cards into collapsible kind
+     sections: Data Tables / Measure Tables / Field Parameters /
+     Composite Model Proxies / Calculation Groups. Group-level
+     collapse is independent of the individual card-level collapse. */
+  .table-group{margin-bottom:var(--space-5)}
+  .table-group-header{display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;user-select:none;
+    background:var(--surface-alt);border:1px solid var(--border-soft);border-radius:var(--radius-md);
+    transition:background .12s,border-color .12s}
+  .table-group-header:hover{background:var(--row-hover);border-color:var(--hover-border)}
+  .table-group-chev::before{content:"▸";display:inline-block;color:var(--text-faint);font-size:11px;transition:transform .15s;width:10px}
+  .table-group.open .table-group-chev::before{transform:rotate(90deg)}
+  .table-group-icon{font-size:14px;color:var(--text-dim);width:18px;text-align:center;flex-shrink:0}
+  .table-group-title{font-size:13px;font-weight:700;color:var(--text);letter-spacing:.01em}
+  .table-group-meta{margin-left:auto;font-size:11px;color:var(--text-faint);font-family:'JetBrains Mono',monospace}
+  .table-group-body{padding-top:10px}
+  .table-group-body:empty{padding:0}
+
   .page-card{background:var(--glass-bg);-webkit-backdrop-filter:blur(16px) saturate(130%);backdrop-filter:blur(16px) saturate(130%);border-radius:var(--radius-lg);border:1px solid var(--glass-border);box-shadow:var(--glass-shadow);margin-bottom:var(--space-5);overflow:hidden;transition:border-color .15s}
   .page-card:hover{border-color:var(--hover-border)}
   .page-header{padding:var(--space-6) var(--space-6);cursor:pointer;display:flex;align-items:center;gap:var(--space-6);user-select:none}
