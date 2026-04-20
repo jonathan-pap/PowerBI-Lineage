@@ -240,7 +240,7 @@ export function runImprovementChecks(data: FullData): Improvement[] {
       rationale: "Safe to remove unless they're intentionally held as private helpers. Reducing the measure catalogue shrinks the end-user picker and the maintenance surface.",
       items: unusedMeasures.map(m => m.table + "[" + m.name + "]"),
       maxListed: 15,
-      crossRef: "See the Quality doc's Unused Measures section for the same list with more context.",
+      crossRef: "The dashboard's **Unused** tab shows the same list with full per-entity lineage context.",
     });
   }
   const deadChainRaw = deadChainMeasures(data);
