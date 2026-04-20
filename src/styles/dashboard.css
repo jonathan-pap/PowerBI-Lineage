@@ -189,7 +189,17 @@
   .tab-count{font:var(--fs-xs)/1 'JetBrains Mono',monospace;background:var(--border);color:var(--text-muted);padding:1px 6px;border-radius:var(--radius-pill);margin-left:var(--space-3);display:inline-block}
   .tab-count.warn{background:var(--clr-measure-soft);color:var(--clr-measure)}
   .panel{display:none}.panel.active{display:block}
-  .search-row{display:flex;gap:var(--space-5);margin-bottom:var(--space-6);align-items:center}
+  .search-row{display:flex;gap:var(--space-5);margin-bottom:var(--space-4);align-items:center;flex-wrap:wrap}
+  /* Docs-tab subtitle — moved out of .search-row and onto its own
+     line so narrow viewports don't crush the buttons. */
+  .md-subtitle{
+    color:var(--text-dim);
+    font-size:var(--fs-sm);
+    line-height:1.4;
+    margin:0 0 var(--space-5);
+    padding:0 var(--space-2);
+    font-style:italic;
+  }
   .search-input{flex:1;padding:var(--space-4) var(--space-5);font-size:var(--fs-md);font-family:inherit;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);color:var(--text-body);outline:none;transition:border-color .15s}
   .search-input:focus{border-color:var(--accent)}
   .search-input::placeholder{color:var(--text-faint)}

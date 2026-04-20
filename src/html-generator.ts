@@ -271,7 +271,7 @@ export function generateHTML(
         <button class="filter-btn" id="md-tab-improvements" data-action="md-tab" data-md="improvements">Improvements</button>
         <button class="filter-btn" id="md-tab-index" data-action="md-tab" data-md="index">Index</button>
       </div>
-      <div style="flex:1;color:var(--text-dim);font-size:12px;margin-left:8px" id="md-subtitle">Semantic-model documentation (no DAX)</div>
+      <div style="flex:1"></div>
       <div style="display:flex;gap:4px">
         <button class="filter-btn active" id="md-mode-rendered" data-action="md-mode" data-mode="rendered">Rendered</button>
         <button class="filter-btn" id="md-mode-raw" data-action="md-mode" data-mode="raw">Raw</button>
@@ -281,6 +281,7 @@ export function generateHTML(
       <button class="filter-btn" id="md-copy-btn" data-action="md-copy">⎘ Copy</button>
       <button class="filter-btn" data-action="md-download">⤓ Download</button>
     </div>
+    <div class="md-subtitle" id="md-subtitle">Semantic-model documentation (no DAX)</div>
     <div id="md-rendered" class="md-rendered"></div>
     <pre id="md-source" class="md-source" style="display:none"></pre>
     <div class="panel-footer" id="footer-docs"></div>
