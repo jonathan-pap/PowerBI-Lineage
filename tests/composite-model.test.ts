@@ -20,7 +20,7 @@
  *      reference so all ~48 DQ partitions collapsed to "Unknown / M".
  *
  *   3. EXTERNALMEASURE proxy detection — regex-at-render-time meant
- *      the Measures MD export, Quality tab, and any future consumer
+ *      the Measures MD export, Improvements doc, and any future consumer
  *      had to re-implement the detection. Now structured on the
  *      ModelMeasure.externalProxy field.
  *

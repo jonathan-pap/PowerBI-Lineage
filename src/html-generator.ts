@@ -175,12 +175,12 @@ export function generateHTML(
   measuresMarkdown: string = "",
   functionsMarkdown: string = "",
   calcGroupsMarkdown: string = "",
-  qualityMarkdown: string = "",
   dataDictionaryMarkdown: string = "",
   version: string = "0.1.0",
   sourcesMarkdown: string = "",
   pagesMarkdown: string = "",
-  indexMarkdown: string = ""
+  indexMarkdown: string = "",
+  improvementsMarkdown: string = ""
 ): string {
   const ts = new Date().toISOString().replace("T", " ").substring(0, 16);
   // safeJSON escapes <, >, &, U+2028, U+2029 on top of JSON.stringify
@@ -191,11 +191,11 @@ export function generateHTML(
   const measuresMarkdownLiteral = safeJSON(measuresMarkdown);
   const functionsMarkdownLiteral = safeJSON(functionsMarkdown);
   const calcGroupsMarkdownLiteral = safeJSON(calcGroupsMarkdown);
-  const qualityMarkdownLiteral = safeJSON(qualityMarkdown);
   const dataDictionaryMarkdownLiteral = safeJSON(dataDictionaryMarkdown);
   const sourcesMarkdownLiteral = safeJSON(sourcesMarkdown);
   const pagesMarkdownLiteral = safeJSON(pagesMarkdown);
   const indexMarkdownLiteral = safeJSON(indexMarkdown);
+  const improvementsMarkdownLiteral = safeJSON(improvementsMarkdown);
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -265,10 +265,10 @@ export function generateHTML(
         <button class="filter-btn" id="md-tab-functions" data-action="md-tab" data-md="functions">Functions</button>
         <button class="filter-btn" id="md-tab-calcgroups" data-action="md-tab" data-md="calcgroups">Calc Groups</button>
         <button class="filter-btn" id="md-tab-pages" data-action="md-tab" data-md="pages">Pages</button>
-        <button class="filter-btn" id="md-tab-quality" data-action="md-tab" data-md="quality">Quality</button>
+        <button class="filter-btn" id="md-tab-improvements" data-action="md-tab" data-md="improvements">Improvements</button>
         <button class="filter-btn" id="md-tab-index" data-action="md-tab" data-md="index">Index</button>
       </div>
-      <div style="flex:1;color:var(--text-dim);font-size:12px;margin-left:8px" id="md-subtitle">Semantic-model documentation (no DAX)</div>
+      <div style="flex:1"></div>
       <div style="display:flex;gap:4px">
         <button class="filter-btn active" id="md-mode-rendered" data-action="md-mode" data-mode="rendered">Rendered</button>
         <button class="filter-btn" id="md-mode-raw" data-action="md-mode" data-mode="raw">Raw</button>
@@ -278,6 +278,7 @@ export function generateHTML(
       <button class="filter-btn" id="md-copy-btn" data-action="md-copy">⎘ Copy</button>
       <button class="filter-btn" data-action="md-download">⤓ Download</button>
     </div>
+    <div class="md-subtitle" id="md-subtitle">Semantic-model documentation (no DAX)</div>
     <div id="md-rendered" class="md-rendered"></div>
     <pre id="md-source" class="md-source" style="display:none"></pre>
     <div class="panel-footer" id="footer-docs"></div>
@@ -307,11 +308,11 @@ const MARKDOWN=${markdownLiteral};
 const MARKDOWN_MEASURES=${measuresMarkdownLiteral};
 const MARKDOWN_FUNCTIONS=${functionsMarkdownLiteral};
 const MARKDOWN_CALCGROUPS=${calcGroupsMarkdownLiteral};
-const MARKDOWN_QUALITY=${qualityMarkdownLiteral};
 const MARKDOWN_DATADICT=${dataDictionaryMarkdownLiteral};
 const MARKDOWN_SOURCES=${sourcesMarkdownLiteral};
 const MARKDOWN_PAGES=${pagesMarkdownLiteral};
 const MARKDOWN_INDEX=${indexMarkdownLiteral};
+const MARKDOWN_IMPROVEMENTS=${improvementsMarkdownLiteral};
 const REPORT_NAME=${safeJSON(reportName)};
 const APP_VERSION=${safeJSON(version)};
 const GENERATED_AT=${safeJSON(ts)};

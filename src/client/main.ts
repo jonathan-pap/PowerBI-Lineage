@@ -1008,48 +1008,48 @@ function toggleUnused(t){showUnusedOnly[t]=!showUnusedOnly[t];document.getElemen
 
 function currentMd(){
   switch(activeMd){
-    case "datadict":   return MARKDOWN_DATADICT;
-    case "measures":   return MARKDOWN_MEASURES;
-    case "functions":  return MARKDOWN_FUNCTIONS;
-    case "calcgroups": return MARKDOWN_CALCGROUPS;
-    case "quality":    return MARKDOWN_QUALITY;
-    case "sources":    return MARKDOWN_SOURCES;
-    case "pages":      return MARKDOWN_PAGES;
-    case "index":      return MARKDOWN_INDEX;
-    default:           return MARKDOWN;
+    case "datadict":     return MARKDOWN_DATADICT;
+    case "measures":     return MARKDOWN_MEASURES;
+    case "functions":    return MARKDOWN_FUNCTIONS;
+    case "calcgroups":   return MARKDOWN_CALCGROUPS;
+    case "sources":      return MARKDOWN_SOURCES;
+    case "pages":        return MARKDOWN_PAGES;
+    case "index":        return MARKDOWN_INDEX;
+    case "improvements": return MARKDOWN_IMPROVEMENTS;
+    default:             return MARKDOWN;
   }
 }
 function currentMdFilename(){
   var suffix="-semantic-model.md";
-  if(activeMd==="datadict")        suffix="-data-dictionary.md";
-  else if(activeMd==="measures")   suffix="-measures.md";
-  else if(activeMd==="functions")  suffix="-functions.md";
-  else if(activeMd==="calcgroups") suffix="-calculation-groups.md";
-  else if(activeMd==="quality")    suffix="-data-quality.md";
-  else if(activeMd==="sources")    suffix="-sources.md";
-  else if(activeMd==="pages")      suffix="-pages.md";
-  else if(activeMd==="index")      suffix="-index.md";
+  if(activeMd==="datadict")          suffix="-data-dictionary.md";
+  else if(activeMd==="measures")     suffix="-measures.md";
+  else if(activeMd==="functions")    suffix="-functions.md";
+  else if(activeMd==="calcgroups")   suffix="-calculation-groups.md";
+  else if(activeMd==="sources")      suffix="-sources.md";
+  else if(activeMd==="pages")        suffix="-pages.md";
+  else if(activeMd==="index")        suffix="-index.md";
+  else if(activeMd==="improvements") suffix="-improvements.md";
   return REPORT_NAME+suffix;
 }
 
 function switchMd(which){
   activeMd=which;
-  var ids=["model","datadict","measures","functions","calcgroups","quality","sources","pages","index"];
+  var ids=["model","datadict","measures","functions","calcgroups","sources","pages","index","improvements"];
   ids.forEach(function(id){
     var el=document.getElementById("md-tab-"+id);
     if(el)el.classList.toggle("active",which===id);
   });
   var sub=document.getElementById("md-subtitle");
   if(sub){
-    if(which==="datadict")        sub.textContent="Data dictionary reference \u00b7 per-table columns, constraints, hierarchies (no DAX expressions)";
-    else if(which==="measures")   sub.textContent="Measures reference \u00b7 A\u2013Z alphabetical (no DAX expressions)";
-    else if(which==="functions")  sub.textContent="Functions reference \u00b7 per-UDF parameters, descriptions and bodies";
-    else if(which==="calcgroups") sub.textContent="Calculation groups reference \u00b7 per-item descriptions and bodies";
-    else if(which==="quality")    sub.textContent="Data quality review \u00b7 coverage, removal candidates, indirect entities, inactive relationships";
-    else if(which==="sources")    sub.textContent="Data sources catalog \u00b7 connections, partition modes, field parameters, composite-model proxies";
-    else if(which==="pages")      sub.textContent="Report pages \u00b7 per-page visual catalog with type, title, and field bindings";
-    else if(which==="index")      sub.textContent="Model glossary \u00b7 alphabetical index of every named entity";
-    else                          sub.textContent="Semantic-model documentation (no DAX expressions)";
+    if(which==="datadict")          sub.textContent="Data dictionary reference \u00b7 per-table columns, constraints, hierarchies (no DAX expressions)";
+    else if(which==="measures")     sub.textContent="Measures reference \u00b7 A\u2013Z alphabetical (no DAX expressions)";
+    else if(which==="functions")    sub.textContent="Functions reference \u00b7 per-UDF parameters, descriptions and bodies";
+    else if(which==="calcgroups")   sub.textContent="Calculation groups reference \u00b7 per-item descriptions and bodies";
+    else if(which==="sources")      sub.textContent="Data sources catalog \u00b7 connections, partition modes, field parameters, composite-model proxies";
+    else if(which==="pages")        sub.textContent="Report pages \u00b7 per-page visual catalog with type, title, and field bindings";
+    else if(which==="index")        sub.textContent="Model glossary \u00b7 alphabetical index of every named entity";
+    else if(which==="improvements") sub.textContent="Areas of improvement \u00b7 prioritized action items with rationale (not a score)";
+    else                            sub.textContent="Semantic-model documentation (no DAX expressions)";
   }
   renderDocs();
 }
