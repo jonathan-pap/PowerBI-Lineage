@@ -114,12 +114,11 @@ function generate(name: string): string {
   return generateHTML(
     buildAdversarialData(name),
     name,            // reportName also adversarial
-    "# " + name,     // every markdown uses the name
-    "# " + name,
-    "# " + name,
-    "# " + name,
-    "# " + name,
-    "# " + name,
+    "# " + name,     // modelMd — every markdown uses the name
+    "# " + name,     // measuresMd
+    "# " + name,     // functionsMd
+    "# " + name,     // calcGroupsMd
+    "# " + name,     // dataDictionaryMd
     "0.0.0-test"
   );
 }

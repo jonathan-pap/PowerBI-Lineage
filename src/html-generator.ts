@@ -175,7 +175,6 @@ export function generateHTML(
   measuresMarkdown: string = "",
   functionsMarkdown: string = "",
   calcGroupsMarkdown: string = "",
-  qualityMarkdown: string = "",
   dataDictionaryMarkdown: string = "",
   version: string = "0.1.0",
   sourcesMarkdown: string = "",
@@ -192,7 +191,6 @@ export function generateHTML(
   const measuresMarkdownLiteral = safeJSON(measuresMarkdown);
   const functionsMarkdownLiteral = safeJSON(functionsMarkdown);
   const calcGroupsMarkdownLiteral = safeJSON(calcGroupsMarkdown);
-  const qualityMarkdownLiteral = safeJSON(qualityMarkdown);
   const dataDictionaryMarkdownLiteral = safeJSON(dataDictionaryMarkdown);
   const sourcesMarkdownLiteral = safeJSON(sourcesMarkdown);
   const pagesMarkdownLiteral = safeJSON(pagesMarkdown);
@@ -267,7 +265,6 @@ export function generateHTML(
         <button class="filter-btn" id="md-tab-functions" data-action="md-tab" data-md="functions">Functions</button>
         <button class="filter-btn" id="md-tab-calcgroups" data-action="md-tab" data-md="calcgroups">Calc Groups</button>
         <button class="filter-btn" id="md-tab-pages" data-action="md-tab" data-md="pages">Pages</button>
-        <button class="filter-btn" id="md-tab-quality" data-action="md-tab" data-md="quality">Quality</button>
         <button class="filter-btn" id="md-tab-improvements" data-action="md-tab" data-md="improvements">Improvements</button>
         <button class="filter-btn" id="md-tab-index" data-action="md-tab" data-md="index">Index</button>
       </div>
@@ -311,7 +308,6 @@ const MARKDOWN=${markdownLiteral};
 const MARKDOWN_MEASURES=${measuresMarkdownLiteral};
 const MARKDOWN_FUNCTIONS=${functionsMarkdownLiteral};
 const MARKDOWN_CALCGROUPS=${calcGroupsMarkdownLiteral};
-const MARKDOWN_QUALITY=${qualityMarkdownLiteral};
 const MARKDOWN_DATADICT=${dataDictionaryMarkdownLiteral};
 const MARKDOWN_SOURCES=${sourcesMarkdownLiteral};
 const MARKDOWN_PAGES=${pagesMarkdownLiteral};

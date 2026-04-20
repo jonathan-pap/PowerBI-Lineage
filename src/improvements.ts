@@ -338,6 +338,24 @@ export function runImprovementChecks(data: FullData): Improvement[] {
     });
   }
 
+  // Data-category / type mismatch — a URL-typed category on a non-string
+  // column is almost always a modelling slip (the category was set but
+  // the underlying type is numeric or date, so Power BI can't render it
+  // as a link).
+  const urlCategories = new Set(["webUrl", "imageUrl"]);
+  const categoryMismatches = userColumns
+    .filter(c => c.dataCategory && urlCategories.has(c.dataCategory))
+    .filter(c => (c.dataType || "").toLowerCase() !== "string");
+  if (categoryMismatches.length > 0) {
+    out.push({
+      severity: "medium",
+      title: `${categoryMismatches.length} data-category / type mismatch${categoryMismatches.length === 1 ? "" : "es"}`,
+      summary: "Columns tagged with a URL data category that aren't string-typed.",
+      rationale: "URL data categories (`WebUrl`, `ImageUrl`) tell Power BI to render the column as a clickable link or image source. Only string-typed columns can carry that semantic — a numeric or date column with a URL category is a broken configuration.",
+      items: categoryMismatches.map(c => `${c.table}[${c.name}] (category=${c.dataCategory}, type=${c.dataType})`),
+    });
+  }
+
   // ── 🟢 Low-priority checks ─────────────────────────────────────────
   const columnsNoDesc = userColumns.filter(c => !c.description || c.description.trim() === "");
   if (columnsNoDesc.length > 0 && columnsNoDesc.length >= userColumns.length * 0.5) {
@@ -356,8 +374,54 @@ export function runImprovementChecks(data: FullData): Improvement[] {
       rationale: "The model description renders as a blockquote at the top of the generated Model doc. A one-sentence elevator pitch here makes it clear what the model is for.",
     });
   }
+  // Numeric columns without a format string — cosmetic, but means
+  // visuals show "12345.678" unformatted. Keys excluded (they're not
+  // meant to be formatted for display).
+  const numericTypes = new Set(["int64", "decimal", "double", "currency"]);
+  const numericNoFormat = userColumns.filter(c =>
+    numericTypes.has((c.dataType || "").toLowerCase()) &&
+    !c.formatString &&
+    !c.isKey
+  );
+  if (numericNoFormat.length > 0) {
+    out.push({
+      severity: "low",
+      title: `${numericNoFormat.length} numeric column${numericNoFormat.length === 1 ? "" : "s"} without a format string`,
+      summary: "These will render as raw numbers in visuals.",
+      rationale: "Without a `formatString`, numeric columns show as \"12345.678\" with full decimal precision. Setting one (e.g. `\"#,0\"`, `\"0.00\"`, `\"0%\"`) keeps visuals consistent across the report and matches the domain semantics.",
+      items: numericNoFormat.map(c => `${c.table}[${c.name}] (${c.dataType})`),
+      maxListed: 15,
+    });
+  }
 
   // ── ℹ️ Info callouts ────────────────────────────────────────────────
+  // External proxy protection — `EXTERNALMEASURE(...)` measures often
+  // show `status: "unused"` because the binding scan only sees visuals
+  // in this report, not the remote cube's consumers. If any are flagged
+  // as unused above, the user is at risk of deleting them based on the
+  // Unused tab. Call them out prominently so the "do not remove"
+  // warning is visible right next to the unused-measures finding.
+  const proxyMeasures = userMeasures.filter(m => m.externalProxy);
+  if (proxyMeasures.length > 0) {
+    const byRemote = new Map<string, string[]>();
+    for (const m of proxyMeasures) {
+      const key = m.externalProxy!.externalModel;
+      if (!byRemote.has(key)) byRemote.set(key, []);
+      byRemote.get(key)!.push(m.table + "[" + m.name + "]");
+    }
+    const summary = proxyMeasures.length === 1
+      ? "1 EXTERNALMEASURE proxy detected — do NOT remove even if it appears in the Unused list."
+      : `${proxyMeasures.length} EXTERNALMEASURE proxies detected across ${byRemote.size} remote model${byRemote.size === 1 ? "" : "s"} — do NOT remove even if they appear in the Unused list.`;
+    out.push({
+      severity: "info",
+      title: `${proxyMeasures.length} external proxy measure${proxyMeasures.length === 1 ? "" : "s"} — DO NOT REMOVE`,
+      summary,
+      rationale: "EXTERNALMEASURE re-exposes a measure from a remote Analysis Services cube. The binding-scan rule marks them `status: unused` because no visual in THIS report binds them directly — but visuals in the remote model do. Deleting one breaks the composite-model contract. Listed here for protection.",
+      items: proxyMeasures.map(m => `${m.table}[${m.name}] → ${m.externalProxy!.externalModel}[${m.externalProxy!.remoteName}]`),
+      maxListed: 20,
+    });
+  }
+
   const fieldParams = userTables.filter(t => t.parameterKind === "field");
   if (fieldParams.length > 0) {
     out.push({

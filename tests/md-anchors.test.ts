@@ -27,7 +27,6 @@ import {
   generateMeasuresMd,
   generateFunctionsMd,
   generateCalcGroupsMd,
-  generateQualityMd,
   generateDataDictionaryMd,
 } from "../src/md-generator.js";
 import { buildFullData } from "../src/data-builder.js";
@@ -135,7 +134,6 @@ const docs: Array<{ name: string; md: () => string }> = FIXTURE_EXISTS ? (() => 
     { name: "measures.md",       md: () => generateMeasuresMd(data, reportName) },
     { name: "functions.md",      md: () => generateFunctionsMd(data, reportName) },
     { name: "calc-groups.md",    md: () => generateCalcGroupsMd(data, reportName) },
-    { name: "quality.md",        md: () => generateQualityMd(data, reportName) },
     { name: "data-dictionary.md", md: () => generateDataDictionaryMd(data, reportName) },
   ];
 })() : [];

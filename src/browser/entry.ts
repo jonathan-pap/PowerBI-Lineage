@@ -26,7 +26,6 @@ import {
   generateMeasuresMd,
   generateFunctionsMd,
   generateCalcGroupsMd,
-  generateQualityMd,
   generateDataDictionaryMd,
 } from "../md-generator.js";
 
@@ -59,7 +58,6 @@ type BrowserWindow = Window & {
   MEASURES_MD?: string;
   FUNCTIONS_MD?: string;
   CALCGROUPS_MD?: string;
-  QUALITY_MD?: string;
   DATA_DICTIONARY_MD?: string;
   APP_VERSION?: string;
   REPORT_PATH?: string;
@@ -182,13 +180,12 @@ async function pickAndLoad(): Promise<void> {
 
   // Generate all the MD exports the Docs tab reads.
   let md = "", measuresMd = "", functionsMd = "", calcGroupsMd = "",
-      qualityMd = "", dataDictionaryMd = "";
+      dataDictionaryMd = "";
   try {
     md = generateMarkdown(fullData, reportName);
     measuresMd = generateMeasuresMd(fullData, reportName);
     functionsMd = generateFunctionsMd(fullData, reportName);
     calcGroupsMd = generateCalcGroupsMd(fullData, reportName);
-    qualityMd = generateQualityMd(fullData, reportName);
     dataDictionaryMd = generateDataDictionaryMd(fullData, reportName);
   } catch (e) {
     // MD generation is secondary — log but don't block the dashboard.
@@ -198,7 +195,7 @@ async function pickAndLoad(): Promise<void> {
 
   // Hand off to the dashboard renderer already loaded in this page.
   applyToDashboard(fullData, reportName, reportPath, {
-    md, measuresMd, functionsMd, calcGroupsMd, qualityMd, dataDictionaryMd,
+    md, measuresMd, functionsMd, calcGroupsMd, dataDictionaryMd,
   });
 
   hideOverlay();
@@ -235,7 +232,6 @@ interface MarkdownBundle {
   measuresMd: string;
   functionsMd: string;
   calcGroupsMd: string;
-  qualityMd: string;
   dataDictionaryMd: string;
 }
 
@@ -259,7 +255,6 @@ function applyToDashboard(
   w.MEASURES_MD = md.measuresMd;
   w.FUNCTIONS_MD = md.functionsMd;
   w.CALCGROUPS_MD = md.calcGroupsMd;
-  w.QUALITY_MD = md.qualityMd;
   w.DATA_DICTIONARY_MD = md.dataDictionaryMd;
 
   // Call every render the server-mode bootstrap calls. Missing functions

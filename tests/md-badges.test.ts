@@ -20,7 +20,6 @@ import * as path from "node:path";
 import {
   generateMarkdown,
   generateMeasuresMd,
-  generateQualityMd,
   generateDataDictionaryMd,
 } from "../src/md-generator.js";
 import { buildFullData } from "../src/data-builder.js";
@@ -66,7 +65,6 @@ if (!FIXTURE_EXISTS) {
   const name = "Health_and_Safety";
   const model = generateMarkdown(data, name);
   const measures = generateMeasuresMd(data, name);
-  const quality = generateQualityMd(data, name);
   const datadict = generateDataDictionaryMd(data, name);
 
   // The full set of glyph+label pairs that should appear in SOME doc
@@ -99,18 +97,6 @@ if (!FIXTURE_EXISTS) {
       );
     });
   }
-
-  // Quality doc should never refer to a proxy measure as "safe to
-  // remove" — check that the "DO NOT REMOVE" callout from v0.6.0 is
-  // still present AND the proxy listing carries the 🌐 glyph.
-  test("quality.md — proxy callout uses 🌐 glyph", () => {
-    if (!quality.includes("DO NOT REMOVE")) return;  // no proxies on this fixture
-    assert.ok(
-      /<span class="badge[^"]+">\s*🌐\s+EXTERNAL\s*<\/span>/.test(measures) ||
-      /🌐\s+External proxy/.test(quality),
-      "Quality doc flagged proxies without the 🌐 glyph marker"
-    );
-  });
 
   // Front-matter shouldn't have bare (un-glyphed) status pills either —
   // regression guard for future additions.

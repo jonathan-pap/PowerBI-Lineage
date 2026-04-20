@@ -192,7 +192,6 @@ test("generateHTML — markdown payload containing </script> is safe", () => {
     malicious,   // measuresMd
     malicious,   // functionsMd
     malicious,   // calcGroupsMd
-    malicious,   // qualityMd
     malicious,   // dataDictionaryMd
     "0.0.0-test"
   );

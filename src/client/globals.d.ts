@@ -22,7 +22,6 @@ declare const MARKDOWN: string;
 declare const MARKDOWN_MEASURES: string;
 declare const MARKDOWN_FUNCTIONS: string;
 declare const MARKDOWN_CALCGROUPS: string;
-declare const MARKDOWN_QUALITY: string;
 declare const MARKDOWN_DATADICT: string;
 declare const MARKDOWN_SOURCES: string;
 declare const MARKDOWN_PAGES: string;
