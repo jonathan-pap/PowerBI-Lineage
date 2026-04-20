@@ -27,6 +27,7 @@ declare const MARKDOWN_DATADICT: string;
 declare const MARKDOWN_SOURCES: string;
 declare const MARKDOWN_PAGES: string;
 declare const MARKDOWN_INDEX: string;
+declare const MARKDOWN_IMPROVEMENTS: string;
 declare const REPORT_NAME: string;
 declare const APP_VERSION: string;
 declare const GENERATED_AT: string;

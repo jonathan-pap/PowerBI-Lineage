@@ -11,6 +11,7 @@ import { exec } from "child_process";
 import { buildFullData } from "./data-builder.js";
 import { generateHTML } from "./html-generator.js";
 import { generateMarkdown, generateMeasuresMd, generateFunctionsMd, generateCalcGroupsMd, generateQualityMd, generateDataDictionaryMd, generateSourcesMd, generatePagesMd, generateIndexMd } from "./md-generator.js";
+import { generateImprovementsMd } from "./improvements.js";
 import { findSemanticModelPath } from "./model-parser.js";
 import { escHtml } from "./render/safe.js";
 import { validateReportPath } from "./path-guard.js";
@@ -589,7 +590,8 @@ const server = http.createServer((req, res) => {
       const sourcesMd = generateSourcesMd(data, reportName);
       const pagesMd = generatePagesMd(data, reportName);
       const indexMd = generateIndexMd(data, reportName);
-      const html = generateHTML(data, reportName, modelMd, measuresMd, functionsMd, calcGroupsMd, qualityMd, dataDictionaryMd, APP_VERSION, sourcesMd, pagesMd, indexMd);
+      const improvementsMd = generateImprovementsMd(data, reportName);
+      const html = generateHTML(data, reportName, modelMd, measuresMd, functionsMd, calcGroupsMd, qualityMd, dataDictionaryMd, APP_VERSION, sourcesMd, pagesMd, indexMd, improvementsMd);
       saveRecent(resolved);
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
       res.end(html);
