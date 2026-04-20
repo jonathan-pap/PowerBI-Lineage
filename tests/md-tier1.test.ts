@@ -52,23 +52,29 @@ function empty(): FullData {
 test("sources.md — empty model produces the scaffold without throwing", () => {
   const md = generateSourcesMd(empty(), "Empty");
   assert.ok(md.includes("# Data Sources"));
-  assert.ok(md.includes("## 1. Summary"));
+  // Front-matter triptych replaced the old "## 1. Summary" header
+  assert.ok(md.includes("At a glance"),
+    "front-matter At-a-glance block missing — see md-readability sweep");
   assert.ok(md.includes("## 3. Field Parameters"));
   assert.ok(md.includes("## 4. Composite Model Proxies"));
   assert.ok(md.includes("<!-- Suggested ADO Wiki page name: Empty/Sources -->"));
 });
 
-test("pages.md — empty model short-circuits after the summary", () => {
+test("pages.md — empty model short-circuits with no-pages note", () => {
   const md = generatePagesMd(empty(), "Empty");
   assert.ok(md.includes("# Report Pages"));
-  assert.ok(md.includes("## Summary"));
+  // Front-matter At-a-glance replaced the old "## Summary" header
+  assert.ok(md.includes("At a glance"),
+    "pages.md should carry an At-a-glance block in the front matter");
   assert.ok(md.includes("_No pages analysed._"));
 });
 
-test("index.md — empty model produces the summary + zero letter groups", () => {
+test("index.md — empty model produces the summary + zero entries", () => {
   const md = generateIndexMd(empty(), "Empty");
   assert.ok(md.includes("# Model Glossary"));
-  assert.ok(md.includes("0 entries across"));
+  // The new at-a-glance carries a "Total entries" row
+  assert.ok(md.includes("Total entries"),
+    "index.md At-a-glance must include a Total entries row");
 });
 
 // ─────────────────────────────────────────────────────────────────────
@@ -121,39 +127,64 @@ if (FIXTURE_EXISTS) {
     }
   });
 
-  test("pages.md — emits one ## section per page + a page-index block", () => {
-    const pageNames = data.pages.map(p => p.name);
-    // Header count: 1 summary + 1 index + N page sections ≥ pageNames.length + 2
-    const h2Matches = pages.match(/^## /gm) || [];
-    assert.ok(h2Matches.length >= pageNames.length,
-      `expected at least ${pageNames.length} ## headers, found ${h2Matches.length}`);
-    // Every page's section exists
-    for (const pn of pageNames) {
-      assert.ok(pages.includes(`## ${pn}`) || pages.includes(`## ${pn.trim()}`),
-        `pages.md missing section for page "${pn}"`);
+  test("pages.md — emits one ### section per page + a page-index block", () => {
+    // Post-readability-sweep structure:
+    //   ## <reportName>          (H2 subtitle)
+    //   ### Visible page index   (jump list)
+    //   ## Visible pages (N)     (umbrella H2)
+    //   ### <pageName>           (one H3 per visible page)
+    //   ## Appendix — Hidden pages (N)  (optional)
+    const visibleNames = data.pages
+      .filter(p => !(data.hiddenPages || []).includes(p.name))
+      .map(p => p.name);
+    // Every visible page's section exists at H3
+    for (const pn of visibleNames) {
+      const rx = new RegExp(`^### ${pn.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "m");
+      assert.ok(rx.test(pages),
+        `pages.md missing ### section for page "${pn}"`);
     }
     // Jump-to index exists
-    assert.ok(pages.includes("### Page index"),
-      "pages.md should include a jump-to index");
+    assert.ok(pages.includes("### Visible page index"),
+      "pages.md should include a visible-page jump-to index");
+    // Umbrella section exists when there are visible pages
+    if (visibleNames.length > 0) {
+      assert.ok(/^## Visible pages \(\d+\)$/m.test(pages),
+        "pages.md should include the `## Visible pages (N)` umbrella header");
+    }
   });
 
-  test("pages.md — per-page section carries the visual count in a stat table", () => {
-    // Pick the first page and verify its stat table values appear.
-    if (data.pages.length === 0) return;
-    const p = data.pages[0];
-    const section = pages.split(`## ${p.name}`)[1]?.split(/^## /m)[0] || "";
-    assert.ok(section.includes(`| Visuals | ${p.visualCount} |`),
-      `page section for "${p.name}" should carry its visualCount`);
-    assert.ok(section.includes(`| Measures bound | ${p.measureCount} |`),
-      "page section should carry its measureCount");
+  test("pages.md — per-page section carries the visual count in its compact stats line", () => {
+    // Stat tables were replaced with a compact one-liner:
+    //   **N** visual(s) · **M** slicer(s) · **K** measure(s) · **J** column(s)
+    // Pick the first visible page and verify its stat bits appear.
+    const visible = data.pages.filter(p => !(data.hiddenPages || []).includes(p.name));
+    if (visible.length === 0) return;
+    const p = visible[0];
+    // Section delimiter: next ### (another page) or next ## (hidden appendix)
+    const headerIdx = pages.search(new RegExp(`^### ${p.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "m"));
+    assert.ok(headerIdx >= 0, `page section for "${p.name}" not found`);
+    const tailStart = headerIdx + 4 + p.name.length;
+    const nextRx = /\n(?:## |### )\S/m;
+    const tailHi = pages.slice(tailStart).search(nextRx);
+    const section = pages.slice(headerIdx, tailStart + (tailHi > 0 ? tailHi : pages.length - tailStart));
+    const vWord = p.visualCount === 1 ? "visual" : "visuals";
+    assert.ok(section.includes(`**${p.visualCount}** ${vWord}`),
+      `page section for "${p.name}" should carry its visualCount in the compact stats line`);
+    if (p.measureCount > 0) {
+      const mWord = p.measureCount === 1 ? "measure" : "measures";
+      assert.ok(section.includes(`**${p.measureCount}** ${mWord}`),
+        "page section should carry its measureCount");
+    }
   });
 
   test("index.md — carries every named entity kind with correct totals", () => {
-    // Summary row per kind present. We don't pin exact counts (those
-    // change if the fixture evolves), just that the rows exist.
-    for (const kind of ["Table", "Column", "Measure"]) {
+    // At-a-glance rows per kind present. We don't pin exact counts
+    // (those change if the fixture evolves), just that the rows
+    // exist. Post-readability-sweep: kind labels are pluralised
+    // inside the At-a-glance block (`Tables`, `Measures`, `Columns`).
+    for (const kind of ["Tables", "Columns", "Measures"]) {
       assert.ok(new RegExp(`\\| ${kind} \\| \\d+ \\|`).test(index),
-        `summary table should have a row for ${kind}`);
+        `At-a-glance should have a row for ${kind}`);
     }
     // H&S has field params — they must appear as entries with the
     // "field parameter" note.

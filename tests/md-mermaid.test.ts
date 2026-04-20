@@ -114,16 +114,24 @@ if (!FIXTURE_EXISTS) {
 
   test("data-dictionary.md — dimension tables do NOT emit a star fragment", () => {
     // Pick a known dimension (dim_country) and assert its table
-    // section doesn't contain "### Star fragment".
-    const headerRx = /^## dim_country$/m;
+    // section doesn't contain a Star fragment block.
+    //
+    // Post-readability-sweep: per-table sections were demoted from
+    // ## to ### under role-grouped ## headings (`## Dimension tables
+    // (N)`), and Star fragment was demoted from ### to ####. The
+    // section delimiter is the next sibling ### (another table) OR
+    // the next ## (next role group), whichever comes first.
+    const headerRx = /^### dim_country$/m;
     const hi = datadict.search(headerRx);
     assert.ok(hi >= 0, "dim_country section not found in data-dictionary");
-    // The section ends at the next "## " heading. Slice between.
-    const nextRx = /\n## \S/m;
     const tailStart = hi + 10;
+    const nextRx = /\n(?:## |### )\S/m;
     const tailHi = datadict.slice(tailStart).search(nextRx);
     const section = datadict.slice(hi, tailStart + (tailHi > 0 ? tailHi : datadict.length - tailStart));
-    assert.ok(!section.includes("### Star fragment"),
+    // Star fragment is now at H4 — but the original assertion also
+    // holds because #### Star fragment contains "### Star fragment"
+    // as a substring. Use a word-boundary check to be explicit.
+    assert.ok(!/^#### Star fragment$/m.test(section),
       "dim_country (a dimension) emitted a star-fragment block — should only fire for facts");
   });
 }
