@@ -13,7 +13,7 @@
     "dev": "tsc && node dist/app.js",
     "typecheck": "tsc --noEmit",
     "test": "tsc -p tsconfig.test.json && node scripts/run-tests.mjs",
-    "build:browser": "tsc && tsc -p tsconfig.browser.json && node scripts/build-browser.mjs",
+    "build:browser": "tsc && tsc -p tsconfig.browser.json && node scripts/build-browser.mjs && node scripts/bake-sample.mjs",
     "serve:browser": "node scripts/serve-browser.mjs"
   },
   "engines": {
