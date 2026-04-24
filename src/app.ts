@@ -590,7 +590,16 @@ const server = http.createServer((req, res) => {
       const pagesMd = generatePagesMd(data, reportName);
       const indexMd = generateIndexMd(data, reportName);
       const improvementsMd = generateImprovementsMd(data, reportName);
-      const html = generateHTML(data, reportName, modelMd, measuresMd, functionsMd, calcGroupsMd, dataDictionaryMd, APP_VERSION, sourcesMd, pagesMd, indexMd, improvementsMd);
+      // Changelog is project-level metadata, not report-level. Read
+      // from disk on each request so dev edits are picked up without
+      // a server restart. Silent fallback to empty string if the file
+      // is missing (e.g., a global npm install without the repo).
+      let changelogMd = "";
+      try {
+        const clPath = path.resolve(process.cwd(), "CHANGELOG.md");
+        if (fs.existsSync(clPath)) changelogMd = fs.readFileSync(clPath, "utf8");
+      } catch { /* best-effort */ }
+      const html = generateHTML(data, reportName, modelMd, measuresMd, functionsMd, calcGroupsMd, dataDictionaryMd, APP_VERSION, sourcesMd, pagesMd, indexMd, improvementsMd, changelogMd);
       saveRecent(resolved);
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
       res.end(html);

@@ -1344,6 +1344,7 @@ function currentMd(){
     case "pages":        return MARKDOWN_PAGES;
     case "index":        return MARKDOWN_INDEX;
     case "improvements": return MARKDOWN_IMPROVEMENTS;
+    case "changelog":    return MARKDOWN_CHANGELOG;
     default:             return MARKDOWN;
   }
 }
@@ -1357,12 +1358,13 @@ function currentMdFilename(){
   else if(activeMd==="pages")        suffix="-pages.md";
   else if(activeMd==="index")        suffix="-index.md";
   else if(activeMd==="improvements") suffix="-improvements.md";
+  else if(activeMd==="changelog")    return "CHANGELOG.md";    // project-level, no report prefix
   return REPORT_NAME+suffix;
 }
 
 function switchMd(which){
   activeMd=which;
-  var ids=["model","datadict","measures","functions","calcgroups","sources","pages","index","improvements"];
+  var ids=["model","datadict","measures","functions","calcgroups","sources","pages","index","improvements","changelog"];
   ids.forEach(function(id){
     var el=document.getElementById("md-tab-"+id);
     if(el)el.classList.toggle("active",which===id);

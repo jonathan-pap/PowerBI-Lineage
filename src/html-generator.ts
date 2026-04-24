@@ -180,7 +180,13 @@ export function generateHTML(
   sourcesMarkdown: string = "",
   pagesMarkdown: string = "",
   indexMarkdown: string = "",
-  improvementsMarkdown: string = ""
+  improvementsMarkdown: string = "",
+  /** Project CHANGELOG. Baked into every rendered dashboard so users
+   *  can see what's new without leaving the tool. Same value for CLI
+   *  and browser mode; browser-mode's __loadBrowserData hook leaves
+   *  this slot alone when a new report loads (changelog doesn't
+   *  depend on the report). */
+  changelogMarkdown: string = ""
 ): string {
   const ts = new Date().toISOString().replace("T", " ").substring(0, 16);
   // safeJSON escapes <, >, &, U+2028, U+2029 on top of JSON.stringify
@@ -196,6 +202,7 @@ export function generateHTML(
   const pagesMarkdownLiteral = safeJSON(pagesMarkdown);
   const indexMarkdownLiteral = safeJSON(indexMarkdown);
   const improvementsMarkdownLiteral = safeJSON(improvementsMarkdown);
+  const changelogMarkdownLiteral = safeJSON(changelogMarkdown);
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -271,6 +278,7 @@ export function generateHTML(
         <button class="filter-btn" id="md-tab-pages" data-action="md-tab" data-md="pages">Pages</button>
         <button class="filter-btn" id="md-tab-improvements" data-action="md-tab" data-md="improvements">Improvements</button>
         <button class="filter-btn" id="md-tab-index" data-action="md-tab" data-md="index">Index</button>
+        <button class="filter-btn" id="md-tab-changelog" data-action="md-tab" data-md="changelog" title="Project changelog — what's new in the tool itself">Changelog</button>
       </div>
       <div style="flex:1"></div>
       <div style="display:flex;gap:4px">
@@ -323,6 +331,7 @@ let MARKDOWN_SOURCES=${sourcesMarkdownLiteral};
 let MARKDOWN_PAGES=${pagesMarkdownLiteral};
 let MARKDOWN_INDEX=${indexMarkdownLiteral};
 let MARKDOWN_IMPROVEMENTS=${improvementsMarkdownLiteral};
+let MARKDOWN_CHANGELOG=${changelogMarkdownLiteral};
 let REPORT_NAME=${safeJSON(reportName)};
 let APP_VERSION=${safeJSON(version)};
 let GENERATED_AT=${safeJSON(ts)};
