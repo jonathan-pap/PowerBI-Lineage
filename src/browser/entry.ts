@@ -20,6 +20,24 @@
 
 import { __setVFS } from "./fs-shim.js";
 import { walkDirectoryHandle, walkIntoMap, isFsaSupported } from "./fsa-walk.js";
+import {
+  NONE_VALUE,
+  scanPairCandidates,
+  findReportRoot,
+  validatePair,
+  findBestModelForReport,
+  findBestReportForModel,
+  filterAndRemount,
+  installModelOnlyShim,
+  installReportOnlyShim,
+  computePickerDefaults,
+  buildPickerCardHtml,
+  classifyLoadMode,
+  escForAttr,
+  reportPrefix as stripSuffix,
+  type PairCandidates,
+  type LoadMode,
+} from "./pair-picker.js";
 import { buildFullData } from "../data-builder.js";
 import {
   generateMarkdown,
@@ -113,15 +131,10 @@ async function openDirectoryPicker(): Promise<DirHandle> {
   return await w.showDirectoryPicker({ mode: "read" });
 }
 
-/**
- * Strip the trailing ".Report" or ".SemanticModel" suffix (case-
- * insensitive) to derive a project prefix the user can recognise
- * (e.g., "training.Report" → "training", so we can say "now pick
- * training.SemanticModel").
- */
-function reportPrefix(name: string): string {
-  return name.replace(/\.(Report|SemanticModel)$/i, "");
-}
+// reportPrefix helper now lives in ./pair-picker.ts (imported as
+// `stripSuffix` above). Kept a local alias so the two-step picker
+// call site reads naturally.
+const reportPrefix = stripSuffix;
 
 async function pickAndLoad(): Promise<void> {
   if (!isFsaSupported()) {
@@ -342,129 +355,27 @@ function showStep2Prompt(
 // enabling Load.
 // ─────────────────────────────────────────────────────────────────────
 
-interface PairCandidates {
-  /** Top-level .Report dirs as virtual paths under /virt/<pickedName>/ */
-  reports: string[];
-  /** Top-level .SemanticModel dirs, same shape */
-  semanticModels: string[];
-}
+// PairCandidates, PairVerdict, scanPairCandidates, validatePair,
+// NONE_VALUE, and escForAttr now live in ./pair-picker.ts (imported
+// at the top of this file). Kept this comment as a breadcrumb for
+// future-you searching for them here.
 
 /**
- * Scan the VFS map for every `*.Report` and `*.SemanticModel`
- * directory and return them as full virtual paths. We look at all
- * depths (some users nest projects under a workspace folder), then
- * dedupe — each unique dir appears once.
- */
-function scanPairCandidates(
-  files: Map<string, string>,
-  pickedName: string,
-): PairCandidates {
-  const rootPrefix = `/virt/${pickedName}/`;
-  const reports = new Set<string>();
-  const models = new Set<string>();
-  for (const key of files.keys()) {
-    if (!key.startsWith(rootPrefix)) continue;
-    const parts = key.slice(rootPrefix.length).split("/");
-    for (let i = 0; i < parts.length; i++) {
-      const seg = parts[i];
-      const fullPath = rootPrefix + parts.slice(0, i + 1).join("/");
-      if (/\.Report$/i.test(seg)) reports.add(fullPath);
-      else if (/\.SemanticModel$/i.test(seg)) models.add(fullPath);
-    }
-  }
-  // Sort by name so the picker renders alphabetically.
-  const byBasename = (a: string, b: string): number =>
-    (a.split("/").pop() || "").localeCompare(b.split("/").pop() || "");
-  return {
-    reports: [...reports].sort(byBasename),
-    semanticModels: [...models].sort(byBasename),
-  };
-}
-
-type PairVerdict =
-  | { kind: "paired"; reason: "pbir" | "prefix"; message: string }
-  | { kind: "mismatch"; expected: string; message: string };
-
-/**
- * Decide whether a given .Report / .SemanticModel pair belongs
- * together. Three-tier:
- *   1. pbir pointer in <report>/definition.pbir resolves to the
- *      selected .SemanticModel → authoritative match
- *   2. Filename prefixes match (training.Report ↔ training.SemanticModel)
- *      → heuristic match
- *   3. Neither → hard mismatch; caller disables Load.
- */
-function validatePair(
-  files: Map<string, string>,
-  reportPath: string,
-  semanticPath: string,
-): PairVerdict {
-  const reportName = reportPath.split("/").pop() || "";
-  const modelName = semanticPath.split("/").pop() || "";
-  const reportPrefix_ = reportName.replace(/\.Report$/i, "");
-  const modelPrefix = modelName.replace(/\.SemanticModel$/i, "");
-
-  // Tier 1: pbir authoritative pointer
-  const pbirKey = reportPath + "/definition.pbir";
-  const pbirContent = files.get(pbirKey);
-  if (pbirContent) {
-    try {
-      const parsed = JSON.parse(pbirContent) as {
-        datasetReference?: { byPath?: { path?: string } };
-      };
-      const rawPath = parsed.datasetReference?.byPath?.path;
-      if (rawPath) {
-        // The pbir path is relative; extract just the final segment
-        // (basename) since the selected .SemanticModel is known by
-        // name, not by a cross-picker path.
-        const expectedModel = rawPath.split(/[/\\]/).pop() || "";
-        if (expectedModel.toLowerCase() === modelName.toLowerCase()) {
-          return {
-            kind: "paired",
-            reason: "pbir",
-            message: `Report paired with this model (via pbir)`,
-          };
-        }
-        return {
-          kind: "mismatch",
-          expected: expectedModel,
-          message: `Report's pbir points to "${expectedModel}", not "${modelName}".`,
-        };
-      }
-    } catch {
-      /* malformed pbir — fall through to prefix match */
-    }
-  }
-
-  // Tier 2: prefix heuristic
-  if (reportPrefix_ && modelPrefix &&
-      reportPrefix_.toLowerCase() === modelPrefix.toLowerCase()) {
-    return {
-      kind: "paired",
-      reason: "prefix",
-      message: `Prefix match — assumed paired`,
-    };
-  }
-
-  // Tier 3: mismatch
-  return {
-    kind: "mismatch",
-    expected: reportPrefix_ ? `${reportPrefix_}.SemanticModel` : "",
-    message: reportPrefix_
-      ? `"${reportName}" doesn't match "${modelName}" — expected "${reportPrefix_}.SemanticModel".`
-      : `"${reportName}" and "${modelName}" don't appear to be paired.`,
-  };
-}
-
-const NONE_VALUE = "__none";
-const escForAttr = (s: string): string => s.replace(/[&<>"']/g, c => ({
-  "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-}[c]!));
-
-/**
- * Render the pair-picker overlay. Radio groups for .Report and
- * .SemanticModel; live validation below the lists drives the
- * Load button's enabled state.
+ * Render the pair-picker overlay and wire its events.
+ *
+ * This is the orchestrator — pure logic (scanning, validating,
+ * auto-selecting, filtering, shimming, HTML building) lives in
+ * `./pair-picker.ts`. This function just stitches them into DOM
+ * side-effects: paste innerHTML, wire listeners, install shims
+ * when Load fires.
+ *
+ * Structure:
+ *   1. Find the overlay card + widen it
+ *   2. Compute defaults, build card HTML, paste
+ *   3. Install the local DOM helpers (getSelected, setters)
+ *   4. Wire radio change → auto-select + verdict refresh
+ *   5. Wire Cancel → restore original card
+ *   6. Wire Load → filter + shim + handoff to processFiles
  */
 function showPairPicker(
   files: Map<string, string>,
@@ -483,79 +394,16 @@ function showPairPicker(
   // again. processFiles hides the overlay outright on success.
   card.classList.add("br-card--wide");
 
-  const nameOnly = (p: string): string => p.split("/").pop() || "";
+  // Compute defaults + build markup (both pure — see pair-picker.ts)
+  const defaults = computePickerDefaults(candidates, files);
+  card.innerHTML = buildPickerCardHtml(pickedName, candidates, defaults);
 
-  // Pre-select the default pair: first report + matching model (or
-  // first model if no match), or "(none)" for the report when there
-  // are no reports at all.
-  let defaultReport: string = candidates.reports[0] || NONE_VALUE;
-  let defaultModel: string = candidates.semanticModels[0] || "";
-  if (defaultReport !== NONE_VALUE && candidates.semanticModels.length > 1) {
-    // Try to find a prefix-matching model
-    const rName = nameOnly(defaultReport);
-    const rPrefix = rName.replace(/\.Report$/i, "");
-    const match = candidates.semanticModels.find(m => {
-      const mName = nameOnly(m);
-      return mName.replace(/\.SemanticModel$/i, "").toLowerCase() === rPrefix.toLowerCase();
-    });
-    if (match) defaultModel = match;
-  }
-
-  const reportRadios = [
-    ...candidates.reports.map(p => {
-      const n = nameOnly(p);
-      return `<label class="br-radio"><input type="radio" name="br-pair-report" value="${escForAttr(p)}"${p === defaultReport ? " checked" : ""}>${escForAttr(n)}</label>`;
-    }),
-    `<label class="br-radio br-radio--none"><input type="radio" name="br-pair-report" value="${NONE_VALUE}"${defaultReport === NONE_VALUE ? " checked" : ""}>(none — semantic model only)</label>`,
-  ].join("");
-
-  const modelRadios = [
-    ...candidates.semanticModels.map(p => {
-      const n = nameOnly(p);
-      return `<label class="br-radio"><input type="radio" name="br-pair-model" value="${escForAttr(p)}"${p === defaultModel ? " checked" : ""}>${escForAttr(n)}</label>`;
-    }),
-    // Symmetric "(none)" option for report-only mode. Required
-    // when the user wants to document pages + visuals from a
-    // .Report without the associated SemanticModel in reach, or
-    // for a report whose model lives in a shared workspace the
-    // user can't pick alongside.
-    `<label class="br-radio br-radio--none"><input type="radio" name="br-pair-model" value="${NONE_VALUE}"${defaultModel === "" ? " checked" : ""}>(none — report only)</label>`,
-  ].join("");
-
-  card.innerHTML = `
-    <h1>Power BI Documenter</h1>
-    <p class="br-lede" style="margin:8px 0 20px">Choose what to document from <code>${escForAttr(pickedName)}</code>.</p>
-
-    <div class="br-pair-picker">
-      <div class="br-pair-col">
-        <h3>Report</h3>
-        ${reportRadios}
-      </div>
-      <div class="br-pair-col">
-        <h3>Semantic Model</h3>
-        ${modelRadios}
-      </div>
-    </div>
-
-    <div id="br-pair-verdict" class="br-pair-verdict" aria-live="polite"></div>
-
-    <div class="br-ctas">
-      <button id="br-pair-cancel" class="br-btn" type="button"
-              style="background:transparent;color:#CBD5E1;border:1px solid rgba(255,255,255,0.18);">
-        Cancel
-      </button>
-      <button id="br-pair-load" class="br-btn" type="button"
-              style="background:#F59E0B;color:#0B0D11;">
-        Load
-      </button>
-    </div>
-  `;
-
+  // DOM accessors + small helpers that need document
   const verdictEl = document.getElementById("br-pair-verdict");
   const loadBtn = document.getElementById("br-pair-load") as HTMLButtonElement | null;
   const cancelBtn = document.getElementById("br-pair-cancel");
 
-  const getSelected = (): { reportPath: string | null; modelPath: string | null } => {
+  const getSelection = (): { reportPath: string | null; modelPath: string | null } => {
     const r = document.querySelector<HTMLInputElement>('input[name="br-pair-report"]:checked');
     const m = document.querySelector<HTMLInputElement>('input[name="br-pair-model"]:checked');
     const rVal = r?.value || "";
@@ -566,35 +414,35 @@ function showPairPicker(
     };
   };
 
+  const setRadio = (group: "br-pair-report" | "br-pair-model", value: string): void => {
+    const radio = document.querySelector<HTMLInputElement>(
+      `input[name="${group}"][value="${CSS.escape(value)}"]`,
+    );
+    if (radio) radio.checked = true;
+  };
+
   const updateVerdict = (): void => {
     if (!verdictEl || !loadBtn) return;
-    const sel = getSelected();
+    const sel = getSelection();
+    const mode = classifyLoadMode(sel.reportPath, sel.modelPath);
 
-    // Four possible states for the two radio groups:
-    //   1. both null       → nothing selected, Load off
-    //   2. model only      → existing model-only mode (pages empty)
-    //   3. report only     → NEW: report-only mode (model empty)
-    //   4. both selected   → validate pair, Load when paired
-    if (!sel.modelPath && !sel.reportPath) {
+    if (mode === "empty") {
       verdictEl.innerHTML = `<span class="br-v-error">Select at least one of Report or Semantic Model to continue.</span>`;
       loadBtn.disabled = true;
       return;
     }
-
-    if (!sel.modelPath && sel.reportPath) {
+    if (mode === "report-only") {
       verdictEl.innerHTML = `<span class="br-v-info">Report-only mode — model docs (tables, measures, columns, DAX) will be empty.</span>`;
       loadBtn.disabled = false;
       return;
     }
-
-    if (sel.modelPath && !sel.reportPath) {
+    if (mode === "model-only") {
       verdictEl.innerHTML = `<span class="br-v-info">Model-only mode — pages and usage stats will be empty.</span>`;
       loadBtn.disabled = false;
       return;
     }
 
-    // Full mode: validate pair. At this point both paths are non-null
-    // (early returns above handled the three partial states).
+    // mode === "full": both selected — validate the pair
     const verdict = validatePair(files, sel.reportPath as string, sel.modelPath as string);
     if (verdict.kind === "paired") {
       verdictEl.innerHTML = `<span class="br-v-ok">✓ ${escForAttr(verdict.message)}</span>`;
@@ -605,136 +453,18 @@ function showPairPicker(
     }
   };
 
-  /**
-   * When the Report radio changes, try to auto-select the matching
-   * Semantic Model. Three tiers, in order:
-   *   1. pbir: read <report>/definition.pbir, follow the
-   *      `datasetReference.byPath.path` pointer to a basename, and
-   *      select the matching model radio if one exists.
-   *   2. Prefix match: training.Report → training.SemanticModel.
-   *   3. No match: leave the model selection alone so the verdict
-   *      surfaces the mismatch and the user picks manually.
-   *
-   * The "(none)" Report branch skips this entirely — the user has
-   * already declared they're doing model-only mode.
-   */
-  const autoSelectModelForReport = (reportPath: string): void => {
-    if (reportPath === NONE_VALUE) return;
-    const reportName = reportPath.split("/").pop() || "";
-
-    // Tier 1: pbir pointer
-    const pbirKey = reportPath + "/definition.pbir";
-    const pbirContent = files.get(pbirKey);
-    if (pbirContent) {
-      try {
-        const parsed = JSON.parse(pbirContent) as {
-          datasetReference?: { byPath?: { path?: string } };
-        };
-        const rawPath = parsed.datasetReference?.byPath?.path;
-        if (rawPath) {
-          const expectedModel = rawPath.split(/[/\\]/).pop() || "";
-          const pbirMatch = candidates.semanticModels.find(m =>
-            (m.split("/").pop() || "").toLowerCase() === expectedModel.toLowerCase());
-          if (pbirMatch) {
-            const radio = document.querySelector<HTMLInputElement>(
-              `input[name="br-pair-model"][value="${CSS.escape(pbirMatch)}"]`,
-            );
-            if (radio) { radio.checked = true; return; }
-          }
-        }
-      } catch { /* malformed pbir — fall through to prefix */ }
-    }
-
-    // Tier 2: prefix heuristic
-    const rPrefix = reportName.replace(/\.Report$/i, "");
-    if (rPrefix) {
-      const prefixMatch = candidates.semanticModels.find(m =>
-        (m.split("/").pop() || "").replace(/\.SemanticModel$/i, "").toLowerCase() === rPrefix.toLowerCase());
-      if (prefixMatch) {
-        const radio = document.querySelector<HTMLInputElement>(
-          `input[name="br-pair-model"][value="${CSS.escape(prefixMatch)}"]`,
-        );
-        if (radio) { radio.checked = true; return; }
-      }
-    }
-    // Tier 3: no match — leave current selection, verdict will flag it
-  };
-
-  /**
-   * When the Model radio changes, try to auto-select the matching
-   * Report. Symmetric to autoSelectModelForReport, with one twist:
-   * a single Model can pair with multiple Reports (two reports
-   * sharing one model for different audiences). We disambiguate in
-   * this order:
-   *   1. Prefer the Report whose pbir points AT THIS model exactly.
-   *   2. Then prefer the Report whose name prefix matches the model's.
-   *   3. Then first pbir pointer that matches (fallback).
-   *   4. No match → leave current selection alone.
-   */
-  const autoSelectReportForModel = (modelPath: string): void => {
-    if (modelPath === NONE_VALUE) return;
-    const modelName = modelPath.split("/").pop() || "";
-    const mPrefix = modelName.replace(/\.SemanticModel$/i, "");
-
-    // Collect every report whose pbir points at this model.
-    const pbirMatches: string[] = [];
-    for (const r of candidates.reports) {
-      const pbirContent = files.get(r + "/definition.pbir");
-      if (!pbirContent) continue;
-      try {
-        const parsed = JSON.parse(pbirContent) as {
-          datasetReference?: { byPath?: { path?: string } };
-        };
-        const rawPath = parsed.datasetReference?.byPath?.path;
-        if (rawPath) {
-          const expected = rawPath.split(/[/\\]/).pop() || "";
-          if (expected.toLowerCase() === modelName.toLowerCase()) {
-            pbirMatches.push(r);
-          }
-        }
-      } catch { /* skip malformed pbir */ }
-    }
-
-    // Within pbir matches, prefer the one whose report-name prefix
-    // matches the model's prefix — that's the "closest" pairing.
-    const pickFromList = (list: string[]): string | null => {
-      if (list.length === 0) return null;
-      const exact = list.find(r => {
-        const n = r.split("/").pop() || "";
-        return n.replace(/\.Report$/i, "").toLowerCase() === mPrefix.toLowerCase();
-      });
-      return exact || list[0];
-    };
-
-    const chosen = pickFromList(pbirMatches)
-      // If no pbir match, try pure prefix match across ALL reports.
-      || pickFromList(candidates.reports.filter(r => {
-        const n = r.split("/").pop() || "";
-        return n.replace(/\.Report$/i, "").toLowerCase() === mPrefix.toLowerCase();
-      }));
-
-    if (chosen) {
-      const radio = document.querySelector<HTMLInputElement>(
-        `input[name="br-pair-report"][value="${CSS.escape(chosen)}"]`,
-      );
-      if (radio) radio.checked = true;
-    }
-    // No match → leave whatever the user had selected (including
-    // "(none) — semantic model only"). They can still Load.
-  };
-
-  // Wire radio change events. Both directions auto-select the
-  // matching partner, then refresh the verdict. Model → Report uses
-  // pbir-first-then-prefix with prefix-exact preference inside pbir
-  // matches, since one model can pair with multiple reports.
+  // Radio change handlers: auto-select the matching partner via
+  // pure helpers, then refresh the verdict.
   document.querySelectorAll<HTMLInputElement>('input[name="br-pair-report"]')
     .forEach(r => r.addEventListener("change", () => {
-      autoSelectModelForReport(r.value);
+      const match = findBestModelForReport(r.value, candidates, files);
+      if (match) setRadio("br-pair-model", match);
       updateVerdict();
     }));
   document.querySelectorAll<HTMLInputElement>('input[name="br-pair-model"]')
     .forEach(r => r.addEventListener("change", () => {
-      autoSelectReportForModel(r.value);
+      const match = findBestReportForModel(r.value, candidates, files);
+      if (match) setRadio("br-pair-report", match);
       updateVerdict();
     }));
 
@@ -751,134 +481,37 @@ function showPairPicker(
 
   if (loadBtn) {
     loadBtn.addEventListener("click", async () => {
-      const sel = getSelected();
       if (loadBtn.disabled) return;
-      if (!sel.modelPath && !sel.reportPath) return;
+      const sel = getSelection();
+      const mode = classifyLoadMode(sel.reportPath, sel.modelPath);
+      if (mode === "empty") return;
 
       // Keep --wide while the pair-picker HTML is still on screen —
-      // if processFiles throws (parser error etc) the user stays in
-      // the picker with a sensible width. On success, processFiles
-      // hides the overlay, and reopenPicker resets --wide before
-      // the user sees the narrow landing card again.
+      // if processFiles throws the user stays in the picker with a
+      // sensible width. On success, processFiles hides the overlay,
+      // and reopenPicker resets --wide before the landing card shows.
       setStatus("Loading selection…");
       // eslint-disable-next-line no-console
       console.log(`[entry] Pair picker: report="${sel.reportPath || "(none)"}", model="${sel.modelPath || "(none)"}"`);
 
-      // Filter the VFS to only the selected pair's files, remount
-      // under a synthetic `/virt/__pbip/` parent so processFiles'
-      // pickedName is stable regardless of the original parent name.
       const filtered = filterAndRemount(files, sel.reportPath, sel.modelPath);
 
-      // Partial-mode shims: the parser (buildFullData → findSemantic-
-      // ModelPath + scanReportBindings) expects BOTH halves to exist.
-      // When one half isn't selected we synthesize a minimal empty
-      // stub for the missing side. Browser-only concern; CLI always
-      // has both halves on disk.
-      let mode: LoadMode = "full";
-      if (sel.reportPath === null && sel.modelPath !== null) {
+      // Install partial-mode shims when one half is missing so the
+      // parser (buildFullData → findSemanticModelPath +
+      // scanReportBindings) has both pieces it expects.
+      if (mode === "model-only" && sel.modelPath) {
         installModelOnlyShim(filtered, sel.modelPath);
-        mode = "model-only";
-      } else if (sel.modelPath === null && sel.reportPath !== null) {
+      } else if (mode === "report-only" && sel.reportPath) {
         installReportOnlyShim(filtered, sel.reportPath);
-        mode = "report-only";
       }
 
-      await processFiles(filtered, "__pbip", /*fromSample=*/ false, mode);
+      await processFiles(filtered, "__pbip", /*fromSample=*/ false, mode as LoadMode);
     });
   }
 }
 
-/**
- * Keep only files under the selected Report + SemanticModel paths,
- * and remap them under `/virt/__pbip/<basename>/…` so the parser's
- * sibling scan finds them as peers regardless of the parent name.
- */
-function filterAndRemount(
-  files: Map<string, string>,
-  reportPath: string | null,
-  modelPath: string | null,
-): Map<string, string> {
-  const reportPrefix = reportPath ? reportPath + "/" : null;
-  const modelPrefix  = modelPath  ? modelPath  + "/" : null;
-  const reportBase = reportPath ? reportPath.split("/").pop() || "" : "";
-  const modelBase  = modelPath  ? modelPath.split("/").pop()  || "" : "";
-  const out = new Map<string, string>();
-
-  for (const [key, val] of files) {
-    if (reportPrefix && key.startsWith(reportPrefix)) {
-      const rest = key.slice(reportPrefix.length);
-      out.set(`/virt/__pbip/${reportBase}/${rest}`, val);
-    } else if (modelPrefix && key.startsWith(modelPrefix)) {
-      const rest = key.slice(modelPrefix.length);
-      out.set(`/virt/__pbip/${modelBase}/${rest}`, val);
-    }
-  }
-  return out;
-}
-
-/**
- * Model-only mode shim: the parser's `buildFullData()` calls both
- * `findSemanticModelPath` AND `scanReportBindings`. Without a
- * .Report the latter would throw. We fabricate a minimal .Report
- * folder with an empty pages directory so everything resolves, and
- * the resulting FullData has zero pages/visuals — exactly what
- * "model-only" means.
- *
- * The synthesised .Report is named after the model's prefix so
- * findSemanticModelPath's prefix-matching still resolves cleanly.
- */
-function installModelOnlyShim(
-  files: Map<string, string>,
-  modelPath: string,
-): void {
-  const modelBase = modelPath.split("/").pop() || "";
-  const prefix = modelBase.replace(/\.SemanticModel$/i, "") || "model-only";
-  const reportBase = `${prefix}.Report`;
-
-  files.set(`/virt/__pbip/${reportBase}/definition.pbir`, JSON.stringify({
-    version: "1.0",
-    datasetReference: { byPath: { path: `../${modelBase}` } },
-  }));
-  // Empty pages list — scanReportBindings yields zero pages/visuals.
-  files.set(`/virt/__pbip/${reportBase}/definition/pages/pages.json`, JSON.stringify({
-    pageOrder: [],
-    activePageName: "",
-    $schema: "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/pagesMetadata/1.0.0/schema.json",
-  }));
-  files.set(`/virt/__pbip/${reportBase}/report.json`, JSON.stringify({
-    $schema: "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/report/3.2.0/schema.json",
-    resourcePackages: [],
-  }));
-}
-
-/**
- * Report-only mode shim: user picked a .Report without a matching
- * .SemanticModel (the model lives in a shared workspace they can't
- * grant access to, for example). We synthesize a minimal empty
- * .SemanticModel so the parser's findSemanticModelPath sibling-scan
- * + parseModel calls resolve cleanly. Result: FullData has zero
- * tables/measures/columns but populated pages/visuals — exactly
- * what "report-only" means.
- *
- * parseModel routes to parseTmdlModel when definition/tables/ has
- * any .tmdl file. We ship a single empty one; parseTmdlModel
- * iterates and finds no `table X` declarations → empty tables[].
- * parseTmdlDatabaseLevel + parseTmdlModelProperties both bail to
- * defaults when their files don't exist, so no other stubs needed.
- */
-function installReportOnlyShim(
-  files: Map<string, string>,
-  reportPath: string,
-): void {
-  const reportBase = reportPath.split("/").pop() || "";
-  const prefix = reportBase.replace(/\.Report$/i, "") || "report-only";
-  const modelBase = `${prefix}.SemanticModel`;
-
-  // Empty TMDL that causes parseTmdlModel to run and produce an
-  // empty RawModel. Comment-only so the file is valid TMDL.
-  files.set(`/virt/__pbip/${modelBase}/definition/tables/_empty.tmdl`,
-    "/// Empty placeholder — report-only mode\n");
-}
+// filterAndRemount, installModelOnlyShim, and installReportOnlyShim
+// now live in ./pair-picker.ts (imported at the top of this file).
 
 /**
  * Re-attach click handlers after the overlay card's innerHTML has
@@ -899,7 +532,7 @@ function rewireLandingButtons(): void {
  * install the VFS, parse, render. Used by both the folder picker
  * and the "Try a sample" button.
  */
-type LoadMode = "full" | "model-only" | "report-only";
+// LoadMode type now lives in ./pair-picker.ts (imported at the top).
 
 async function processFiles(
   files: Map<string, string>,
@@ -1035,25 +668,7 @@ async function loadSample(): Promise<void> {
  * have it as a direct child of the picked folder; we support nested
  * layouts too by taking the shortest match.
  */
-function findReportRoot(files: Map<string, string>, pickedName: string): string | null {
-  const rootPrefix = `/virt/${pickedName}/`;
-  const seen = new Set<string>();
-  for (const key of files.keys()) {
-    if (!key.startsWith(rootPrefix)) continue;
-    // walk segments to find any *.Report directory
-    const rest = key.slice(rootPrefix.length);
-    const parts = rest.split("/");
-    for (let i = 0; i < parts.length; i++) {
-      if (/\.Report$/i.test(parts[i])) {
-        const candidate = rootPrefix + parts.slice(0, i + 1).join("/");
-        seen.add(candidate);
-      }
-    }
-  }
-  if (seen.size === 0) return null;
-  // Prefer the shallowest candidate (usually the one the user intended)
-  return [...seen].sort((a, b) => a.length - b.length)[0];
-}
+// findReportRoot now lives in ./pair-picker.ts (imported at the top).
 
 interface MarkdownBundle {
   md: string;
