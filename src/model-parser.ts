@@ -91,6 +91,27 @@ export interface RawPartition {
    * (shared expressions, simple navigation-only partitions).
    */
   steps: MStep[];
+  /**
+   * Raw M expression body for this partition — exactly what TMDL /
+   * BIM had in the `source = …` / `source.expression` field. Surfaced
+   * read-only in the Sources tab + Sources.md so reviewers can inspect
+   * the verbatim Power Query without leaving the dashboard. Capped at
+   * `M_EXPRESSION_CAP` characters to keep the JSON payload bounded —
+   * anything longer is truncated with a trailing marker.
+   */
+  mExpression: string;
+}
+
+/** Upper bound on the M body we ship to the client, per partition.
+ *  10 KB covers every realistic hand-written query; pathological
+ *  auto-generated blobs (huge inline CSV via `Table.FromRows`) truncate. */
+const M_EXPRESSION_CAP = 10_000;
+
+function capMExpression(m: string): string {
+  if (!m) return "";
+  const trimmed = m.trim();
+  if (trimmed.length <= M_EXPRESSION_CAP) return trimmed;
+  return trimmed.substring(0, M_EXPRESSION_CAP) + `\n\n… (truncated — ${trimmed.length - M_EXPRESSION_CAP} more chars)`;
 }
 
 export interface RawHierarchyLevel {
@@ -977,6 +998,7 @@ function extractTmdlPartitions(
       expressionSource: current.expressionSource,
       nativeQuery,
       steps,
+      mExpression: capMExpression(mCode),
     });
     current = null;
     inSource = false;
@@ -1646,6 +1668,7 @@ function parseBimFile(bimPath: string): RawModel {
         expressionSource,
         nativeQuery: extractNativeQuery(mCode),
         steps: parseMSteps(mCode),
+        mExpression: capMExpression(mCode),
       };
     });
     // Hierarchies defined on the table.

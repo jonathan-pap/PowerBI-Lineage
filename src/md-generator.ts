@@ -1687,6 +1687,33 @@ export function generateSourcesMd(data: FullData, reportName: string): string {
     lines.push("");
   }
 
+  // ── 2.3 Raw M expressions ─────────────────────────────────────────────────
+  // The verbatim M body for every partition, in a collapsible per-table
+  // list. Kept separate from the step breakdown so reviewers who just
+  // want the classified flow aren't buried in raw Power Query.
+  const withM = regularTables.filter(t => t.partitions.some(p => p.mExpression && p.mExpression.trim().length > 0));
+  if (withM.length > 0) {
+    lines.push(`## 2.3 Raw M expressions`);
+    lines.push("");
+    lines.push(`Verbatim M body for every partition that has one. Truncated at 10 KB per partition; the dashboard's Sources tab shows the same content inline.`);
+    lines.push("");
+    for (const t of withM) {
+      for (const p of t.partitions) {
+        if (!p.mExpression || p.mExpression.trim().length === 0) continue;
+        lines.push(`<details><summary><b>${esc(t.name)}</b>${p.name && p.name !== t.name ? ` — partition <code>${esc(p.name)}</code>` : ""}</summary>`);
+        lines.push("");
+        lines.push("```m");
+        lines.push(p.mExpression);
+        lines.push("```");
+        lines.push("");
+        lines.push("</details>");
+        lines.push("");
+      }
+    }
+    lines.push("---");
+    lines.push("");
+  }
+
   lines.push(`## 3. Field Parameters`);
   lines.push("");
   if (fieldParams.length === 0) {
