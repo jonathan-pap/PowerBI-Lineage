@@ -134,8 +134,19 @@ async function pickAndLoad(): Promise<void> {
   }
 
   if (files.size === 0) {
+    // If the user picked a `.Report` folder directly, the walker can
+    // only see that folder's descendants — which have no TMDL/BIM
+    // (those live in the sibling `.SemanticModel`) — so the map is
+    // empty. Route to the specific self-correcting message.
+    if (/\.report$/i.test(pickedName)) {
+      setStatus(
+        `You picked "${pickedName}" directly. Browser mode needs access to its matching .SemanticModel sibling too — please go up one level and pick the parent folder that contains both.`,
+        "error",
+      );
+      return;
+    }
     setStatus(
-      `No PBIP files found in ${pickedName}. Pick the folder that contains a .Report + .SemanticModel pair.`,
+      `No PBIP files found in "${pickedName}". Pick the parent folder that contains a <Name>.Report + <Name>.SemanticModel pair.`,
       "error",
     );
     return;
@@ -151,8 +162,23 @@ async function pickAndLoad(): Promise<void> {
   // a direct or nested child.
   const reportPath = findReportRoot(files, pickedName);
   if (!reportPath) {
+    // Common mistake: user stepped INTO the `.Report` folder and
+    // picked that directly. The File System Access API only grants
+    // access to the picked folder + descendants — not its siblings —
+    // so the matching `.SemanticModel` is invisible to us. The CLI
+    // doesn't hit this because Node has filesystem-wide read access;
+    // the browser genuinely can't reach sideways. Surface that as a
+    // specific, self-correcting message instead of the generic
+    // "no .Report found" error.
+    if (/\.report$/i.test(pickedName)) {
+      setStatus(
+        `You picked "${pickedName}" directly. Browser mode needs access to its matching .SemanticModel sibling too — please go up one level and pick the parent folder that contains both.`,
+        "error",
+      );
+      return;
+    }
     setStatus(
-      "No .Report folder found under the picked directory. Expected a <Name>.Report sibling to <Name>.SemanticModel.",
+      `No .Report folder found under "${pickedName}". Pick the parent folder that contains a <Name>.Report and its matching <Name>.SemanticModel.`,
       "error",
     );
     return;
