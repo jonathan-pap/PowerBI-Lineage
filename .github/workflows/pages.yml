@@ -1,0 +1,85 @@
+# Deploys the browser-mode bundle to GitHub Pages on every push to
+# main. The browser mode (PR #19) compiles the parser + dashboard into
+# a static site under `docs/` where the `.Report` folder is opened via
+# the File System Access API — nothing ever uploads, the user's files
+# stay on their machine. Pages just serves the empty shell.
+#
+# This lives alongside the CLI workflow (`ci.yml`) rather than
+# replacing it. The CLI path (`dist/app.js` + local 127.0.0.1 server)
+# is the recommended mode for power users and CI; Pages is the
+# install-free front door for casual users on Chrome/Edge/Opera.
+#
+# Prerequisite (one-time, in GitHub UI):
+#   Settings → Pages → Source: "GitHub Actions"
+# The workflow itself takes care of the deploy — no branch-based
+# publish, no `gh-pages` branch.
+
+name: Pages
+
+on:
+  push:
+    branches: [main]
+  # Allow manual redeploy from the Actions tab without a code change.
+  workflow_dispatch:
+
+# Pages requires these scopes on the GITHUB_TOKEN for the
+# configure-pages / deploy-pages actions to succeed.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never overlap Pages deploys — if two pushes land in quick
+# succession, the first one's in-flight deploy is cancelled so the
+# newer SHA wins cleanly. `cancel-in-progress: true` avoids a stale
+# deploy overwriting the latest one.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    name: build · deploy
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # `build:browser` runs both `tsc` (for the CLI-side imports the
+      # build script needs) AND `tsc -p tsconfig.browser.json` (for
+      # the compiled browser modules) AND `scripts/build-browser.mjs`
+      # (for the shell-HTML injection). End state: `docs/` has
+      # `index.html`, `.nojekyll`, plus all the compiled JS modules.
+      - name: Build browser bundle
+        run: npm run build:browser
+
+      # Fail fast if the build produced an empty `docs/` — would
+      # deploy a blank site silently otherwise.
+      - name: Verify docs/ populated
+        run: |
+          test -f docs/index.html || (echo "docs/index.html missing"; exit 1)
+          test -f docs/.nojekyll || (echo "docs/.nojekyll missing"; exit 1)
+          test -f docs/browser/entry.js || (echo "docs/browser/entry.js missing"; exit 1)
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+
+      - name: Deploy to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4
