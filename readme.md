@@ -214,8 +214,9 @@ Each of the nine generated MDs starts with an HTML comment suggesting its wiki p
 
 Every anchor link is verified by `tests/md-anchors.test.ts` — drift fires CI.
 
-## Changelog
+## Changelog + roadmap
 
-Release notes live under [`changelog/`](changelog/) — one file per release. See [`changelog/README.md`](changelog/README.md) for the full index.
+- **What shipped** — [`changelog/`](changelog/), one file per release. Full index in [`changelog/README.md`](changelog/README.md).
+- **What's parked for future design** — [`ROADMAP.md`](ROADMAP.md). Not a commitment — a scratchpad of ideas (XMLA endpoint support, broken-DAX audit, column drill-down, physical-source index, M-query steps, CSV exports) with rough scopes.
 
-Latest: **[v0.8.1](changelog/0.8.1.md)** — Post-`/sc:analyze` hardening (CI bundle guard, pair-picker extraction + tests, strict typing on main.ts).
+Latest release: **[v0.8.1](changelog/0.8.1.md)** — Post-`/sc:analyze` hardening (CI bundle guard, pair-picker extraction + tests, strict typing on main.ts).
