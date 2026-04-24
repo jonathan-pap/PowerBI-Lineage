@@ -17,9 +17,13 @@
  * everything off once the DOM is ready.
  */
 
-// @ts-nocheck -- Client is untyped JS by origin; the Stop-5 follow-up
-// will tighten this panel by panel. Leaving errors off for the initial
-// carve keeps the diff review-able.
+// NOTE: main.ts used to carry @ts-nocheck because it grew as
+// untyped JS and we didn't want 400-error diffs during the first
+// extraction. P4 of /sc:analyze removed the escape hatch and
+// brought the file under full strict checks. Ambient globals
+// (DATA, MARKDOWN_*, escHtml / escAttr / sc / uc) live in
+// ./globals.d.ts — main.ts relies on them as bare names because
+// they're concatenated into the same <script> block at build time.
 
 let activeMd="model";
 let mdViewMode="rendered";
@@ -58,7 +62,7 @@ function highlightDaxBlocks(){
 
 function addCopyButtons(){
   highlightDaxBlocks();
-  document.querySelectorAll('.lineage-dax:not([data-copy-wired])').forEach(function(el){
+  document.querySelectorAll('.lineage-dax:not([data-copy-wired])').forEach(function(el: any){
     el.setAttribute('data-copy-wired','1');
     var dax=el.textContent;
     el.setAttribute('data-dax',dax);
@@ -86,9 +90,16 @@ function addCopyButtons(){
 (function(){var t=document.documentElement.getAttribute('data-theme')||'dark';var btn=document.getElementById('theme-btn');if(btn)btn.textContent=t==='dark'?'☾':'☀';})();
 
 let activeTab="measures",lastTab="measures";
-let sortState={measures:{key:"usageCount",desc:true},columns:{key:"usageCount",desc:true}};
-let showUnusedOnly={measures:false,columns:false};
-let searchTerms={measures:"",columns:""};
+// Typed as Record<string, …> so dynamic key access (e.g.
+// sortState[t] where t is a string) type-checks. Runtime keys
+// are still only "measures" / "columns" but a string-key index
+// signature keeps the callsites simple and ambient-typed.
+let sortState: Record<string, { key: string; desc: boolean }> = {
+  measures: { key: "usageCount", desc: true },
+  columns: { key: "usageCount", desc: true },
+};
+let showUnusedOnly: Record<string, boolean> = { measures: false, columns: false };
+let searchTerms: Record<string, string> = { measures: "", columns: "" };
 let openPages=new Set();
 let openTables=new Set();
 
@@ -158,7 +169,8 @@ document.addEventListener('click', function(e){
 });
 
 document.addEventListener('click', function(e){
-  var el = e.target.closest && e.target.closest('[data-action]');
+  const target = e.target as Element | null;
+  const el = target?.closest && target.closest('[data-action]') as HTMLElement | null;
   if (!el) return;
   var a = el.getAttribute('data-action');
   var d = el.dataset;
@@ -180,7 +192,7 @@ document.addEventListener('click', function(e){
     case 'table-group-toggle': toggleTableGroup(d.group); break;
     case 'orphan-toggle':   toggleOrphanSection(d.section); break;
     case 'toggle-auto-date': toggleAutoDate(); break;
-    case 'card-toggle':     el.parentElement.classList.toggle('open'); break;
+    case 'card-toggle':     el.parentElement!.classList.toggle('open'); break;
     // Sources tab — view toggle between card view + flat map
     case 'sources-view':    setSourcesView(d.view as "cards" | "flat"); break;
     // Source Map (flat view inside Sources tab)
@@ -197,7 +209,8 @@ document.addEventListener('click', function(e){
 // invariant. Same structural guarantee: user text reaches
 // filterTable via HTMLInputElement.value (browser-decoded, safe).
 document.addEventListener('input', function(e){
-  var el = e.target.closest && e.target.closest('[data-action]');
+  const target = e.target as Element | null;
+  const el = target?.closest && target.closest('[data-action]') as HTMLInputElement | null;
   if (!el) return;
   var a = el.getAttribute('data-action');
   var d = el.dataset;
@@ -218,7 +231,7 @@ function renderSummary(){
   const tipUnused=`Not referenced anywhere in the report — safe to remove. ${t.measuresUnused} measures · ${t.columnsUnused} columns.`;
   const tipPages=`Total pages in the report. ${visibleCount} visible · ${hiddenCount} hidden (tooltip / drillthrough / nav-suppressed).`;
   const tipVisuals=`Total visuals across all pages.`;
-  document.getElementById("summary").innerHTML=`
+  document.getElementById("summary")!.innerHTML=`
     <div class="stat has-tip" data-tooltip="${tipDirect}"><div class="stat-value good">${t.measuresDirect+t.columnsDirect}</div><div class="stat-label">Direct</div><div class="stat-detail">${t.measuresDirect}M · ${t.columnsDirect}C</div></div>
     <div class="stat has-tip" data-tooltip="${tipIndirect}"><div class="stat-value ${t.measuresIndirect+t.columnsIndirect>0?'warn':''}">${t.measuresIndirect+t.columnsIndirect}</div><div class="stat-label">Indirect</div><div class="stat-detail">${t.measuresIndirect}M · ${t.columnsIndirect}C</div></div>
     <div class="stat has-tip" data-tooltip="${tipUnused}"><div class="stat-value ${totalOrphan>0?'danger':''}">${totalOrphan}</div><div class="stat-label">Unused</div><div class="stat-detail">${t.measuresUnused}M · ${t.columnsUnused}C</div></div>
@@ -233,8 +246,8 @@ function renderSummary(){
 // lets users opt into seeing them. On the H&S composite model this
 // cuts 10 noise entries out of the 53-table list.
 let showAutoDate = false;
-function visibleTables(){ return (DATA.tables||[]).filter(t=>showAutoDate||t.origin!=="auto-date"); }
-function autoDateCount(){ return (DATA.tables||[]).filter(t=>t.origin==="auto-date").length; }
+function visibleTables(){ return (DATA.tables||[]).filter((t: any) =>showAutoDate||t.origin!=="auto-date"); }
+function autoDateCount(){ return (DATA.tables||[]).filter((t: any) =>t.origin==="auto-date").length; }
 function toggleAutoDate(){ showAutoDate = !showAutoDate; renderTabs(); renderTables(); renderSources(); }
 
 function renderTabs(){
@@ -243,16 +256,16 @@ function renderTabs(){
   const adc=autoDateCount();
   // Bottom-up build order: data foundations first, then calculation logic,
   // then consumption (pages), then analysis (unused/lineage), then docs.
-  document.getElementById("tabs").innerHTML=[
+  document.getElementById("tabs")!.innerHTML=[
     // Data layer
-    {id:"sources",l:"Sources",b:vt.filter(function(t){return (t.partitions||[]).length>0;}).length},
+    {id:"sources",l:"Sources",b:vt.filter(function(t: any){return (t.partitions||[]).length>0;}).length},
     {id:"tables",l:"Tables",b:vt.length},
     {id:"columns",l:"Columns",b:DATA.columns.length},
     {id:"relationships",l:"Relationships",b:DATA.relationships.length},
     // Calculation layer
     {id:"measures",l:"Measures",b:DATA.measures.length},
     {id:"calcgroups",l:"Calc Groups",b:DATA.calcGroups.length},
-    {id:"functions",l:"Functions",b:DATA.functions.filter(f=>!f.name.endsWith('.About')).length},
+    {id:"functions",l:"Functions",b:DATA.functions.filter((f: any) =>!f.name.endsWith('.About')).length},
     // Consumption
     {id:"pages",l:"Pages",b:pageData.length},
     // Analysis
@@ -260,31 +273,31 @@ function renderTabs(){
     {id:"lineage",l:"Lineage",b:null},
     // Output
     {id:"docs",l:"Docs",b:null}
-  ].map(t=>`<button class="tab ${activeTab===t.id?'active':''}" data-action="tab" data-tab="${t.id}">${t.l}${t.b!==null?`<span class="tab-count ${t.w?'warn':''}">${t.b}</span>`:''}</button>`).join("");
+  ].map((t: any) =>`<button class="tab ${activeTab===t.id?'active':''}" data-action="tab" data-tab="${t.id}">${t.l}${t.b!==null?`<span class="tab-count ${t.w?'warn':''}">${t.b}</span>`:''}</button>`).join("");
 }
 
 // Shared panel-footer writer. Each render* function calls this at the end
 // with its own count string on the left and (optionally) a sort / meta on
 // the right. Writes into a target element by id; silent if absent.
-function setPanelFooter(id, leftHtml, rightHtml){
+function setPanelFooter( id: any, leftHtml: any, rightHtml: any) {
   var el=document.getElementById(id);
   if(!el)return;
   var left='<div class="left">'+leftHtml+'</div>';
   var right=rightHtml?'<div class="right">'+rightHtml+'</div>':'';
   el.innerHTML=left+right;
 }
-function sortIndicator(state){
+function sortIndicator( state: any) {
   if(!state||!state.key)return "";
   return 'Sorted by '+state.key+' '+(state.desc?'↓':'↑');
 }
 
-function switchTab(id){
+function switchTab( id: any) {
   if(id!=="lineage")lastTab=id;
   activeTab=id;renderTabs();
-  document.querySelectorAll(".panel").forEach(p=>p.classList.remove("active"));
-  document.getElementById("panel-"+id).classList.add("active");
-  if(id==="lineage"&&!document.getElementById("lineage-content").innerHTML.trim())
-    document.getElementById("lineage-content").innerHTML='<div style="text-align:center;padding:60px 20px;color:var(--text-faint)"><div style="font-size:16px;margin-bottom:8px">Click a measure or column name to view its lineage</div><div style="font-size:12px">Go to the Measures or Columns tab and click any field name</div></div>';
+  document.querySelectorAll(".panel").forEach((p: any) =>p.classList.remove("active"));
+  document.getElementById("panel-"+id)!.classList.add("active");
+  if(id==="lineage"&&!document.getElementById("lineage-content")!.innerHTML.trim())
+    document.getElementById("lineage-content")!.innerHTML='<div style="text-align:center;padding:60px 20px;color:var(--text-faint)"><div style="font-size:16px;margin-bottom:8px">Click a measure or column name to view its lineage</div><div style="font-size:12px">Go to the Measures or Columns tab and click any field name</div></div>';
   // Functions + Calc Groups tabs display DAX bodies. Running through
   // addCopyButtons() here (which also highlights) colourises any new
   // blocks that weren't highlighted at initial render.
@@ -294,13 +307,13 @@ function switchTab(id){
 // sc — see src/client/render/escape.ts
 function renderMeasures(){
   let items=[...DATA.measures];const s=sortState.measures;
-  items.sort((a,b)=>{let av=a[s.key],bv=b[s.key];if(typeof av==='string')return s.desc?bv.localeCompare(av):av.localeCompare(bv);return s.desc?bv-av:av-bv;});
-  if(showUnusedOnly.measures)items=items.filter(m=>m.status!=='direct');
-  if(searchTerms.measures){const q=searchTerms.measures.toLowerCase();items=items.filter(m=>m.name.toLowerCase().includes(q)||m.table.toLowerCase().includes(q));}
-  document.getElementById("tbody-measures").innerHTML=items.map(m=>{
-    const deps=m.daxDependencies.map(d=>`<span class="dep-chip" data-action="lineage" data-type="measure" data-name="${escAttr(d)}">${escHtml(d)}</span>`).join("")||'<span style="color:var(--text-faint)">—</span>';
-    const pages=[...new Set(m.usedIn.map(u=>u.pageName))];
-    const used=pages.map(p=>`<span class="used-chip">${escHtml(p)}</span>`).join("")||'<span style="color:var(--text-faint)">—</span>';
+  items.sort((a: any, b: any) =>{let av=a[s.key],bv=b[s.key];if(typeof av==='string')return s.desc?bv.localeCompare(av):av.localeCompare(bv);return s.desc?bv-av:av-bv;});
+  if(showUnusedOnly.measures)items=items.filter((m: any) =>m.status!=='direct');
+  if(searchTerms.measures){const q=searchTerms.measures.toLowerCase();items=items.filter((m: any) =>m.name.toLowerCase().includes(q)||m.table.toLowerCase().includes(q));}
+  document.getElementById("tbody-measures")!.innerHTML=items.map((m: any) =>{
+    const deps=m.daxDependencies.map((d: any) =>`<span class="dep-chip" data-action="lineage" data-type="measure" data-name="${escAttr(d)}">${escHtml(d)}</span>`).join("")||'<span style="color:var(--text-faint)">—</span>';
+    const pages=[...new Set(m.usedIn.map((u: any) =>u.pageName))];
+    const used=pages.map((p: any) =>`<span class="used-chip">${escHtml(p)}</span>`).join("")||'<span style="color:var(--text-faint)">—</span>';
     const statusBadge=m.status==='indirect'?'<span class="badge badge--indirect">↻ INDIRECT</span>':m.status==='unused'?'<span class="badge badge--unused">⚠ UNUSED</span>':'';
     const nameAttr=m.description?' title="'+escAttr(m.description)+'" data-desc="1"':'';
     const descRow=m.description?'<div class="desc-muted" style="margin-top:2px;font-size:11px">'+escHtml(m.description)+'</div>':'';
@@ -313,12 +326,12 @@ function renderMeasures(){
 
 function renderColumns(){
   let items=[...DATA.columns];const s=sortState.columns;
-  items.sort((a,b)=>{let av=a[s.key],bv=b[s.key];if(typeof av==='string')return s.desc?bv.localeCompare(av):av.localeCompare(bv);return s.desc?bv-av:av-bv;});
-  if(showUnusedOnly.columns)items=items.filter(c=>c.status!=='direct');
-  if(searchTerms.columns){const q=searchTerms.columns.toLowerCase();items=items.filter(c=>c.name.toLowerCase().includes(q)||c.table.toLowerCase().includes(q));}
-  document.getElementById("tbody-columns").innerHTML=items.map(c=>{
-    const pages=[...new Set(c.usedIn.map(u=>u.pageName))];
-    const used=pages.map(p=>`<span class="used-chip">${escHtml(p)}</span>`).join("")||'<span style="color:var(--text-faint)">—</span>';
+  items.sort((a: any, b: any) =>{let av=a[s.key],bv=b[s.key];if(typeof av==='string')return s.desc?bv.localeCompare(av):av.localeCompare(bv);return s.desc?bv-av:av-bv;});
+  if(showUnusedOnly.columns)items=items.filter((c: any) =>c.status!=='direct');
+  if(searchTerms.columns){const q=searchTerms.columns.toLowerCase();items=items.filter((c: any) =>c.name.toLowerCase().includes(q)||c.table.toLowerCase().includes(q));}
+  document.getElementById("tbody-columns")!.innerHTML=items.map((c: any) =>{
+    const pages=[...new Set(c.usedIn.map((u: any) =>u.pageName))];
+    const used=pages.map((p: any) =>`<span class="used-chip">${escHtml(p)}</span>`).join("")||'<span style="color:var(--text-faint)">—</span>';
     // SLICER badge intentionally omitted here — it now lives on the per-column
     // row inside the Tables tab, next to PK/FK/CALC/HIDDEN, where it's more
     // useful in context.
@@ -332,25 +345,25 @@ function renderColumns(){
     sortIndicator(sortState.columns));
 }
 
-function navigateLineage(type,name){
+function navigateLineage( type: any, name: any) {
   lastTab=activeTab!=="lineage"?activeTab:lastTab;
   activeTab="lineage";renderTabs();
-  document.querySelectorAll(".panel").forEach(p=>p.classList.remove("active"));
-  document.getElementById("panel-lineage").classList.add("active");
+  document.querySelectorAll(".panel").forEach((p: any) =>p.classList.remove("active"));
+  document.getElementById("panel-lineage")!.classList.add("active");
 
-  const el=document.getElementById("lineage-content");
+  const el=document.getElementById("lineage-content")!;
   const backTab=type==="column"?"columns":"measures";
 
   if(type==="measure"){
-    const m=DATA.measures.find(x=>x.name===name);
+    const m=DATA.measures.find((x: any) =>x.name===name);
     if(!m){el.innerHTML='<div style="color:var(--clr-unused);padding:20px">Measure not found</div>';return;}
 
-    const upstream=m.daxDependencies.map(d=>{
-      const dep=DATA.measures.find(x=>x.name===d);
+    const upstream=m.daxDependencies.map((d: any) =>{
+      const dep=DATA.measures.find((x: any) =>x.name===d);
       return dep||{name:d,table:"?",formatString:""};
     });
-    const usedFuncs=DATA.functions.filter(f=>!f.name.endsWith('.About')&&(m.daxExpression.includes("'"+f.name+"'")||m.daxExpression.includes(f.name+'(')));
-    const feedsInto=DATA.measures.filter(x=>x.daxDependencies.includes(m.name));
+    const usedFuncs=DATA.functions.filter((f: any) =>!f.name.endsWith('.About')&&(m.daxExpression.includes("'"+f.name+"'")||m.daxExpression.includes(f.name+'(')));
+    const feedsInto=DATA.measures.filter((x: any) =>x.daxDependencies.includes(m.name));
     // EXTERNALMEASURE proxy is now detected server-side (data-builder.ts)
     // and attached to the measure as a structured `externalProxy` field.
     // The regex fallback stays for back-compat with older DATA payloads.
@@ -373,7 +386,7 @@ function navigateLineage(type,name){
       <div class="lineage-flow-row">
         <div class="lineage-flow-col">
           <div class="lineage-flow-col-label" style="color:var(--clr-upstream)">↑ Upstream</div>
-          ${usedFuncs.map(f=>`
+          ${usedFuncs.map((f: any) =>`
             <div class="lc udf clickable" style="margin-bottom:4px" data-action="tab" data-tab="functions">
               <div class="lc-name" style="color:var(--clr-function)">ƒ ${escHtml(f.name)}</div>
               <div class="lc-sub">Function · ${f.parameters?f.parameters.split(',').length+' param'+(f.parameters.split(',').length!==1?'s':''):'no params'}</div>
@@ -387,7 +400,7 @@ function navigateLineage(type,name){
             <div class="lc-name" style="color:var(--clr-source)">⬡ ${escHtml(m.table)}</div>
             <div class="lc-sub">Source table</div>
           </div>
-          ${upstream.length?upstream.map(u=>`
+          ${upstream.length?upstream.map((u: any) =>`
             <div class="lc upstream clickable" data-action="lineage" data-type="measure" data-name="${escAttr(u.name)}">
               <div class="lc-name">${escHtml(u.name)}</div>
               <div class="lc-sub">${escHtml(u.table)} · ${escHtml(u.formatString||'')}</div>
@@ -402,7 +415,7 @@ function navigateLineage(type,name){
           </div>
           ${feedsInto.length?`
             <div class="feeds-label">Feeds into</div>
-            ${feedsInto.map(f=>`
+            ${feedsInto.map((f: any) =>`
               <div class="lc feeds clickable" data-action="lineage" data-type="measure" data-name="${escAttr(f.name)}">
                 <div class="lc-name">${escHtml(f.name)}</div>
                 <div class="lc-sub">${escHtml(f.formatString||'')} · ${f.usageCount} visual${f.usageCount!==1?'s':''}</div>
@@ -412,7 +425,7 @@ function navigateLineage(type,name){
         <div class="lineage-arrow-col">→</div>
         <div class="lineage-flow-col">
           <div class="lineage-flow-col-label" style="color:var(--clr-downstream)">↓ Downstream</div>
-          ${m.usedIn.length?m.usedIn.map(d=>`
+          ${m.usedIn.length?m.usedIn.map((d: any) =>`
             <div class="lc downstream">
               <div class="lc-name">${escHtml(d.visualTitle)}</div>
               <div class="lc-sub">${escHtml(d.visualType)} · ${escHtml(d.bindingRole)}</div>
@@ -423,10 +436,10 @@ function navigateLineage(type,name){
     addCopyButtons();
   }
   else if(type==="column"){
-    const c=DATA.columns.find(x=>x.name===name);
+    const c=DATA.columns.find((x: any) =>x.name===name);
     if(!c){el.innerHTML='<div style="color:var(--clr-unused);padding:20px">Column not found</div>';return;}
     const colRef=c.table+'['+c.name+']';
-    const related=DATA.measures.filter(m=>m.daxExpression.includes(colRef)||m.daxExpression.includes('['+c.name+']'));
+    const related=DATA.measures.filter((m: any) =>m.daxExpression.includes(colRef)||m.daxExpression.includes('['+c.name+']'));
 
     el.innerHTML=`
       <div class="lineage-back" data-action="tab" data-tab="columns">← Back to Columns</div>
@@ -452,7 +465,7 @@ function navigateLineage(type,name){
           </div>
           ${related.length?`
             <div class="feeds-label">Measures referencing ${escHtml(c.name)}</div>
-            ${related.map(m=>`
+            ${related.map((m: any) =>`
               <div class="lc feeds clickable" data-action="lineage" data-type="measure" data-name="${escAttr(m.name)}">
                 <div class="lc-name">${escHtml(m.name)}</div>
                 <div class="lc-sub">${escHtml(m.formatString||'')} · ${m.usageCount} visual${m.usageCount!==1?'s':''}</div>
@@ -462,7 +475,7 @@ function navigateLineage(type,name){
         <div class="lineage-arrow-col">→</div>
         <div class="lineage-flow-col">
           <div class="lineage-flow-col-label" style="color:var(--clr-downstream)">↓ Downstream</div>
-          ${c.usedIn.length?c.usedIn.map(d=>`
+          ${c.usedIn.length?c.usedIn.map((d: any) =>`
             <div class="lc downstream">
               <div class="lc-name">${escHtml(d.visualTitle)}</div>
               <div class="lc-sub">${escHtml(d.visualType)} · ${escHtml(d.bindingRole)}</div>
@@ -490,7 +503,7 @@ const WF_COLORS:{[k:string]:string}={
   ai:      "#EF4444",  // red
 };
 
-function renderPageWireframe(p){
+function renderPageWireframe( p: any) {
   const w=p.width||1280, h=p.height||720;
   const visuals=p.wireframeVisuals||[];
   if(visuals.length===0){
@@ -510,7 +523,7 @@ function renderPageWireframe(p){
   const MIN_H_FOR_LABEL = 80;
   const ALWAYS_LABEL: { [k: string]: true } = { slicer: true };
 
-  const nodes=visuals.map(v=>{
+  const nodes=visuals.map((v: any) =>{
     const color=WF_COLORS[v.category]||"#6B7280";
     const pos=v.position||{x:0,y:0,width:100,height:60};
     const label=v.title||v.type||"";
@@ -530,7 +543,7 @@ function renderPageWireframe(p){
         const fqn = (b.fieldTable ? b.fieldTable + '[' : '[') + b.fieldName + ']';
         (byRole[b.bindingRole] = byRole[b.bindingRole] || []).push(fqn);
       }
-      const lines = Object.keys(byRole).sort().map(role =>
+      const lines = Object.keys(byRole).sort().map((role: any) =>
         role + ': ' + byRole[role].join(', '),
       );
       if (bindings.length > MAX_SHOWN) {
@@ -554,9 +567,9 @@ function renderPageWireframe(p){
     '</g>';
   }).join("");
 
-  const cats={};
-  visuals.forEach(v=>{cats[v.category]=(cats[v.category]||0)+1;});
-  const legend=Object.keys(cats).sort().map(c=>{
+  const cats: Record<string, number> = {};
+  visuals.forEach((v: any) => { cats[v.category] = (cats[v.category] || 0) + 1; });
+  const legend=Object.keys(cats).sort().map((c: any) =>{
     const color=WF_COLORS[c]||"#6B7280";
     return '<span class="wf-legend-chip" style="background:'+color+'22;color:'+color+';border:1px solid '+color+'55">'+c+' \u00d7 '+cats[c]+'</span>';
   }).join("");
@@ -573,14 +586,14 @@ function renderPageWireframe(p){
 function renderPages(){
   const FC={measure:"#F59E0B",column:"#3B82F6"};
   const hiddenSet=new Set(DATA.hiddenPages||[]);
-  document.getElementById("pages-content").innerHTML=pageData.map(p=>{
+  document.getElementById("pages-content")!.innerHTML=pageData.map((p: any) =>{
     const isOpen=openPages.has(p.name);
     const hiddenBadge=hiddenSet.has(p.name)?'<span class="badge badge--hidden" title="This page is marked HiddenInViewMode — typically a tooltip, drillthrough, or nav-suppressed page">👁 HIDDEN</span>':'';
 
     const typeChips=Object.entries(p.typeCounts).map(([t,c])=>`<span class="page-type-chip">${c}× ${escHtml(t)}</span>`).join("");
 
-    const visualRows=p.visuals.map(v=>{
-      const bindingChips=v.bindings.map(b=>{
+    const visualRows=p.visuals.map((v: any) =>{
+      const bindingChips=v.bindings.map((b: any) =>{
         const color=b.fieldType==="measure"?FC.measure:FC.column;
         return `<span class="dep-chip" style="background:${color}15;color:${color};border-color:${color}30;cursor:pointer" data-action="lineage" data-type="${escAttr(b.fieldType)}" data-name="${escAttr(b.fieldName)}">${escHtml(b.fieldName)}</span>`;
       }).join("");
@@ -591,8 +604,8 @@ function renderPages(){
       </div>`;
     }).join("");
 
-    const measureChips=p.measures.map(m=>`<span class="dep-chip" style="background:rgba(245,158,11,.1);color:var(--clr-measure);border-color:rgba(245,158,11,.2);cursor:pointer" data-action="lineage" data-type="measure" data-name="${escAttr(m)}">${escHtml(m)}</span>`).join("");
-    const columnChips=p.columns.map(c=>`<span class="dep-chip" style="background:rgba(59,130,246,.1);color:var(--clr-column);border-color:rgba(59,130,246,.2);cursor:pointer" data-action="lineage" data-type="column" data-name="${escAttr(c)}">${escHtml(c)}</span>`).join("");
+    const measureChips=p.measures.map((m: any) =>`<span class="dep-chip" style="background:rgba(245,158,11,.1);color:var(--clr-measure);border-color:rgba(245,158,11,.2);cursor:pointer" data-action="lineage" data-type="measure" data-name="${escAttr(m)}">${escHtml(m)}</span>`).join("");
+    const columnChips=p.columns.map((c: any) =>`<span class="dep-chip" style="background:rgba(59,130,246,.1);color:var(--clr-column);border-color:rgba(59,130,246,.2);cursor:pointer" data-action="lineage" data-type="column" data-name="${escAttr(c)}">${escHtml(c)}</span>`).join("");
 
     return `<div class="page-card ${isOpen?'open':''}">
       <div class="page-header" data-action="page-toggle" data-name="${escAttr(p.name)}">
@@ -631,7 +644,7 @@ function renderPages(){
   }).join("");
   var hiddenCount=(DATA.hiddenPages||[]).length;
   var visibleCount=pageData.length-hiddenCount;
-  var totalVisuals=pageData.reduce(function(a,p){return a+(p.visualCount||0);},0);
+  var totalVisuals=pageData.reduce(function(a: any, p: any){return a+(p.visualCount||0);},0);
   var pf=document.getElementById("pages-content");
   if(pf)pf.insertAdjacentHTML("beforeend",
     '<div class="panel-footer"><div class="left">'+
@@ -639,12 +652,12 @@ function renderPages(){
     '</div></div>');
 }
 
-function togglePage(name){
+function togglePage( name: any) {
   if(openPages.has(name))openPages.delete(name);else openPages.add(name);
   renderPages();
 }
 
-function toggleTableCard(name){
+function toggleTableCard( name: any) {
   if(openTables.has(name))openTables.delete(name);else openTables.add(name);
   renderTables();
 }
@@ -653,7 +666,7 @@ function toggleTableCard(name){
 // Tables-tab sectioning. Order of checks matters because a calc-group
 // table could also technically have a "measure" name etc. — we take
 // the most-specific category first.
-function tableGroupKey(t){
+function tableGroupKey( t: any) {
   if(t.parameterKind==='field')return 'field-param';
   if(t.parameterKind==='compositeModelProxy')return 'proxy';
   if(t.isCalcGroup)return 'calcgroup';
@@ -674,11 +687,11 @@ const TABLE_GROUPS=[
 // Track which groups the user has toggled away from their default.
 // Default state is derived per-group; this set stores the flips.
 var flippedTableGroups = new Set();
-function isTableGroupOpen(key){
-  const def = (TABLE_GROUPS.find(g=>g.key===key)||{}).defaultOpen;
+function isTableGroupOpen( key: any) {
+  const def = (TABLE_GROUPS.find((g: any) =>g.key===key)||{}).defaultOpen;
   return flippedTableGroups.has(key) ? !def : def;
 }
-function toggleTableGroup(key){
+function toggleTableGroup( key: any) {
   if(flippedTableGroups.has(key))flippedTableGroups.delete(key);
   else flippedTableGroups.add(key);
   renderTables();
@@ -688,19 +701,21 @@ function renderTables(){
   const tables=visibleTables();
   // Precompute slicer lookup once per render so the per-row badge stays cheap.
   // TableColumnData doesn't carry isSlicerField — it lives on the flat ModelColumn.
-  const slicerSet=new Set((DATA.columns||[]).filter(c=>c.isSlicerField).map(c=>c.table+'|'+c.name));
+  const slicerSet=new Set((DATA.columns||[]).filter((c: any) =>c.isSlicerField).map((c: any) =>c.table+'|'+c.name));
 
   // Partition visible tables into the five groups.
-  const byGroup = new Map(TABLE_GROUPS.map(g=>[g.key,[]]));
+  const byGroup = new Map<string, any[]>(
+    TABLE_GROUPS.map((g: any) => [g.key, [] as any[]]),
+  );
   for(const t of tables){
     const k = tableGroupKey(t);
-    byGroup.get(k).push(t);
+    byGroup.get(k)!.push(t);
   }
 
-  function cardHtml(t){
+  function cardHtml(t: any){
     const isOpen=openTables.has(t.name);
 
-    const colRows=t.columns.map(c=>{
+    const colRows=t.columns.map((c: any) =>{
       const badges=[];
       if(c.isKey)badges.push('<span class="badge badge--pk" title="Primary key — isKey:true set in the model">🔑 PK</span>');
       else if(c.isInferredPK)badges.push('<span class="badge badge--pk-inf" title="Inferred primary key — this column is on the one-side of at least one relationship">🗝 PK</span>');
@@ -713,7 +728,7 @@ function renderTables(){
       const parts=[];
       if(c.isFK&&c.fkTarget)parts.push(`<span class="rel-out">→ ${escHtml(c.fkTarget.table)}[${escHtml(c.fkTarget.column)}]</span>`);
       if(c.incomingRefs&&c.incomingRefs.length>0){
-        const refs=c.incomingRefs.map(r=>`<span class="rel-in${r.isActive?'':' rel-inactive'}">← ${escHtml(r.table)}[${escHtml(r.column)}]${r.isActive?'':' <span style="font-size:9px;opacity:.7">(inactive)</span>'}</span>`).join('<span style="color:var(--text-fainter);margin:0 4px">·</span>');
+        const refs=c.incomingRefs.map((r: any) =>`<span class="rel-in${r.isActive?'':' rel-inactive'}">← ${escHtml(r.table)}[${escHtml(r.column)}]${r.isActive?'':' <span style="font-size:9px;opacity:.7">(inactive)</span>'}</span>`).join('<span style="color:var(--text-fainter);margin:0 4px">·</span>');
         parts.push(refs);
       }
       const relText=parts.length?parts.join('<br>'):'<span style="color:var(--text-fainter)">—</span>';
@@ -729,12 +744,12 @@ function renderTables(){
       </div>`;
     }).join("")||'<div style="padding:8px 10px;color:var(--text-faint);font-size:12px">No columns</div>';
 
-    const measureList=t.measures.map(m=>{
+    const measureList=t.measures.map((m: any) =>{
       const cls=m.status==='unused'?'zero':m.status==='indirect'?'low':'good';
       return `<span class="dep-chip" style="background:rgba(245,158,11,.1);color:var(--clr-measure);border-color:rgba(245,158,11,.2);cursor:pointer" data-action="lineage" data-type="measure" data-name="${escAttr(m.name)}">${escHtml(m.name)} <span class="usage-count ${cls}" style="margin-left:4px;font-size:9px">${m.usageCount}</span></span>`;
     }).join("")||'<span style="color:var(--text-faint);font-size:12px">None</span>';
 
-    const relRows=t.relationships.map(r=>{
+    const relRows=t.relationships.map((r: any) =>{
       const dirClass=r.direction==='outgoing'?'badge--direction-out':'badge--direction-in';
       const dirLabel=r.direction==='outgoing'?'FK →':'← PK';
       const inactive=r.isActive?'':' trel-inactive';
@@ -787,12 +802,12 @@ function renderTables(){
   // each group; the group order comes from TABLE_GROUPS. Empty
   // groups are omitted so the UI doesn't show empty "0 tables"
   // section headers for models that have no parameters / proxies.
-  const sectionsHtml = TABLE_GROUPS.map(g=>{
-    const groupTables = (byGroup.get(g.key)||[]).slice().sort((a,b)=>a.name.localeCompare(b.name));
+  const sectionsHtml = TABLE_GROUPS.map((g: any) =>{
+    const groupTables = (byGroup.get(g.key)||[]).slice().sort((a: any, b: any) =>a.name.localeCompare(b.name));
     if(groupTables.length===0)return '';
     const open = isTableGroupOpen(g.key);
-    const groupCols = groupTables.reduce((a,t)=>a+(t.columnCount||0),0);
-    const groupMs  = groupTables.reduce((a,t)=>a+(t.measureCount||0),0);
+    const groupCols = groupTables.reduce((a: any, t: any) =>a+(t.columnCount||0),0);
+    const groupMs  = groupTables.reduce((a: any, t: any) =>a+(t.measureCount||0),0);
     const metaParts = [groupTables.length+' table'+(groupTables.length===1?'':'s')];
     if(groupCols>0) metaParts.push(groupCols+' col'+(groupCols===1?'':'s'));
     if(groupMs>0)   metaParts.push(groupMs+' measure'+(groupMs===1?'':'s'));
@@ -807,11 +822,11 @@ function renderTables(){
       <div class="table-group-body">${bodyHtml}</div>
     </div>`;
   }).join("");
-  document.getElementById("tables-content").innerHTML =
+  document.getElementById("tables-content")!.innerHTML =
     sectionsHtml || '<div style="text-align:center;padding:60px 20px;color:var(--text-faint);font-size:13px">No tables found</div>';
 
-  var totalCols=tables.reduce(function(a,t){return a+(t.columnCount||0);},0);
-  var totalMs=tables.reduce(function(a,t){return a+(t.measureCount||0);},0);
+  var totalCols=tables.reduce(function(a: any, t: any){return a+(t.columnCount||0);},0);
+  var totalMs=tables.reduce(function(a: any, t: any){return a+(t.measureCount||0);},0);
   var adc=autoDateCount();
   var pf=document.getElementById("tables-content");
   if(pf){
@@ -832,9 +847,9 @@ function renderTables(){
 }
 
 var openOrphanSections=new Set();
-function toggleOrphanSection(id){if(openOrphanSections.has(id))openOrphanSections.delete(id);else openOrphanSections.add(id);renderUnused();}
+function toggleOrphanSection( id: any) {if(openOrphanSections.has(id))openOrphanSections.delete(id);else openOrphanSections.add(id);renderUnused();}
 
-function orphanSection(id,title,subtitle,color,count,countLabel,items){
+function orphanSection( id: any, title: any, subtitle: any, color: any, count: any, countLabel: any, items: any) {
   const isOpen=openOrphanSections.has(id);
   return `<div class="page-card ${isOpen?'open':''}" style="border-left:3px solid ${color}">
     <div class="page-header" data-action="orphan-toggle" data-section="${escAttr(id)}">
@@ -854,33 +869,33 @@ function orphanSection(id,title,subtitle,color,count,countLabel,items){
 }
 
 function renderUnused(){
-  const unusedM=DATA.measures.filter(m=>m.status==='unused'),indirectM=DATA.measures.filter(m=>m.status==='indirect');
-  const unusedC=DATA.columns.filter(c=>c.status==='unused'),indirectC=DATA.columns.filter(c=>c.status==='indirect');
-  const pureOrphanM=unusedM.filter(m=>!m.dependedOnBy.length);
-  const chainOrphanM=unusedM.filter(m=>m.dependedOnBy.length>0);
+  const unusedM=DATA.measures.filter((m: any) =>m.status==='unused'),indirectM=DATA.measures.filter((m: any) =>m.status==='indirect');
+  const unusedC=DATA.columns.filter((c: any) =>c.status==='unused'),indirectC=DATA.columns.filter((c: any) =>c.status==='indirect');
+  const pureOrphanM=unusedM.filter((m: any) =>!m.dependedOnBy.length);
+  const chainOrphanM=unusedM.filter((m: any) =>m.dependedOnBy.length>0);
   let h='';
 
   if(pureOrphanM.length) h+=orphanSection('pure-m','Unused Measures — Not Referenced Anywhere','No visual uses them and no other measure references them — safe to remove','var(--clr-unused)',pureOrphanM.length,'Measures',
-    pureOrphanM.map(m=>`<div class="lc clickable" style="border-left:3px solid var(--clr-unused);flex:0 0 auto" data-action="lineage" data-type="measure" data-name="${escAttr(m.name)}"><div class="lc-name">${escHtml(m.name)}</div><div class="lc-sub">${escHtml(m.table)} · ${escHtml(m.formatString||'')}</div></div>`).join(""));
+    pureOrphanM.map((m: any) =>`<div class="lc clickable" style="border-left:3px solid var(--clr-unused);flex:0 0 auto" data-action="lineage" data-type="measure" data-name="${escAttr(m.name)}"><div class="lc-name">${escHtml(m.name)}</div><div class="lc-sub">${escHtml(m.table)} · ${escHtml(m.formatString||'')}</div></div>`).join(""));
 
   if(chainOrphanM.length) h+=orphanSection('chain-m','Unused Measures — Dead Chain','Other measures depend on them, but the full chain never reaches any visual','var(--clr-unused)',chainOrphanM.length,'Measures',
-    chainOrphanM.map(m=>`<div class="lc clickable" style="border-left:3px solid var(--clr-unused);flex:0 0 auto" data-action="lineage" data-type="measure" data-name="${escAttr(m.name)}"><div class="lc-name">${escHtml(m.name)}</div><div class="lc-sub">${escHtml(m.table)} · ${escHtml(m.formatString||'')} · depended on by ${m.dependedOnBy.length}</div></div>`).join(""));
+    chainOrphanM.map((m: any) =>`<div class="lc clickable" style="border-left:3px solid var(--clr-unused);flex:0 0 auto" data-action="lineage" data-type="measure" data-name="${escAttr(m.name)}"><div class="lc-name">${escHtml(m.name)}</div><div class="lc-sub">${escHtml(m.table)} · ${escHtml(m.formatString||'')} · depended on by ${m.dependedOnBy.length}</div></div>`).join(""));
 
   if(unusedC.length) h+=orphanSection('orphan-c','Unused Columns','No visual, measure, or relationship uses them — safe to hide or remove','var(--clr-unused)',unusedC.length,'Columns',
-    unusedC.map(c=>`<div class="lc clickable" style="border-left:3px solid var(--clr-unused);flex:0 0 auto" data-action="lineage" data-type="column" data-name="${escAttr(c.name)}"><div class="lc-name">${escHtml(c.name)}</div><div class="lc-sub">${escHtml(c.table)} · ${escHtml(c.dataType)}</div></div>`).join(""));
+    unusedC.map((c: any) =>`<div class="lc clickable" style="border-left:3px solid var(--clr-unused);flex:0 0 auto" data-action="lineage" data-type="column" data-name="${escAttr(c.name)}"><div class="lc-name">${escHtml(c.name)}</div><div class="lc-sub">${escHtml(c.table)} · ${escHtml(c.dataType)}</div></div>`).join(""));
 
   if(indirectM.length) h+=orphanSection('indirect-m','Indirect Measures','Not on any visual, but used inside other measures that are — keep these','var(--clr-indirect)',indirectM.length,'Measures',
-    indirectM.map(m=>`<div class="lc clickable" style="border-left:3px solid var(--clr-indirect);flex:0 0 auto" data-action="lineage" data-type="measure" data-name="${escAttr(m.name)}"><div class="lc-name">${escHtml(m.name)}</div><div class="lc-sub">${escHtml(m.table)} · ${escHtml(m.formatString||'')}</div></div>`).join(""));
+    indirectM.map((m: any) =>`<div class="lc clickable" style="border-left:3px solid var(--clr-indirect);flex:0 0 auto" data-action="lineage" data-type="measure" data-name="${escAttr(m.name)}"><div class="lc-name">${escHtml(m.name)}</div><div class="lc-sub">${escHtml(m.table)} · ${escHtml(m.formatString||'')}</div></div>`).join(""));
 
   if(indirectC.length) h+=orphanSection('indirect-c','Indirect Columns','Not on any visual, but used in a relationship or measure DAX — keep these','var(--clr-indirect)',indirectC.length,'Columns',
-    indirectC.map(c=>`<div class="lc clickable" style="border-left:3px solid var(--clr-indirect);flex:0 0 auto" data-action="lineage" data-type="column" data-name="${escAttr(c.name)}"><div class="lc-name">${escHtml(c.name)}</div><div class="lc-sub">${escHtml(c.table)} · ${escHtml(c.dataType)}</div></div>`).join(""));
+    indirectC.map((c: any) =>`<div class="lc clickable" style="border-left:3px solid var(--clr-indirect);flex:0 0 auto" data-action="lineage" data-type="column" data-name="${escAttr(c.name)}"><div class="lc-name">${escHtml(c.name)}</div><div class="lc-sub">${escHtml(c.table)} · ${escHtml(c.dataType)}</div></div>`).join(""));
 
   if(!unusedM.length&&!unusedC.length&&!indirectM.length&&!indirectC.length)h='<div style="text-align:center;padding:40px;color:var(--clr-success);font-weight:600">All fields are in use ✓</div>';
   var totalUnused=unusedM.length+unusedC.length;
   h+='<div class="panel-footer"><div class="left">'+
     (totalUnused?totalUnused+' unused items · safe to review for removal':'No unused items to review')+
     '</div></div>';
-  document.getElementById("unused-content").innerHTML=h;
+  document.getElementById("unused-content")!.innerHTML=h;
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -950,18 +965,18 @@ function renderSources(){
       '</div>'+
     '</div>';
 
-  var tablesWithSources=visibleTables().filter(function(t){return (t.partitions||[]).length>0;});
-  var modeCounts={};
+  var tablesWithSources=visibleTables().filter(function(t: any){return (t.partitions||[]).length>0;});
+  var modeCounts: Record<string, number> = {};
   var totalParts=0;
-  tablesWithSources.forEach(function(t){
-    (t.partitions||[]).forEach(function(p){
+  tablesWithSources.forEach(function(t: any){
+    (t.partitions||[]).forEach(function(p: any){
       var m=(p.mode||"import").toLowerCase();
       modeCounts[m]=(modeCounts[m]||0)+1;
       totalParts++;
     });
   });
 
-  var modeChips=Object.keys(modeCounts).sort(function(a,b){return modeCounts[b]-modeCounts[a];}).map(function(m){
+  var modeChips=Object.keys(modeCounts).sort(function(a: any, b: any){return modeCounts[b]-modeCounts[a];}).map(function(m: any){
     return '<span class="dep-chip" style="background:rgba(59,130,246,.1);color:var(--clr-column);border-color:rgba(59,130,246,.2)">'+modeCounts[m]+'\u00d7 '+escHtml(m)+'</span>';
   }).join('');
 
@@ -984,7 +999,7 @@ function renderSources(){
   // Parameters / expressions block
   var exprBlock="";
   if((DATA.expressions||[]).length>0){
-    var rows=DATA.expressions.map(function(e){
+    var rows=DATA.expressions.map(function(e: any){
       var kind=e.kind==="parameter"?"Parameter":"M expression";
       var val=String(e.value||"");
       if(val.length>120)val=val.substring(0,117)+"\u2026";
@@ -1007,8 +1022,8 @@ function renderSources(){
   var perTableBlock="";
   if(tablesWithSources.length>0){
     var sourceRows="";
-    tablesWithSources.forEach(function(t){
-      (t.partitions||[]).forEach(function(p){
+    tablesWithSources.forEach(function(t: any){
+      (t.partitions||[]).forEach(function(p: any){
         var loc=p.sourceLocation?'<code style="font-size:11px;color:var(--text-muted);word-break:break-all">'+escHtml(p.sourceLocation)+'</code>':'<span style="color:var(--text-faint)">\u2014</span>';
         sourceRows+=
           '<tr>'+
@@ -1044,12 +1059,12 @@ function renderSources(){
 
 function renderRelationships(){
   const rels=DATA.relationships;
-  var activeCount=rels.filter(function(r){return r.isActive;}).length;
+  var activeCount=rels.filter(function(r: any){return r.isActive;}).length;
   var inactiveCount=rels.length-activeCount;
   var relFooter='<div class="panel-footer"><div class="left">'+
     rels.length+' relationships · '+activeCount+' active · '+inactiveCount+' inactive'+
     '</div></div>';
-  if(!rels.length){document.getElementById("relationships-content").innerHTML='<div style="text-align:center;padding:40px;color:#6B7280">No relationships found in the model</div>'+relFooter;return;}
+  if(!rels.length){document.getElementById("relationships-content")!.innerHTML='<div style="text-align:center;padding:40px;color:#6B7280">No relationships found in the model</div>'+relFooter;return;}
   let h='<div class="table-wrap"><table class="data-table"><thead><tr><th>From Table</th><th>From Column</th><th></th><th>To Table</th><th>To Column</th><th>Status</th></tr></thead><tbody>';
   for(const r of rels){
     const statusColor=r.isActive?'var(--clr-success)':'var(--text-faint)';
@@ -1064,7 +1079,7 @@ function renderRelationships(){
     </tr>`;
   }
   h+='</tbody></table></div>'+relFooter;
-  document.getElementById("relationships-content").innerHTML=h;
+  document.getElementById("relationships-content")!.innerHTML=h;
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -1087,11 +1102,11 @@ let sourceMapSearch="";
 let sourceMapFilterType="";   // empty = all source types
 
 function sourceMapRows(){
-  const tableByName=new Map(DATA.tables.map(t=>[t.name,t]));
-  const calcGroupTables=new Set(DATA.calcGroups.map(cg=>cg.name));
-  const rows=[];
+  const tableByName = new Map<string, any>(DATA.tables.map((t: any) => [t.name, t]));
+  const calcGroupTables = new Set<string>(DATA.calcGroups.map((cg: any) => cg.name));
+  const rows: any[] = [];
   for(const c of DATA.columns){
-    const tbl=tableByName.get(c.table);
+    const tbl: any = tableByName.get(c.table);
     if(!tbl)continue;
     if(!showAutoDate && tbl.origin==="auto-date")continue;
     if(calcGroupTables.has(tbl.name) && c.name==="Name")continue;  // calc-group internal
@@ -1123,16 +1138,16 @@ function renderSourceMap(){
   let rows=sourceMapRows();
 
   // ── Toolbar: filter chips by source type + search + CSV export
-  const typeCounts={};
+  const typeCounts: Record<string, number> = {};
   for(const r of rows){typeCounts[r.sourceType]=(typeCounts[r.sourceType]||0)+1;}
-  const typeKeys=Object.keys(typeCounts).sort((a,b)=>typeCounts[b]-typeCounts[a]);
+  const typeKeys=Object.keys(typeCounts).sort((a: any, b: any) =>typeCounts[b]-typeCounts[a]);
   // Template literals (backticks) are deliberate — string concat of
   // attribute strings would leave quoted pseudo-attribute fragments
   // in the compiled JS script body, which the XSS fuzz test reads as
   // if they were rendered HTML attributes containing raw quotes.
   // Template literals leave no such pseudo-attributes in source.
   const chipAll = `<button data-action="sm-filter-type" data-type="" class="dep-chip${sourceMapFilterType===""?" active":""}" style="cursor:pointer;background:rgba(148,163,184,.1);color:var(--text-body);border-color:rgba(148,163,184,.2)">All ${rows.length}</button>`;
-  const chipsTyped = typeKeys.map(t => `<button data-action="sm-filter-type" data-type="${escAttr(t)}" class="dep-chip${sourceMapFilterType===t?" active":""}" style="cursor:pointer;background:rgba(16,185,129,.1);color:var(--clr-source);border-color:rgba(16,185,129,.2)">${escHtml(t)} ${typeCounts[t]}</button>`).join(" ");
+  const chipsTyped = typeKeys.map((t: any) => `<button data-action="sm-filter-type" data-type="${escAttr(t)}" class="dep-chip${sourceMapFilterType===t?" active":""}" style="cursor:pointer;background:rgba(16,185,129,.1);color:var(--clr-source);border-color:rgba(16,185,129,.2)">${escHtml(t)} ${typeCounts[t]}</button>`).join(" ");
   const chips = chipAll + " " + chipsTyped;
 
   const toolbar =
@@ -1144,10 +1159,10 @@ function renderSourceMap(){
     `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">${chips}</div>`;
 
   // ── Apply filter + search + sort
-  if(sourceMapFilterType)rows=rows.filter(r=>r.sourceType===sourceMapFilterType);
+  if(sourceMapFilterType)rows=rows.filter((r: any) =>r.sourceType===sourceMapFilterType);
   if(sourceMapSearch){
     const q=sourceMapSearch.toLowerCase();
-    rows=rows.filter(r=>
+    rows=rows.filter((r: any) =>
       r.column.toLowerCase().includes(q)||
       r.table.toLowerCase().includes(q)||
       r.sourceType.toLowerCase().includes(q)||
@@ -1156,7 +1171,7 @@ function renderSourceMap(){
     );
   }
   const s=sourceMapSort;
-  rows.sort((a,b)=>{
+  rows.sort((a: any, b: any) =>{
     const av=(a[s.key]||"").toString().toLowerCase();
     const bv=(b[s.key]||"").toString().toLowerCase();
     if(av<bv)return s.desc?1:-1;
@@ -1165,7 +1180,7 @@ function renderSourceMap(){
   });
 
   // ── Table
-  const arrow=k=>s.key===k?(s.desc?" \u2193":" \u2191"):"";
+  const arrow=(k: string)=>s.key===k?(s.desc?" \u2193":" \u2191"):"";
   const headers=[
     {k:"column",l:"PBI Column"},
     {k:"table",l:"Table"},
@@ -1174,7 +1189,7 @@ function renderSourceMap(){
     {k:"sourceType",l:"Source Type"},
     {k:"sourceLocation",l:"Source Location"},
   ];
-  const ths = headers.map(h => `<th data-action="sm-sort" data-key="${escAttr(h.k)}" style="cursor:pointer;user-select:none">${h.l}${arrow(h.k)}</th>`).join("");
+  const ths = headers.map((h: any) => `<th data-action="sm-sort" data-key="${escAttr(h.k)}" style="cursor:pointer;user-select:none">${h.l}${arrow(h.k)}</th>`).join("");
   let body="";
   if(rows.length===0){
     body='<tr><td colspan="'+headers.length+'" style="text-align:center;padding:24px;color:var(--text-faint)">No columns match the current filter.</td></tr>';
@@ -1203,31 +1218,31 @@ function renderSourceMap(){
     '</div><div class="right">Sorted by '+s.key+' '+(s.desc?"\u2193":"\u2191")+'</div></div>';
 
   // Wire search input — done here because renderSourceMap rebuilds innerHTML each call
-  const searchEl=document.getElementById("sm-search");
-  if(searchEl){
-    searchEl.addEventListener("input",function(e){
-      sourceMapSearch=e.target.value;
+  const searchEl = document.getElementById("sm-search") as HTMLInputElement | null;
+  if (searchEl) {
+    searchEl.addEventListener("input", function(e) {
+      sourceMapSearch = (e.target as HTMLInputElement).value;
       // Debounce-ish: rerender immediately but preserve cursor
       renderSourceMap();
-      const again=document.getElementById("sm-search");
-      if(again){again.focus();again.setSelectionRange(sourceMapSearch.length,sourceMapSearch.length);}
+      const again = document.getElementById("sm-search") as HTMLInputElement | null;
+      if (again) { again.focus(); again.setSelectionRange(sourceMapSearch.length, sourceMapSearch.length); }
     });
   }
 }
 
-function sourceMapSortBy(key){
+function sourceMapSortBy( key: any) {
   if(sourceMapSort.key===key)sourceMapSort.desc=!sourceMapSort.desc;
   else{sourceMapSort.key=key;sourceMapSort.desc=false;}
   renderSourceMap();
 }
-function sourceMapSetFilterType(t){
+function sourceMapSetFilterType( t: any) {
   sourceMapFilterType=(sourceMapFilterType===t?"":t);
   renderSourceMap();
 }
 function sourceMapExportCsv(){
   const rows=sourceMapRows();
   // Apply same filter+search as the current view so users export what they see
-  const visible=rows.filter(r=>{
+  const visible=rows.filter((r: any) =>{
     if(sourceMapFilterType && r.sourceType!==sourceMapFilterType)return false;
     if(sourceMapSearch){
       const q=sourceMapSearch.toLowerCase();
@@ -1238,9 +1253,9 @@ function sourceMapExportCsv(){
     return true;
   });
   const headers=["PBI Column","Table","Data Type","Mode","Source Type","Source Location","Hidden","Calculated"];
-  const csvEscape=v=>{
-    const s=String(v==null?"":v);
-    return /[",\n\r]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;
+  const csvEscape = (v: unknown): string => {
+    const s = String(v == null ? "" : v);
+    return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
   };
   const lines=[headers.join(",")];
   for(const r of visible){
@@ -1256,19 +1271,19 @@ function sourceMapExportCsv(){
 }
 
 function renderFunctions(){
-  const fns=DATA.functions.filter(f=>!f.name.endsWith('.About'));
+  const fns=DATA.functions.filter((f: any) =>!f.name.endsWith('.About'));
   var fnsFooter='<div class="panel-footer"><div class="left">'+fns.length+' function'+(fns.length===1?'':'s')+'</div></div>';
-  if(!fns.length){document.getElementById("functions-content").innerHTML='<div style="text-align:center;padding:40px;color:#6B7280">No user-defined functions found in the model</div>'+fnsFooter;return;}
+  if(!fns.length){document.getElementById("functions-content")!.innerHTML='<div style="text-align:center;padding:40px;color:#6B7280">No user-defined functions found in the model</div>'+fnsFooter;return;}
   let h='<div style="display:flex;flex-direction:column;gap:12px">';
   for(const f of fns){
-    const refMeasures=DATA.measures.filter(m=>m.daxExpression.includes("'"+f.name+"'")||m.daxExpression.includes(f.name+'('));
-    const params=f.parameters?f.parameters.split(',').map(p=>{
+    const refMeasures=DATA.measures.filter((m: any) =>m.daxExpression.includes("'"+f.name+"'")||m.daxExpression.includes(f.name+'('));
+    const params=f.parameters?f.parameters.split(',').map((p: any) =>{
       const parts=p.trim().split(/\s*:\s*/);
       return parts.length>=2?'<span style="color:var(--code-name)">'+parts[0].trim()+'</span> <span style="color:var(--code-punct)">:</span> <span style="color:var(--code-type)">'+parts.slice(1).join(':').trim()+'</span>':'<span style="color:var(--code-name)">'+p.trim()+'</span>';
     }).join('<span style="color:var(--code-punct)">, </span>'):'<span style="color:var(--code-punct);font-style:italic">none</span>';
     const desc=f.description?'<div style="font-size:11px;color:#64748B;margin-top:6px;line-height:1.4">'+f.description.replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</div>':'';
     const expr=f.expression.replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    const measureChips=refMeasures.map(m=>`<span class="dep-chip" style="background:rgba(245,158,11,.1);color:var(--clr-measure);border-color:rgba(245,158,11,.2);cursor:pointer" data-action="lineage" data-type="measure" data-name="${escAttr(m.name)}">${escHtml(m.name)}</span>`).join('');
+    const measureChips=refMeasures.map((m: any) =>`<span class="dep-chip" style="background:rgba(245,158,11,.1);color:var(--clr-measure);border-color:rgba(245,158,11,.2);cursor:pointer" data-action="lineage" data-type="measure" data-name="${escAttr(m.name)}">${escHtml(m.name)}</span>`).join('');
     h+=`<div class="page-card">
       <div class="page-header" data-action="card-toggle">
         <div style="flex:1">
@@ -1288,13 +1303,13 @@ function renderFunctions(){
     </div>`;
   }
   h+='</div>'+fnsFooter;
-  document.getElementById("functions-content").innerHTML=h;
+  document.getElementById("functions-content")!.innerHTML=h;
 }
 
 function renderCalcGroups(){
   const cgs=DATA.calcGroups;
   var cgsFooter='<div class="panel-footer"><div class="left">'+cgs.length+' calc group'+(cgs.length===1?'':'s')+'</div></div>';
-  if(!cgs.length){document.getElementById("calcgroups-content").innerHTML='<div style="text-align:center;padding:40px;color:#6B7280">No calculation groups found in the model</div>'+cgsFooter;return;}
+  if(!cgs.length){document.getElementById("calcgroups-content")!.innerHTML='<div style="text-align:center;padding:40px;color:#6B7280">No calculation groups found in the model</div>'+cgsFooter;return;}
   let h='<div style="display:flex;flex-direction:column;gap:12px">';
   for(const cg of cgs){
     const desc=cg.description?'<div style="font-size:11px;color:var(--text-dim);margin-top:4px">'+cg.description.replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</div>':'';
@@ -1327,12 +1342,12 @@ function renderCalcGroups(){
     </div>`;
   }
   h+='</div>'+cgsFooter;
-  document.getElementById("calcgroups-content").innerHTML=h;
+  document.getElementById("calcgroups-content")!.innerHTML=h;
 }
 
-function sortTable(t,k){const s=sortState[t];if(s.key===k)s.desc=!s.desc;else{s.key=k;s.desc=true;}t==="measures"?renderMeasures():renderColumns();}
-function filterTable(t,v){searchTerms[t]=v;t==="measures"?renderMeasures():renderColumns();}
-function toggleUnused(t){showUnusedOnly[t]=!showUnusedOnly[t];document.getElementById("btn-unused-"+(t==="measures"?"m":"c")).classList.toggle("active");t==="measures"?renderMeasures():renderColumns();}
+function sortTable( t: any, k: any) {const s=sortState[t];if(s.key===k)s.desc=!s.desc;else{s.key=k;s.desc=true;}t==="measures"?renderMeasures():renderColumns();}
+function filterTable( t: any, v: any) {searchTerms[t]=v;t==="measures"?renderMeasures():renderColumns();}
+function toggleUnused( t: any) {showUnusedOnly[t]=!showUnusedOnly[t];document.getElementById("btn-unused-"+(t==="measures"?"m":"c"))!.classList.toggle("active");t==="measures"?renderMeasures():renderColumns();}
 
 function currentMd(){
   switch(activeMd){
@@ -1362,10 +1377,10 @@ function currentMdFilename(){
   return REPORT_NAME+suffix;
 }
 
-function switchMd(which){
+function switchMd( which: any) {
   activeMd=which;
   var ids=["model","datadict","measures","functions","calcgroups","sources","pages","index","improvements","changelog"];
-  ids.forEach(function(id){
+  ids.forEach(function(id: any){
     var el=document.getElementById("md-tab-"+id);
     if(el)el.classList.toggle("active",which===id);
   });
@@ -1384,7 +1399,7 @@ function switchMd(which){
   renderDocs();
 }
 
-function switchMdMode(mode){
+function switchMdMode( mode: any) {
   mdViewMode=mode;
   var rb=document.getElementById("md-mode-rendered");
   var wb=document.getElementById("md-mode-raw");
@@ -1400,12 +1415,12 @@ function switchMdMode(mode){
 function expandAllDetails(){
   var host=document.getElementById("md-rendered");
   if(!host)return;
-  host.querySelectorAll("details").forEach(function(d){d.open=true;});
+  host.querySelectorAll("details").forEach(function(d: any){d.open=true;});
 }
 function collapseAllDetails(){
   var host=document.getElementById("md-rendered");
   if(!host)return;
-  host.querySelectorAll("details").forEach(function(d){d.open=false;});
+  host.querySelectorAll("details").forEach(function(d: any){d.open=false;});
 }
 
 // ─── Markdown renderer ────────────────────────────────────────────────────
@@ -1440,14 +1455,24 @@ function renderDocs(){
 }
 
 function copyMarkdown(){
-  var btn=document.getElementById("md-copy-btn");
-  var text=currentMd();
-  function ok(){if(btn){btn.textContent="✓ Copied";setTimeout(function(){btn.textContent="⎘ Copy";},1500);}}
+  const btn = document.getElementById("md-copy-btn");
+  const text = currentMd();
+  function ok(){
+    if (!btn) return;
+    const b = btn;  // capture non-null ref for the setTimeout closure
+    b.textContent = "✓ Copied";
+    setTimeout(function(){ b.textContent = "⎘ Copy"; }, 1500);
+  }
   function fallback(){
     var ta=document.createElement("textarea");ta.value=text;ta.style.position="fixed";ta.style.opacity="0";document.body.appendChild(ta);ta.select();
     var ok2=false;try{ok2=document.execCommand("copy");}catch(e){}
     document.body.removeChild(ta);
-    if(ok2)ok();else if(btn){btn.textContent="✗ Failed";setTimeout(function(){btn.textContent="⎘ Copy";},1500);}
+    if (ok2) ok();
+    else if (btn) {
+      const b = btn;
+      b.textContent = "✗ Failed";
+      setTimeout(function(){ b.textContent = "⎘ Copy"; }, 1500);
+    }
   }
   if(navigator.clipboard&&navigator.clipboard.writeText){
     navigator.clipboard.writeText(text).then(ok).catch(fallback);
