@@ -746,6 +746,15 @@ function applyToDashboard(
 // Wire up on DOM ready
 // ─────────────────────────────────────────────────────────────────────
 
+/**
+ * Cached landing-card HTML captured at first boot. The overlay card's
+ * innerHTML is swapped wholesale by the pair-picker and the two-step
+ * prompt; without a cached baseline `reopenPicker()` has nothing to
+ * restore to after a successful load, so the user gets the previous
+ * session's stale picker markup instead of a fresh landing card.
+ */
+let LANDING_CARD_HTML = "";
+
 function init(): void {
   // The sample button ships enabled — the sample-data.json is
   // committed alongside this script, so it always deploys as a
@@ -756,6 +765,11 @@ function init(): void {
   // enable the button. That introduced a race where a quick
   // first-click happened before the probe finished, felt like
   // "nothing happened". Always-enabled is simpler and more robust.
+  // Cache the landing card's baseline HTML BEFORE any picker flow
+  // can mutate it. reopenPicker() restores from this on "Load another".
+  const landingCard = document.querySelector<HTMLElement>(".br-card");
+  if (landingCard) LANDING_CARD_HTML = landingCard.innerHTML;
+
   const sBtn = sampleButton();
   if (sBtn) {
     sBtn.addEventListener("click", () => { void loadSample(); });
@@ -801,25 +815,20 @@ function init(): void {
  * had swapped them mid-pick) and clears any lingering status text.
  */
 function reopenPicker(): void {
-  // Reset the wide-card modifier from any previous pair-picker
-  // session so the landing card renders at the narrow default.
-  const card = document.querySelector(".br-card");
-  if (card) card.classList.remove("br-card--wide");
-  // Restore the default CTA row — step-2 might have replaced it.
-  const ctas = document.getElementById("br-ctas");
-  if (ctas) {
-    ctas.innerHTML = `
-      <button id="br-pick" class="br-btn" type="button">Open folder</button>
-      <button id="br-sample" class="br-btn" type="button" title="Load the bundled sample PBIP — runs entirely in-browser">Try a sample</button>
-    `;
-    const newPick = pickButton();
-    if (newPick) {
-      if (!isFsaSupported()) newPick.disabled = true;
-      else newPick.addEventListener("click", () => { void pickAndLoad(); });
+  // The pair-picker and two-step flow both replace `.br-card` innerHTML
+  // wholesale. Previously we tried to patch `#br-ctas` in place, but
+  // when those flows had wiped it we silently did nothing — the user
+  // got the stale picker markup on the second "Load another". Restore
+  // from the cached landing HTML instead.
+  const card = document.querySelector<HTMLElement>(".br-card");
+  if (card) {
+    card.classList.remove("br-card--wide");
+    if (LANDING_CARD_HTML) {
+      card.innerHTML = LANDING_CARD_HTML;
     }
-    const newSample = sampleButton();
-    if (newSample) newSample.addEventListener("click", () => { void loadSample(); });
   }
+  // Re-bind click handlers for the restored buttons.
+  rewireLandingButtons();
   setStatus("");
   showOverlay();
 }

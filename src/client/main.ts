@@ -1249,17 +1249,55 @@ function renderSources(){
       '</div>';
   }
 
+  // Raw M expressions — verbatim partition body, collapsed by default
+  // via <details>. The user asked for this after shipping the step
+  // parser: the classified flow answers "what shape", the raw M
+  // answers "what exactly, character for character".
+  var rawMTables: Array<{ name: string; partition: string; m: string }> = [];
+  (DATA.tables || []).forEach(function(t: any){
+    (t.partitions || []).forEach(function(p: any){
+      if (typeof p.mExpression === "string" && p.mExpression.trim().length > 0) {
+        rawMTables.push({ name: t.name, partition: p.name || "", m: p.mExpression });
+      }
+    });
+  });
+  var rawMBlock = "";
+  if (rawMTables.length > 0) {
+    var rawMItems = rawMTables.map(function(r){
+      var subtitle = (r.partition && r.partition !== r.name)
+        ? ' <span style="font-size:11px;color:var(--text-dim)">· partition <code>'+escHtml(r.partition)+'</code></span>'
+        : '';
+      return (
+        '<details style="padding:8px 18px;border-top:1px solid var(--border-subtle)">'+
+          '<summary style="cursor:pointer;font-weight:600;font-size:13px;color:var(--text);padding:4px 0">'+
+            escHtml(r.name)+subtitle+
+          '</summary>'+
+          '<pre style="margin:8px 0 4px;padding:10px 12px;background:var(--surface-deep,var(--surface));border:1px solid var(--border-subtle);border-radius:6px;font-family:var(--font-mono,ui-monospace,SFMono-Regular,Consolas,monospace);font-size:12px;line-height:1.5;overflow-x:auto;white-space:pre;color:var(--text)">'+escHtml(r.m)+'</pre>'+
+        '</details>'
+      );
+    }).join("");
+    rawMBlock =
+      '<div class="page-card">'+
+        '<div class="page-header" style="cursor:default"><div style="flex:1">'+
+          '<div class="page-name" style="font-size:14px">Raw M expressions · '+rawMTables.length+' partition'+(rawMTables.length===1?'':'s')+'</div>'+
+          '<div style="font-size:11px;color:var(--text-dim);margin-top:2px">Click a table to reveal its verbatim Power Query body. Capped at 10 KB per partition.</div>'+
+        '</div></div>'+
+        rawMItems+
+      '</div>';
+  }
+
   var sourcesFooter='<div class="panel-footer"><div class="left">'+
     tablesWithSources.length+' source tables'+
     (nativeQueryRows.length>0?' · '+nativeQueryRows.length+' native quer'+(nativeQueryRows.length===1?'y':'ies'):'')+
     (tablesWithSteps.length>0?' · '+tablesWithSteps.length+' with M-steps':'')+
+    (rawMTables.length>0?' · '+rawMTables.length+' with raw M':'')+
     '</div></div>';
   if(tablesWithSources.length===0&&(DATA.expressions||[]).length===0){
     // Even when there's no partition info, show the model properties card.
     host.innerHTML=modelPropsCard+'<div style="text-align:center;padding:40px 20px;color:var(--text-faint);font-size:13px">No partition or expression information found in this model.</div>'+sourcesFooter;
     return;
   }
-  host.innerHTML=modelPropsCard+summary+exprBlock+perTableBlock+nativeQueryBlock+mStepsBlock+sourcesFooter;
+  host.innerHTML=modelPropsCard+summary+exprBlock+perTableBlock+nativeQueryBlock+mStepsBlock+rawMBlock+sourcesFooter;
 }
 
 function renderRelationships(){
@@ -1746,6 +1784,23 @@ function __loadBrowserData(opts: {
   // the new fields.
   for (const k of Object.keys(DATA)) delete (DATA as Record<string, unknown>)[k];
   Object.assign(DATA, opts.data);
+
+  // Reset every piece of cross-report UI state. Without this, a
+  // search term or sort from the previous report would carry over
+  // into the new one — "Ghost" typed into Measures search on report
+  // A would hide every measure in report B that doesn't contain
+  // "Ghost", giving the impression the dashboard was broken.
+  for (const k of Object.keys(searchTerms)) searchTerms[k] = "";
+  for (const k of Object.keys(showUnusedOnly)) showUnusedOnly[k] = false;
+  for (const k of Object.keys(sortState)) sortState[k] = { key: sortState[k].key, desc: false };
+  openPages.clear();
+  openTables.clear();
+  showAutoDate = false;
+  sourceMapSearch = "";
+  sourceMapFilterType = "";
+  sourceMapSort = { key: "table", desc: false };
+  activeMd = "model";
+  mdViewMode = "rendered";
 
   // pageData is `const` inside this script — can't reassign, but can
   // mutate length + refill with the new pages.
