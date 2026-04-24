@@ -708,13 +708,16 @@ function showPairPicker(
       // When one half isn't selected we synthesize a minimal empty
       // stub for the missing side. Browser-only concern; CLI always
       // has both halves on disk.
+      let mode: LoadMode = "full";
       if (sel.reportPath === null && sel.modelPath !== null) {
         installModelOnlyShim(filtered, sel.modelPath);
+        mode = "model-only";
       } else if (sel.modelPath === null && sel.reportPath !== null) {
         installReportOnlyShim(filtered, sel.reportPath);
+        mode = "report-only";
       }
 
-      await processFiles(filtered, "__pbip", /*fromSample=*/ false);
+      await processFiles(filtered, "__pbip", /*fromSample=*/ false, mode);
     });
   }
 }
@@ -830,10 +833,13 @@ function rewireLandingButtons(): void {
  * install the VFS, parse, render. Used by both the folder picker
  * and the "Try a sample" button.
  */
+type LoadMode = "full" | "model-only" | "report-only";
+
 async function processFiles(
   files: Map<string, string>,
   pickedName: string,
   fromSample: boolean,
+  loadMode: LoadMode = "full",
 ): Promise<void> {
   if (files.size === 0) {
     // The two-step picker handles the ".Report / .SemanticModel
@@ -911,7 +917,7 @@ async function processFiles(
   applyToDashboard(fullData, reportName, reportPath, {
     md, measuresMd, functionsMd, calcGroupsMd, dataDictionaryMd,
     sourcesMd, pagesMd, indexMd, improvementsMd,
-  });
+  }, loadMode);
 
   hideOverlay();
   setStatus("");
@@ -1015,6 +1021,7 @@ function applyToDashboard(
   reportName: string,
   reportPath: string,
   md: MarkdownBundle,
+  loadMode: LoadMode = "full",
 ): void {
   const w = window as BrowserWindow & {
     __loadBrowserData?: (opts: unknown) => void;
@@ -1039,6 +1046,7 @@ function applyToDashboard(
     reportName,
     generatedAt: nowTs,
     appVersion: "browser",
+    loadMode,
     markdown: {
       md: md.md,
       measuresMd: md.measuresMd,

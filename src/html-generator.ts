@@ -210,7 +210,7 @@ export function generateHTML(
 <div class="container">
   <div class="header">
     <div class="header-left">
-      <div class="top"><span class="usage-map-badge">Usage Map</span><span class="header-sep">|</span><span class="header-sub">${serverEscHtml(reportName)}</span></div>
+      <div class="top"><span class="usage-map-badge">Usage Map</span><span class="header-sep">|</span><span class="header-sub">${serverEscHtml(reportName)}</span><span class="load-mode-badge" hidden></span></div>
       <div class="timestamp">Generated: ${ts}</div>
     </div>
     <div class="header-actions">
