@@ -151,6 +151,17 @@
      Matches the launcher badge in app.ts. */
   .usage-map-badge{display:inline-block;font:10px/1 'JetBrains Mono',monospace;font-weight:600;letter-spacing:.15em;text-transform:uppercase;padding:4px 10px;border-radius:999px;color:var(--accent);background:rgba(245,158,11,0.05);border:1px solid rgba(245,158,11,0.18);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
   [data-theme="light"] .usage-map-badge{background:rgba(245,158,11,0.08);border-color:rgba(245,158,11,0.28)}
+  /* Load-mode badge — shown only for partial browser-mode loads
+     (model-only / report-only). Full mode keeps the header clean,
+     matching CLI output where both halves are always present. Color
+     codes by what's MISSING: amber-red for "no model", green-cyan
+     for "no report". */
+  .load-mode-badge{display:inline-block;margin-left:10px;font:10px/1 'JetBrains Mono',monospace;font-weight:600;letter-spacing:.12em;text-transform:uppercase;padding:4px 10px;border-radius:999px;vertical-align:middle}
+  .load-mode-badge[hidden]{display:none}
+  .load-mode-badge--model-only{color:#A78BFA;background:rgba(167,139,250,0.08);border:1px solid rgba(167,139,250,0.25)}
+  .load-mode-badge--report-only{color:#34D399;background:rgba(52,211,153,0.08);border:1px solid rgba(52,211,153,0.25)}
+  [data-theme="light"] .load-mode-badge--model-only{color:#7C3AED;background:rgba(167,139,250,0.12);border-color:rgba(167,139,250,0.35)}
+  [data-theme="light"] .load-mode-badge--report-only{color:#059669;background:rgba(52,211,153,0.12);border-color:rgba(52,211,153,0.35)}
 
   /* ─── Shared in-table badge component ─────────────────────────────────── */
   /* Single base + one modifier per semantic role. Replaces the ad-hoc

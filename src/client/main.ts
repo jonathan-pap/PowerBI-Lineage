@@ -1353,6 +1353,9 @@ function __loadBrowserData(opts: {
   reportName: string;
   generatedAt: string;
   appVersion: string;
+  /** "full" (default) | "model-only" | "report-only". Drives the
+   *  small badge next to the report name. Full mode hides it. */
+  loadMode?: "full" | "model-only" | "report-only";
   markdown?: {
     md?: string;
     measuresMd?: string;
@@ -1409,6 +1412,29 @@ function __loadBrowserData(opts: {
   const timerEl = document.querySelector<HTMLElement>(".rb-center .timer");
   if (timerEl) timerEl.textContent = "Last scan " + opts.generatedAt;
   document.title = opts.reportName + " — Power BI Documenter";
+
+  // Load-mode badge — visible only for partial loads. "full" keeps
+  // the header clean (matches CLI, which always has both halves).
+  const modeBadge = document.querySelector<HTMLElement>(".load-mode-badge");
+  if (modeBadge) {
+    const mode = opts.loadMode || "full";
+    modeBadge.classList.remove("load-mode-badge--model-only", "load-mode-badge--report-only");
+    if (mode === "model-only") {
+      modeBadge.textContent = "Model only";
+      modeBadge.classList.add("load-mode-badge--model-only");
+      modeBadge.hidden = false;
+      modeBadge.title = "Loaded the .SemanticModel without a .Report — pages and usage data are empty.";
+    } else if (mode === "report-only") {
+      modeBadge.textContent = "Report only";
+      modeBadge.classList.add("load-mode-badge--report-only");
+      modeBadge.hidden = false;
+      modeBadge.title = "Loaded the .Report without a .SemanticModel — tables, measures, and DAX are empty.";
+    } else {
+      modeBadge.textContent = "";
+      modeBadge.hidden = true;
+      modeBadge.title = "";
+    }
+  }
 
   // Re-run every renderer in the same order as the initial bootstrap.
   renderSummary(); renderTabs(); renderMeasures(); renderColumns();
