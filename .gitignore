@@ -26,6 +26,13 @@ docs/**/
 # machine, not in git.
 sample/
 
+# Fixture PBIP projects used by the test suite. 59 MB of real Power BI
+# exports that shouldn't live in the repo — contributors run the tests
+# without them and the fixture-dependent suites skip cleanly via
+# `{ skip: !FIXTURE_EXISTS }` guards. Keep a local copy at test/ if
+# you want to exercise the composite-model / markdown-fixture tests.
+test/
+
 # Editor/agent state
 .claude/
 
