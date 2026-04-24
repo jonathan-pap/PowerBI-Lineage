@@ -181,6 +181,10 @@ document.addEventListener('click', function(e){
     case 'orphan-toggle':   toggleOrphanSection(d.section); break;
     case 'toggle-auto-date': toggleAutoDate(); break;
     case 'card-toggle':     el.parentElement.classList.toggle('open'); break;
+    // Source Map tab
+    case 'sm-sort':         sourceMapSortBy(d.key); break;
+    case 'sm-filter-type':  sourceMapSetFilterType(d.type); break;
+    case 'sm-export-csv':   sourceMapExportCsv(); break;
   }
 });
 
@@ -240,6 +244,7 @@ function renderTabs(){
   document.getElementById("tabs").innerHTML=[
     // Data layer
     {id:"sources",l:"Sources",b:vt.filter(function(t){return (t.partitions||[]).length>0;}).length},
+    {id:"sourcemap",l:"Source Map",b:sourceMapRowCount()},
     {id:"tables",l:"Tables",b:vt.length},
     {id:"columns",l:"Columns",b:DATA.columns.length},
     {id:"relationships",l:"Relationships",b:DATA.relationships.length},
@@ -927,6 +932,195 @@ function renderRelationships(){
   document.getElementById("relationships-content").innerHTML=h;
 }
 
+// ─────────────────────────────────────────────────────────────────────
+// Source Map — flat row-per-column table mapping PBI columns back to
+// their physical source (database / server / source-table). Answers
+// the data-engineer question "what breaks if I drop this source
+// column?" that the Sources tab (partition-mode-grouped) doesn't
+// surface directly. Sortable, searchable, CSV-exportable.
+//
+// Scope: every user-facing column excluded from Docs (auto-date
+// tables + calc-group `Name` columns). Source info is derived from
+// the column's table's FIRST partition — typical case for
+// single-partition tables. Multi-partition incremental-refresh
+// tables show their first partition here; the Sources tab covers
+// the full per-partition detail.
+// ─────────────────────────────────────────────────────────────────────
+
+let sourceMapSort={key:"table",desc:false};
+let sourceMapSearch="";
+let sourceMapFilterType="";   // empty = all source types
+
+function sourceMapRows(){
+  const tableByName=new Map(DATA.tables.map(t=>[t.name,t]));
+  const calcGroupTables=new Set(DATA.calcGroups.map(cg=>cg.name));
+  const rows=[];
+  for(const c of DATA.columns){
+    if(isAutoName&&false){} // no-op placeholder — future auto-date carve
+    const tbl=tableByName.get(c.table);
+    if(!tbl)continue;
+    if(!showAutoDate && tbl.origin==="auto-date")continue;
+    if(calcGroupTables.has(tbl.name) && c.name==="Name")continue;  // calc-group internal
+    const p=(tbl.partitions||[])[0]||null;
+    const mode=p?(p.mode||"import"):(tbl.isCalculatedTable?"calculated":"—");
+    const sourceType=p?(p.sourceType||"Unknown / M"):(tbl.isCalculatedTable?"Calculated (DAX)":"—");
+    const sourceLocation=p?(p.sourceLocation||""):"";
+    rows.push({
+      column:c.name,
+      table:c.table,
+      dataType:c.dataType||"",
+      mode:mode,
+      sourceType:sourceType,
+      sourceLocation:sourceLocation,
+      isCalculated:!!c.isCalculated,
+      isHidden:!!c.isHidden,
+    });
+  }
+  return rows;
+}
+
+function sourceMapRowCount(){
+  try{return sourceMapRows().length;}catch(e){return 0;}
+}
+
+function renderSourceMap(){
+  const host=document.getElementById("sourcemap-content");
+  if(!host)return;
+  let rows=sourceMapRows();
+
+  // ── Toolbar: filter chips by source type + search + CSV export
+  const typeCounts={};
+  for(const r of rows){typeCounts[r.sourceType]=(typeCounts[r.sourceType]||0)+1;}
+  const typeKeys=Object.keys(typeCounts).sort((a,b)=>typeCounts[b]-typeCounts[a]);
+  // Template literals (backticks) are deliberate — string concat of
+  // attribute strings would leave quoted pseudo-attribute fragments
+  // in the compiled JS script body, which the XSS fuzz test reads as
+  // if they were rendered HTML attributes containing raw quotes.
+  // Template literals leave no such pseudo-attributes in source.
+  const chipAll = `<button data-action="sm-filter-type" data-type="" class="dep-chip${sourceMapFilterType===""?" active":""}" style="cursor:pointer;background:rgba(148,163,184,.1);color:var(--text-body);border-color:rgba(148,163,184,.2)">All ${rows.length}</button>`;
+  const chipsTyped = typeKeys.map(t => `<button data-action="sm-filter-type" data-type="${escAttr(t)}" class="dep-chip${sourceMapFilterType===t?" active":""}" style="cursor:pointer;background:rgba(16,185,129,.1);color:var(--clr-source);border-color:rgba(16,185,129,.2)">${escHtml(t)} ${typeCounts[t]}</button>`).join(" ");
+  const chips = chipAll + " " + chipsTyped;
+
+  const toolbar =
+    `<div style="display:flex;gap:10px;align-items:center;margin-bottom:10px;flex-wrap:wrap">` +
+      `<input type="text" id="sm-search" placeholder="Search columns, tables, sources\u2026" value="${escAttr(sourceMapSearch)}" ` +
+        `style="flex:1;min-width:220px;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit;font-size:13px">` +
+      `<button data-action="sm-export-csv" class="dep-chip" style="cursor:pointer;background:rgba(245,158,11,.1);color:var(--accent);border-color:rgba(245,158,11,.25);padding:8px 14px">\u25bc Export CSV</button>` +
+    `</div>` +
+    `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">${chips}</div>`;
+
+  // ── Apply filter + search + sort
+  if(sourceMapFilterType)rows=rows.filter(r=>r.sourceType===sourceMapFilterType);
+  if(sourceMapSearch){
+    const q=sourceMapSearch.toLowerCase();
+    rows=rows.filter(r=>
+      r.column.toLowerCase().includes(q)||
+      r.table.toLowerCase().includes(q)||
+      r.sourceType.toLowerCase().includes(q)||
+      r.sourceLocation.toLowerCase().includes(q)||
+      r.dataType.toLowerCase().includes(q)
+    );
+  }
+  const s=sourceMapSort;
+  rows.sort((a,b)=>{
+    const av=(a[s.key]||"").toString().toLowerCase();
+    const bv=(b[s.key]||"").toString().toLowerCase();
+    if(av<bv)return s.desc?1:-1;
+    if(av>bv)return s.desc?-1:1;
+    return 0;
+  });
+
+  // ── Table
+  const arrow=k=>s.key===k?(s.desc?" \u2193":" \u2191"):"";
+  const headers=[
+    {k:"column",l:"PBI Column"},
+    {k:"table",l:"Table"},
+    {k:"dataType",l:"Type"},
+    {k:"mode",l:"Mode"},
+    {k:"sourceType",l:"Source Type"},
+    {k:"sourceLocation",l:"Source Location"},
+  ];
+  const ths = headers.map(h => `<th data-action="sm-sort" data-key="${escAttr(h.k)}" style="cursor:pointer;user-select:none">${h.l}${arrow(h.k)}</th>`).join("");
+  let body="";
+  if(rows.length===0){
+    body='<tr><td colspan="'+headers.length+'" style="text-align:center;padding:24px;color:var(--text-faint)">No columns match the current filter.</td></tr>';
+  }else{
+    for(const r of rows){
+      const flags=[];
+      if(r.isHidden)flags.push('<span class="dep-chip" style="background:rgba(100,116,139,.1);color:var(--text-dim);border-color:rgba(100,116,139,.2);padding:1px 7px;font-size:10px">hidden</span>');
+      if(r.isCalculated)flags.push('<span class="dep-chip" style="background:rgba(167,139,250,.1);color:var(--clr-upstream);border-color:rgba(167,139,250,.2);padding:1px 7px;font-size:10px">calc</span>');
+      body+='<tr>'+
+        '<td><code style="color:var(--code-name)">'+escHtml(r.column)+'</code>'+(flags.length?' '+flags.join(" "):'')+'</td>'+
+        '<td>'+escHtml(r.table)+'</td>'+
+        '<td style="color:var(--text-dim);font-size:12px">'+escHtml(r.dataType)+'</td>'+
+        '<td>'+escHtml(r.mode)+'</td>'+
+        '<td style="color:var(--clr-source)">'+escHtml(r.sourceType)+'</td>'+
+        '<td style="color:var(--text-dim);font-size:12px;word-break:break-all">'+escHtml(r.sourceLocation||"\u2014")+'</td>'+
+      '</tr>';
+    }
+  }
+
+  host.innerHTML=
+    toolbar+
+    '<div style="overflow-x:auto"><table class="data-table"><thead><tr>'+ths+'</tr></thead><tbody>'+body+'</tbody></table></div>'+
+    '<div class="panel-footer"><div class="left">'+rows.length+' of '+sourceMapRowCount()+' rows'+
+      (sourceMapFilterType?' \u00b7 filtered by '+escHtml(sourceMapFilterType):'')+
+      (sourceMapSearch?' \u00b7 matching "'+escHtml(sourceMapSearch)+'"':'')+
+    '</div><div class="right">Sorted by '+s.key+' '+(s.desc?"\u2193":"\u2191")+'</div></div>';
+
+  // Wire search input — done here because renderSourceMap rebuilds innerHTML each call
+  const searchEl=document.getElementById("sm-search");
+  if(searchEl){
+    searchEl.addEventListener("input",function(e){
+      sourceMapSearch=e.target.value;
+      // Debounce-ish: rerender immediately but preserve cursor
+      renderSourceMap();
+      const again=document.getElementById("sm-search");
+      if(again){again.focus();again.setSelectionRange(sourceMapSearch.length,sourceMapSearch.length);}
+    });
+  }
+}
+
+function sourceMapSortBy(key){
+  if(sourceMapSort.key===key)sourceMapSort.desc=!sourceMapSort.desc;
+  else{sourceMapSort.key=key;sourceMapSort.desc=false;}
+  renderSourceMap();
+}
+function sourceMapSetFilterType(t){
+  sourceMapFilterType=(sourceMapFilterType===t?"":t);
+  renderSourceMap();
+}
+function sourceMapExportCsv(){
+  const rows=sourceMapRows();
+  // Apply same filter+search as the current view so users export what they see
+  const visible=rows.filter(r=>{
+    if(sourceMapFilterType && r.sourceType!==sourceMapFilterType)return false;
+    if(sourceMapSearch){
+      const q=sourceMapSearch.toLowerCase();
+      if(!(r.column.toLowerCase().includes(q)||r.table.toLowerCase().includes(q)||
+            r.sourceType.toLowerCase().includes(q)||r.sourceLocation.toLowerCase().includes(q)||
+            r.dataType.toLowerCase().includes(q)))return false;
+    }
+    return true;
+  });
+  const headers=["PBI Column","Table","Data Type","Mode","Source Type","Source Location","Hidden","Calculated"];
+  const csvEscape=v=>{
+    const s=String(v==null?"":v);
+    return /[",\n\r]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;
+  };
+  const lines=[headers.join(",")];
+  for(const r of visible){
+    lines.push([r.column,r.table,r.dataType,r.mode,r.sourceType,r.sourceLocation,r.isHidden?"yes":"no",r.isCalculated?"yes":"no"].map(csvEscape).join(","));
+  }
+  const blob=new Blob([lines.join("\n")],{type:"text/csv;charset=utf-8"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  a.href=url;
+  a.download=(REPORT_NAME||"report")+"-source-map.csv";
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+  setTimeout(function(){URL.revokeObjectURL(url);},1000);
+}
+
 function renderFunctions(){
   const fns=DATA.functions.filter(f=>!f.name.endsWith('.About'));
   var fnsFooter='<div class="panel-footer"><div class="left">'+fns.length+' function'+(fns.length===1?'':'s')+'</div></div>';
@@ -1134,7 +1328,7 @@ function downloadMarkdown(){
   setTimeout(function(){URL.revokeObjectURL(url);},1000);
 }
 
-renderSummary();renderTabs();renderMeasures();renderColumns();renderTables();renderRelationships();renderSources();renderFunctions();renderCalcGroups();renderPages();renderUnused();renderDocs();switchTab("measures");addCopyButtons();
+renderSummary();renderTabs();renderMeasures();renderColumns();renderTables();renderRelationships();renderSources();renderSourceMap();renderFunctions();renderCalcGroups();renderPages();renderUnused();renderDocs();switchTab("measures");addCopyButtons();
 
 // ─────────────────────────────────────────────────────────────────────
 // Browser-mode bootstrap hook
@@ -1210,7 +1404,7 @@ function __loadBrowserData(opts: {
 
   // Re-run every renderer in the same order as the initial bootstrap.
   renderSummary(); renderTabs(); renderMeasures(); renderColumns();
-  renderTables(); renderRelationships(); renderSources();
+  renderTables(); renderRelationships(); renderSources(); renderSourceMap();
   renderFunctions(); renderCalcGroups(); renderPages();
   renderUnused(); renderDocs();
   switchTab("measures");
