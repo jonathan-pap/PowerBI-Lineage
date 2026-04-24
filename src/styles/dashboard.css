@@ -446,14 +446,19 @@
   .has-tip:hover::after,.has-tip:hover::before{opacity:1}
   .summary .stat.has-tip:first-child::after{left:0;transform:none}
 
-  /* ── What's-new release popup ─────────────────────────────────────
+  /* ── What's-new popup ─────────────────────────────────────────────
      Modal surfaced from the landing-overlay "✨ What's new" button
      (and reusable from any data-action="show-whats-new" control).
-     Renders the latest release block from the baked MARKDOWN_CHANGELOG.
+     Renders the curated MARKDOWN_WELCOME block (tour-shaped intro
+     aimed at first-time visitors), falling back to the latest entry
+     from MARKDOWN_CHANGELOG if WELCOME is empty at build time.
      Structure: full-viewport backdrop + centred card. Backdrop click
      + Escape key + close button all dismiss. Body uses .md-rendered
-     so it picks up the same MD styling as the Docs tab. */
-  .wn-modal { position: fixed; inset: 0; z-index: 2000; display: flex; align-items: center; justify-content: center; padding: 24px; }
+     so it picks up the same MD styling as the Docs tab.
+     z-index 10000 puts this ABOVE #br-overlay (9999); before that
+     the popup opened correctly but was hidden behind the landing
+     card until the user dismissed the overlay by loading a report. */
+  .wn-modal { position: fixed; inset: 0; z-index: 10000; display: flex; align-items: center; justify-content: center; padding: 24px; }
   .wn-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.55); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
   .wn-card {
     position: relative; z-index: 1;

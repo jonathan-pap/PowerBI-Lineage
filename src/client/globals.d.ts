@@ -36,6 +36,7 @@ declare let MARKDOWN_PAGES: string;
 declare let MARKDOWN_INDEX: string;
 declare let MARKDOWN_IMPROVEMENTS: string;
 declare let MARKDOWN_CHANGELOG: string;
+declare let MARKDOWN_WELCOME: string;
 declare let REPORT_NAME: string;
 declare let APP_VERSION: string;
 declare let GENERATED_AT: string;

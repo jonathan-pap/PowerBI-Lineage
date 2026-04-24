@@ -1,0 +1,36 @@
+# 👋 Welcome to Power BI Documenter
+
+Drop in a PBIP folder — get a **searchable dashboard** plus **nine Markdown docs** ready for ADO Wiki or GitHub.
+
+## What this dashboard shows
+
+### Model
+- **Sources** — data connections, partition modes, composite-model proxies (switch between Cards + Flat-map views)
+- **Tables** — grouped by role (Fact / Dimension / Bridge / Calc Group) with columns, measures, and relationships at a glance
+- **Columns** — types, usage counts, direct / indirect / unused status
+- **Relationships** — active + inactive, cross-filter direction
+- **Measures** — A–Z reference with DAX, dependencies, where-used per visual + page
+- **Calc Groups** — items, precedence, format-string expressions
+- **Functions** — UDFs with parameters + every measure that calls each one
+
+### Report
+- **Pages** — each page's layout wireframe (scaled SVG showing real visual positions) + per-visual field bindings
+- **Lineage** — click any measure or column → upstream dependencies + source tables + downstream visuals in one view
+
+### Analysis
+- **Unused** — orphan measures, dead-chain measures, indirect-use detection
+- **Improvements** — 15-check model-health audit, severity-tiered (high · medium · low · info · strengths)
+
+### Output
+- **Docs tab** — nine Markdown files ready to paste into ADO Wiki or GitHub:
+  *Model · Data Dictionary · Sources · Measures · Functions · Calc Groups · Pages · Improvements · Index*
+
+## Under the hood
+
+- Runs **entirely in your browser** (File System Access API — nothing uploads) *or* as a **local CLI**
+- **Zero runtime dependencies**, MIT-licensed, 194 tests
+- Three themes: dark · light · BluPulse — pick from the bottom of this overlay
+
+---
+
+Looking for per-release technical details? See [`changelog/`](https://github.com/jonathan-pap/PowerBI-Lineage/tree/main/changelog). Planned work lives in [`ROADMAP.md`](https://github.com/jonathan-pap/PowerBI-Lineage/blob/main/ROADMAP.md).

@@ -96,9 +96,15 @@ function buildChangelog() {
   return intro + body + "\n";
 }
 
+// Curated welcome / dashboard-tour doc for the "What's new" popup.
+// Same pattern as CHANGELOG — build-time read, bake into the shell,
+// survives __loadBrowserData swaps (not report-specific).
+const welcomePath = resolve(repoRoot, "WHATS-NEW.md");
+const welcomeMd = existsSync(welcomePath) ? readFileSync(welcomePath, "utf8") : "";
+
 const html = generateHTML(
   emptyData, "(browser)", "", "", "", "", "", "", "0",
-  "", "", "", changelogMd,
+  "", "", "", changelogMd, welcomeMd,
 );
 
 // ─────────────────────────────────────────────────────────────────────
