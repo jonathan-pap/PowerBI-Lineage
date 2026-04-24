@@ -1135,3 +1135,84 @@ function downloadMarkdown(){
 }
 
 renderSummary();renderTabs();renderMeasures();renderColumns();renderTables();renderRelationships();renderSources();renderFunctions();renderCalcGroups();renderPages();renderUnused();renderDocs();switchTab("measures");addCopyButtons();
+
+// ─────────────────────────────────────────────────────────────────────
+// Browser-mode bootstrap hook
+//
+// The CLI inlines this script with a full DATA payload baked in and
+// never calls this function. Browser mode ships an empty shell, lets
+// the folder picker (or "Try a sample") produce a fresh FullData,
+// then calls this hook to swap it in and re-render.
+//
+// Why this lives here: DATA / MARKDOWN_* / REPORT_NAME / GENERATED_AT
+// are top-level `let` bindings in this script's Script scope. Module
+// code (entry.ts) can't reach them, and `window.DATA = …` creates a
+// different variable the renderers don't see. Declaring this helper
+// in the same Script scope gives us reach; attaching it to `window`
+// makes it callable from the entry module.
+//
+// DATA and pageData are mutated in place so the `const pageData` at
+// line ~101 keeps its reference. Primitive lets (strings) are
+// reassigned directly — the renderers read them fresh each call.
+(window as unknown as { __loadBrowserData?: Function }).__loadBrowserData =
+function __loadBrowserData(opts: {
+  data: typeof DATA;
+  reportName: string;
+  generatedAt: string;
+  appVersion: string;
+  markdown?: {
+    md?: string;
+    measuresMd?: string;
+    functionsMd?: string;
+    calcGroupsMd?: string;
+    dataDictionaryMd?: string;
+    sourcesMd?: string;
+    pagesMd?: string;
+    indexMd?: string;
+    improvementsMd?: string;
+  };
+}) {
+  // Clear + repopulate DATA in place so closures (e.g., pageData
+  // derived at module load) and all bare-DATA references pick up
+  // the new fields.
+  for (const k of Object.keys(DATA)) delete (DATA as Record<string, unknown>)[k];
+  Object.assign(DATA, opts.data);
+
+  // pageData is `const` inside this script — can't reassign, but can
+  // mutate length + refill with the new pages.
+  pageData.length = 0;
+  const newPages = opts.data.pages || [];
+  for (const p of newPages) pageData.push(p);
+
+  // Reassign primitive lets so subsequent render calls see new values.
+  REPORT_NAME = opts.reportName;
+  GENERATED_AT = opts.generatedAt;
+  APP_VERSION = opts.appVersion;
+  if (opts.markdown) {
+    if (typeof opts.markdown.md === "string") MARKDOWN = opts.markdown.md;
+    if (typeof opts.markdown.measuresMd === "string") MARKDOWN_MEASURES = opts.markdown.measuresMd;
+    if (typeof opts.markdown.functionsMd === "string") MARKDOWN_FUNCTIONS = opts.markdown.functionsMd;
+    if (typeof opts.markdown.calcGroupsMd === "string") MARKDOWN_CALCGROUPS = opts.markdown.calcGroupsMd;
+    if (typeof opts.markdown.dataDictionaryMd === "string") MARKDOWN_DATADICT = opts.markdown.dataDictionaryMd;
+    if (typeof opts.markdown.sourcesMd === "string") MARKDOWN_SOURCES = opts.markdown.sourcesMd;
+    if (typeof opts.markdown.pagesMd === "string") MARKDOWN_PAGES = opts.markdown.pagesMd;
+    if (typeof opts.markdown.indexMd === "string") MARKDOWN_INDEX = opts.markdown.indexMd;
+    if (typeof opts.markdown.improvementsMd === "string") MARKDOWN_IMPROVEMENTS = opts.markdown.improvementsMd;
+  }
+
+  // Refresh the banner text baked at build time (report name +
+  // "Last scan …" timestamp). Harmless if selectors don't match.
+  const reportEl = document.querySelector<HTMLElement>(".rb-report");
+  if (reportEl) reportEl.textContent = opts.reportName;
+  const timerEl = document.querySelector<HTMLElement>(".rb-center .timer");
+  if (timerEl) timerEl.textContent = "Last scan " + opts.generatedAt;
+  document.title = opts.reportName + " — Power BI Documenter";
+
+  // Re-run every renderer in the same order as the initial bootstrap.
+  renderSummary(); renderTabs(); renderMeasures(); renderColumns();
+  renderTables(); renderRelationships(); renderSources();
+  renderFunctions(); renderCalcGroups(); renderPages();
+  renderUnused(); renderDocs();
+  switchTab("measures");
+  addCopyButtons();
+};
