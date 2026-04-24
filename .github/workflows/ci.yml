@@ -59,3 +59,26 @@ jobs:
           test -f dist/app.js || (echo "dist/app.js missing"; exit 1)
           test -f dist/client/main.js || (echo "dist/client/main.js missing"; exit 1)
           test -f dist/client/render/md.js || (echo "dist/client/render/md.js missing"; exit 1)
+
+      # Build the browser bundle + run a size regression check. The
+      # cap is a 30% headroom over the current bundle (236 KB →
+      # 300 KB ceiling) — catches accidental 2× balloons from a
+      # vendor library or an over-included MD payload, while still
+      # leaving room for organic growth.
+      #
+      # Node 18 matrix entry runs the bake but not the cap check
+      # (build-browser.mjs uses `existsSync` + optional sample/,
+      # which is fine). The cap check runs on every matrix row so
+      # regressions surface immediately.
+      - name: Build browser bundle
+        run: npm run build:browser
+
+      - name: Bundle-size guard (docs/index.html)
+        run: |
+          size=$(wc -c < docs/index.html)
+          cap=300000
+          echo "docs/index.html: $size bytes (cap $cap)"
+          if [ "$size" -gt "$cap" ]; then
+            echo "::error::Bundle exceeds cap — refactor or bump the cap deliberately"
+            exit 1
+          fi
