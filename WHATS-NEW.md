@@ -31,6 +31,15 @@ Drop in a PBIP folder — get a **searchable dashboard** plus **nine Markdown do
 - **Zero runtime dependencies**, MIT-licensed, 194 tests
 - Three themes: dark · light · BluPulse — pick from the bottom of this overlay
 
+## Running locally (CLI mode)
+
+Firefox / Safari users, or anyone who prefers a local app:
+
+- **Windows:** double-click `launch.bat` — it auto-pulls the latest revision, builds if needed, and opens `http://127.0.0.1:5679`
+- **Any OS:** `npm install && npm run build && node dist/app.js`
+
+Loopback only — nothing leaves your machine. Requires Node.js 18+.
+
 ---
 
 Looking for per-release technical details? See [`changelog/`](https://github.com/jonathan-pap/PowerBI-Lineage/tree/main/changelog). Planned work lives in [`ROADMAP.md`](https://github.com/jonathan-pap/PowerBI-Lineage/blob/main/ROADMAP.md).
