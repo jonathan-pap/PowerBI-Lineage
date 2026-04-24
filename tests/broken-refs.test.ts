@@ -138,6 +138,33 @@ test("extractDaxRefs — empty / null-ish input is safe", () => {
 // brokenReferences
 // ─────────────────────────────────────────────────────────────────────
 
+test("brokenReferences — case-insensitive resolution (DAX identifiers are case-insensitive)", () => {
+  // The H&S fixture has `table fct_trcf_targets` (all lowercase) but
+  // measures reference it as `'fct_TRCF_targets'[TRCF_target]`. Power BI
+  // resolves this fine at runtime — our detector must too, or every
+  // model with mixed-case ref habits lights up with false positives.
+  const data = mk({
+    tables: [mkTable("fct_trcf_targets")],
+    columns: [mkColumn("fct_trcf_targets", "TRCF_target")],
+    measures: [mkMeasure({
+      name: "M",
+      daxExpression: "MAX('fct_TRCF_targets'[TRCF_target])",
+    })],
+  });
+  assert.deepEqual(brokenReferences(data), []);
+});
+
+test("brokenReferences — case-insensitive bare [Measure] ref", () => {
+  const data = mk({
+    tables: [mkTable("T")],
+    measures: [
+      mkMeasure({ name: "Total Sales", daxExpression: "1" }),
+      mkMeasure({ name: "Caller", daxExpression: "[TOTAL SALES] * 2" }),
+    ],
+  });
+  assert.deepEqual(brokenReferences(data), []);
+});
+
 test("brokenReferences — clean model reports nothing", () => {
   const data = mk({
     tables: [mkTable("Sales")],

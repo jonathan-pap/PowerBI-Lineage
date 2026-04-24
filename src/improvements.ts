@@ -295,11 +295,17 @@ export interface BrokenRefFinding {
  *     cross-check without that model in hand.
  */
 export function brokenReferences(data: FullData): BrokenRefFinding[] {
-  const tableSet = new Set(data.tables.map(t => t.name));
+  // DAX identifiers are case-insensitive at query time, so our
+  // resolution index must be too. We normalise once here, then
+  // lowercase every ref we test against it. Display strings (the
+  // `broken` field in findings) still use the ref's original casing —
+  // this is purely about resolution, not presentation.
+  const lc = (s: string): string => s.toLowerCase();
+  const tableSet = new Set(data.tables.map(t => lc(t.name)));
   const columnSet = new Set<string>();
-  for (const c of data.columns) columnSet.add(`${c.table}|${c.name}`);
-  const measureNames = new Set(data.measures.map(m => m.name));
-  const columnNamesAny = new Set(data.columns.map(c => c.name));
+  for (const c of data.columns) columnSet.add(`${lc(c.table)}|${lc(c.name)}`);
+  const measureNames = new Set(data.measures.map(m => lc(m.name)));
+  const columnNamesAny = new Set(data.columns.map(c => lc(c.name)));
 
   const findings: BrokenRefFinding[] = [];
 
@@ -307,18 +313,21 @@ export function brokenReferences(data: FullData): BrokenRefFinding[] {
     if (!expression) return;
     const { columnRefs, measureRefs } = extractDaxRefs(expression);
     for (const cr of columnRefs) {
-      if (!tableSet.has(cr.table)) {
+      const t = lc(cr.table);
+      const c = lc(cr.column);
+      if (!tableSet.has(t)) {
         findings.push({ where, broken: `${cr.table}[${cr.column}]`, reason: "table not in model" });
         continue;
       }
-      const hasColumn = columnSet.has(`${cr.table}|${cr.column}`);
-      const hasMeasure = measureNames.has(cr.column);
+      const hasColumn = columnSet.has(`${t}|${c}`);
+      const hasMeasure = measureNames.has(c);
       if (!hasColumn && !hasMeasure) {
         findings.push({ where, broken: `${cr.table}[${cr.column}]`, reason: "column not on table" });
       }
     }
     for (const mr of measureRefs) {
-      if (!measureNames.has(mr) && !columnNamesAny.has(mr)) {
+      const k = lc(mr);
+      if (!measureNames.has(k) && !columnNamesAny.has(k)) {
         findings.push({ where, broken: `[${mr}]`, reason: "measure/column not found" });
       }
     }
