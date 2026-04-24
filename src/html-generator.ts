@@ -250,6 +250,7 @@ export function generateHTML(
   <div class="panel" id="panel-tables"><div id="tables-content"></div></div>
   <div class="panel" id="panel-relationships"><div id="relationships-content"></div></div>
   <div class="panel" id="panel-sources"><div id="sources-content"></div></div>
+  <div class="panel" id="panel-sourcemap"><div id="sourcemap-content"></div></div>
   <div class="panel" id="panel-functions"><div id="functions-content"></div></div>
   <div class="panel" id="panel-calcgroups"><div id="calcgroups-content"></div></div>
   <div class="panel" id="panel-pages"><div id="pages-content"></div></div>
