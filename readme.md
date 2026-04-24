@@ -9,7 +9,7 @@ Open a PBIP project folder — get a searchable dashboard plus nine Markdown doc
 </p>
 
 <p align="center">
-  <img alt="Tests 157/157" src="https://img.shields.io/badge/tests-157%2F157-22c55e?style=flat-square">
+  <img alt="Tests 194/194" src="https://img.shields.io/badge/tests-194%2F194-22c55e?style=flat-square">
   <img alt="Runtime deps 0" src="https://img.shields.io/badge/runtime%20deps-0-64748b?style=flat-square">
   <img alt="Node ≥18" src="https://img.shields.io/badge/node-%E2%89%A518-5E6A7B?style=flat-square">
 </p>
@@ -152,9 +152,11 @@ src/
   improvements.ts      15-check audit — severity-tiered recommendations
   html-generator.ts    Dashboard HTML template
   client/              Dashboard runtime (tabs, search, sort, lineage view, wireframe)
-  render/              Shared escape helpers
+                         main.ts · render/escape.ts · render/md.ts · globals.d.ts
+  render/              Shared server-side escape helpers
   app.ts               CLI HTTP server + landing page
-  browser/             FSA walker + shims + entry shell
+  browser/             FSA walker + shims + entry shell + pair-picker logic
+                         entry.ts · fsa-walk.ts · fs-shim.ts · path-shim.ts · pair-picker.ts
 
 scripts/
   build-browser.mjs    Assembles docs/ from dist/ + browser TS output
@@ -162,7 +164,7 @@ scripts/
   serve-browser.mjs    Tiny static server for local testing
 
 changelog/             Per-version release notes (one file per release)
-tests/                 node:test suites — 157 tests, zero framework deps
+tests/                 node:test suites — 194 tests, zero framework deps
 ```
 
 ## Zero runtime dependencies
@@ -216,4 +218,4 @@ Every anchor link is verified by `tests/md-anchors.test.ts` — drift fires CI.
 
 Release notes live under [`changelog/`](changelog/) — one file per release. See [`changelog/README.md`](changelog/README.md) for the full index.
 
-Latest: **[v0.8.0](changelog/0.8.0.md)** — Browser mode, pair picker, Source Map, page-layout wireframe.
+Latest: **[v0.8.1](changelog/0.8.1.md)** — Post-`/sc:analyze` hardening (CI bundle guard, pair-picker extraction + tests, strict typing on main.ts).
