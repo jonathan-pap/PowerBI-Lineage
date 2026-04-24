@@ -2,7 +2,24 @@
 node_modules/
 dist/
 dist-test/
-docs/
+# Ignore docs/ contents with a single exception: docs/sample-data.json
+# is a committed build artefact so the hosted "Try a sample" button
+# has data to fetch. CI checkout doesn't include sample/ (ignored
+# below), so the bake script skips in CI and the committed JSON is
+# what ships. Re-bake + re-commit locally whenever sample/ changes.
+#
+# Git won't honour `!docs/sample-data.json` if `docs/` itself is
+# ignored (dirs aren't descended into), so we ignore `docs/*` and
+# `docs/**/` individually and then negate the one file we want.
+docs/*
+docs/**/
+!docs/sample-data.json
+
+# Local sample PBIP — raw folder is 51 MB of binaries; only the
+# ~1.76 MB of text files matter and they get baked into
+# docs/sample-data.json above. Raw sample stays on the author's
+# machine, not in git.
+sample/
 
 # Editor/agent state
 .claude/
