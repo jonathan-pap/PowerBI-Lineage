@@ -18,7 +18,7 @@
  * this script runs AFTER that step and just wires the shell.
  */
 
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildFullData } from "../dist/data-builder.js";
@@ -55,7 +55,18 @@ const emptyData = {
   },
 };
 
-const html = generateHTML(emptyData, "(browser)", "", "", "", "", "", "", "0");
+// Bake CHANGELOG.md into the shell so browser users can see what's
+// new via the Docs tab without leaving the app. The __loadBrowserData
+// hook on the client side does NOT overwrite MARKDOWN_CHANGELOG when
+// a new report loads — changelog is project metadata, not
+// report-specific.
+const changelogPath = resolve(repoRoot, "CHANGELOG.md");
+const changelogMd = existsSync(changelogPath) ? readFileSync(changelogPath, "utf8") : "";
+
+const html = generateHTML(
+  emptyData, "(browser)", "", "", "", "", "", "", "0",
+  "", "", "", changelogMd,
+);
 
 // ─────────────────────────────────────────────────────────────────────
 // 2. Inject browser wiring.
