@@ -27,7 +27,11 @@ import {
   generateFunctionsMd,
   generateCalcGroupsMd,
   generateDataDictionaryMd,
+  generateSourcesMd,
+  generatePagesMd,
+  generateIndexMd,
 } from "../md-generator.js";
+import { generateImprovementsMd } from "../improvements.js";
 
 // ─────────────────────────────────────────────────────────────────────
 // Types — we intentionally don't import the global `window` augmentation
@@ -227,15 +231,20 @@ async function processFiles(
   setStatus(`Parsed ${fullData.tables.length} tables. Rendering docs…`);
   await new Promise(r => setTimeout(r, 10));
 
-  // Generate all the MD exports the Docs tab reads.
+  // Generate all 9 MD exports the Docs tab reads.
   let md = "", measuresMd = "", functionsMd = "", calcGroupsMd = "",
-      dataDictionaryMd = "";
+      dataDictionaryMd = "", sourcesMd = "", pagesMd = "", indexMd = "",
+      improvementsMd = "";
   try {
     md = generateMarkdown(fullData, reportName);
     measuresMd = generateMeasuresMd(fullData, reportName);
     functionsMd = generateFunctionsMd(fullData, reportName);
     calcGroupsMd = generateCalcGroupsMd(fullData, reportName);
     dataDictionaryMd = generateDataDictionaryMd(fullData, reportName);
+    sourcesMd = generateSourcesMd(fullData, reportName);
+    pagesMd = generatePagesMd(fullData, reportName);
+    indexMd = generateIndexMd(fullData, reportName);
+    improvementsMd = generateImprovementsMd(fullData, reportName);
   } catch (e) {
     // MD generation is secondary — log but don't block the dashboard.
     // eslint-disable-next-line no-console
@@ -245,6 +254,7 @@ async function processFiles(
   // Hand off to the dashboard renderer already loaded in this page.
   applyToDashboard(fullData, reportName, reportPath, {
     md, measuresMd, functionsMd, calcGroupsMd, dataDictionaryMd,
+    sourcesMd, pagesMd, indexMd, improvementsMd,
   });
 
   hideOverlay();
@@ -323,12 +333,26 @@ interface MarkdownBundle {
   functionsMd: string;
   calcGroupsMd: string;
   dataDictionaryMd: string;
+  sourcesMd: string;
+  pagesMd: string;
+  indexMd: string;
+  improvementsMd: string;
 }
 
 /**
- * Populate the dashboard globals + invoke the existing render chain.
- * Mirrors the bootstrap line the server-mode main.js emits at the end
- * of the inlined script block.
+ * Hand the parsed data + rendered MDs off to the dashboard runtime.
+ *
+ * Why this is delegated: the renderers in src/client/main.ts close
+ * over the top-level `let DATA` + `let MARKDOWN_*` bindings declared
+ * in src/html-generator.ts. Those `let`s live in the inline script's
+ * Script scope, which is invisible to this (module) code. Setting
+ * `window.DATA = …` from here creates a separate variable the
+ * renderers ignore — we'd render the empty build-time shell forever.
+ *
+ * The fix: main.ts installs `window.__loadBrowserData(opts)` inside
+ * the same Script scope, so the hook has reach to mutate DATA in
+ * place, reassign the primitive `let`s, refill `pageData`, and
+ * re-run every renderer. Here we just shape the opts payload.
  */
 function applyToDashboard(
   data: unknown,
@@ -336,35 +360,41 @@ function applyToDashboard(
   reportPath: string,
   md: MarkdownBundle,
 ): void {
-  const w = window as BrowserWindow;
-  w.DATA = data;
-  w.pageData = (data as { pages: unknown }).pages;
-  w.REPORT_NAME = reportName;
-  w.REPORT_PATH = reportPath;
-  w.MARKDOWN = md.md;
-  w.MEASURES_MD = md.measuresMd;
-  w.FUNCTIONS_MD = md.functionsMd;
-  w.CALCGROUPS_MD = md.calcGroupsMd;
-  w.DATA_DICTIONARY_MD = md.dataDictionaryMd;
+  const w = window as BrowserWindow & {
+    __loadBrowserData?: (opts: unknown) => void;
+    REPORT_PATH?: string;
+  };
 
-  // Call every render the server-mode bootstrap calls. Missing functions
-  // are skipped silently so a partial main.js bundle still boots.
-  const fns: (keyof BrowserWindow)[] = [
-    "renderSummary", "renderTabs", "renderMeasures", "renderColumns",
-    "renderTables", "renderRelationships", "renderSources",
-    "renderFunctions", "renderCalcGroups", "renderPages",
-    "renderUnused", "renderDocs", "addCopyButtons",
-  ];
-  for (const fn of fns) {
-    const f = w[fn];
-    if (typeof f === "function") {
-      try { (f as () => void)(); } catch (e) {
-        // eslint-disable-next-line no-console
-        console.warn(`[entry] ${fn} threw:`, e);
-      }
-    }
+  // REPORT_PATH is informational (shown in some tooltips) and lives
+  // outside the Script-scoped lets — a plain window property is fine.
+  w.REPORT_PATH = reportPath;
+
+  if (typeof w.__loadBrowserData !== "function") {
+    // eslint-disable-next-line no-console
+    console.error(
+      "[entry] window.__loadBrowserData missing — dashboard script didn't install its bootstrap hook. Check the html-generator + main.ts build.",
+    );
+    return;
   }
-  if (typeof w.switchTab === "function") w.switchTab("measures");
+
+  const nowTs = new Date().toISOString().replace("T", " ").substring(0, 16);
+  w.__loadBrowserData({
+    data,
+    reportName,
+    generatedAt: nowTs,
+    appVersion: "browser",
+    markdown: {
+      md: md.md,
+      measuresMd: md.measuresMd,
+      functionsMd: md.functionsMd,
+      calcGroupsMd: md.calcGroupsMd,
+      dataDictionaryMd: md.dataDictionaryMd,
+      sourcesMd: md.sourcesMd,
+      pagesMd: md.pagesMd,
+      indexMd: md.indexMd,
+      improvementsMd: md.improvementsMd,
+    },
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────

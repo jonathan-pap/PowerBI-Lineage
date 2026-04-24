@@ -79,7 +79,7 @@ function buildFullDataWithPayload(payload: string): FullData {
  * mask the bug we're testing against.
  */
 function extractDataEmbed(html: string): string {
-  const marker = "const DATA=";
+  const marker = "let DATA=";
   const start = html.indexOf(marker);
   assert.ok(start >= 0, "DATA embed not found in generated HTML");
   // Find the matching closing </script> that follows.
@@ -150,11 +150,11 @@ test("generateHTML — adversarial payload round-trips via Function()", () => {
     "0.0.0-test"
   );
   // Pull out the JSON blob that follows `const DATA=` and precedes `;\n`
-  const marker = "const DATA=";
+  const marker = "let DATA=";
   const start = html.indexOf(marker) + marker.length;
   // The embed ends at the first `;` that is followed by a newline and
   // the next `const` declaration. Using a safe-ish locator.
-  const end = html.indexOf(";\nconst MARKDOWN=", start);
+  const end = html.indexOf(";\nlet MARKDOWN=", start);
   assert.ok(end > start, "could not locate end of DATA embed");
   const blob = html.slice(start, end);
 
@@ -171,7 +171,7 @@ test("generateHTML — reportName with </script> also safe", () => {
     "0.0.0-test"
   );
   // Find the REPORT_NAME= line
-  const marker = "const REPORT_NAME=";
+  const marker = "let REPORT_NAME=";
   const start = html.indexOf(marker);
   assert.ok(start >= 0, "REPORT_NAME embed not found");
   const endOfLine = html.indexOf("\n", start);

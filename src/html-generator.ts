@@ -303,19 +303,25 @@ export function generateHTML(
 <!-- DAX syntax highlighter (vendor/dax-highlight) — exposes window.DaxHighlight -->
 <script>${DAX_HIGHLIGHT_JS}</script>
 <script>
-const DATA=${safeJSON(data)};
-const MARKDOWN=${markdownLiteral};
-const MARKDOWN_MEASURES=${measuresMarkdownLiteral};
-const MARKDOWN_FUNCTIONS=${functionsMarkdownLiteral};
-const MARKDOWN_CALCGROUPS=${calcGroupsMarkdownLiteral};
-const MARKDOWN_DATADICT=${dataDictionaryMarkdownLiteral};
-const MARKDOWN_SOURCES=${sourcesMarkdownLiteral};
-const MARKDOWN_PAGES=${pagesMarkdownLiteral};
-const MARKDOWN_INDEX=${indexMarkdownLiteral};
-const MARKDOWN_IMPROVEMENTS=${improvementsMarkdownLiteral};
-const REPORT_NAME=${safeJSON(reportName)};
-const APP_VERSION=${safeJSON(version)};
-const GENERATED_AT=${safeJSON(ts)};
+// Top-level bindings use 'let' rather than 'const' so that
+// browser-mode can swap them after an empty shell has rendered.
+// The inline CLIENT_JS closes over these names via Script scope;
+// a 'const' would make the dynamic-load flow unable to update
+// what the renderers see. CLI mode evaluates these literals once
+// and never reassigns, so the change is benign there.
+let DATA=${safeJSON(data)};
+let MARKDOWN=${markdownLiteral};
+let MARKDOWN_MEASURES=${measuresMarkdownLiteral};
+let MARKDOWN_FUNCTIONS=${functionsMarkdownLiteral};
+let MARKDOWN_CALCGROUPS=${calcGroupsMarkdownLiteral};
+let MARKDOWN_DATADICT=${dataDictionaryMarkdownLiteral};
+let MARKDOWN_SOURCES=${sourcesMarkdownLiteral};
+let MARKDOWN_PAGES=${pagesMarkdownLiteral};
+let MARKDOWN_INDEX=${indexMarkdownLiteral};
+let MARKDOWN_IMPROVEMENTS=${improvementsMarkdownLiteral};
+let REPORT_NAME=${safeJSON(reportName)};
+let APP_VERSION=${safeJSON(version)};
+let GENERATED_AT=${safeJSON(ts)};
 
 // Client runtime — extracted to src/client/main.ts in Stop 5, inlined here from dist/client/main.js.
 ${CLIENT_JS}

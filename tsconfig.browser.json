@@ -25,6 +25,7 @@
     "src/model-parser.ts",
     "src/data-builder.ts",
     "src/md-generator.ts",
+    "src/improvements.ts",
     "src/report-scanner.ts",
     "src/pbir-reader.ts",
     "src/render/**/*"
