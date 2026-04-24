@@ -1779,6 +1779,30 @@ function downloadMarkdown(){
 renderSummary();renderTabs();renderMeasures();renderColumns();renderTables();renderRelationships();renderSources();renderSourceMap();renderSourcesViewToggle();renderFunctions();renderCalcGroups();renderPages();renderUnused();renderDocs();switchTab("measures");addCopyButtons();
 
 // ─────────────────────────────────────────────────────────────────────
+// Print support — Ctrl-P produces a PDF covering every tab.
+//
+// The @media print block in dashboard.css forces every `.panel` visible
+// and strips the interactive chrome, but `<details>` elements with
+// `open=false` stay collapsed regardless of CSS. Flip them all open on
+// `beforeprint` and restore on `afterprint` so the printed document
+// includes every measure body, every table row, every collapsed raw-M.
+// ─────────────────────────────────────────────────────────────────────
+window.addEventListener("beforeprint", function(){
+  document.querySelectorAll<HTMLDetailsElement>("details").forEach(function(d){
+    if (!d.open) {
+      d.setAttribute("data-print-was-closed", "");
+      d.open = true;
+    }
+  });
+});
+window.addEventListener("afterprint", function(){
+  document.querySelectorAll<HTMLDetailsElement>("details[data-print-was-closed]").forEach(function(d){
+    d.open = false;
+    d.removeAttribute("data-print-was-closed");
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────
 // Browser-mode bootstrap hook
 //
 // The CLI inlines this script with a full DATA payload baked in and

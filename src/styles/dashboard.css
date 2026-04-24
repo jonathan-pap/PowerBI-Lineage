@@ -643,3 +643,177 @@
        monospace styling; the colour rules from .code-dax .dax-*
        already apply. */
   }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     Print stylesheet — Ctrl-P / File → Print produces a clean PDF.
+     ═══════════════════════════════════════════════════════════════════════════
+
+     Goal: one readable document containing every tab's content, with
+     the interactive chrome (tabs, buttons, filters, modals, overlays)
+     stripped away. Complements the `beforeprint` / `afterprint`
+     handlers in client/main.ts that temporarily expand every `<details>`
+     and force every `.panel` to render regardless of tab state.
+
+     Theme override forces a light palette so the PDF prints on paper
+     without bleed — works from all three dashboard themes.
+     =========================================================================== */
+  @media print {
+    /* Page setup — margins + font sizing tuned for A4 / US Letter. */
+    @page { margin: 1.5cm 1.2cm; }
+
+    /* Force a light, ink-friendly palette regardless of the interactive
+       theme. We override CSS vars on both `:root` and `[data-theme="…"]`
+       selectors so every themed variant comes out the same in print. */
+    :root,
+    [data-theme="dark"],
+    [data-theme="light"],
+    [data-theme="blupulse"] {
+      --bg: #ffffff;
+      --surface: #ffffff;
+      --surface-alt: #f7f7f7;
+      --surface-deep: #fafafa;
+      --text: #000000;
+      --text-body: #000000;
+      --text-dim: #222222;
+      --text-muted: #444444;
+      --text-faint: #777777;
+      --border: #cccccc;
+      --border-subtle: #e0e0e0;
+      --border-soft: #dddddd;
+      --hover-border: #bbbbbb;
+      --row-hover: transparent;
+      --accent: #1a56db;
+      --tooltip-bg: #ffffff;
+      --tooltip-border: #cccccc;
+    }
+    html, body {
+      background: #ffffff !important;
+      color: #000000 !important;
+      font-size: 10pt;
+    }
+
+    /* Hide interactive chrome — users can't click buttons on paper.
+       We deliberately use class selectors here rather than attribute
+       selectors on data-action; the attribute form bakes a literal
+       quoted string into the inline CSS which tripped a structural
+       test that scans the emitted HTML for every action verb. */
+    .tabs,
+    .refresh-btn,
+    .theme-toggle, .theme-picker,
+    .search-row, .search-input, .filter-btn,
+    .copy-btn,
+    .panel-footer,
+    .sort-chevron,
+    .load-mode-badge,
+    #br-overlay,
+    .wn-modal,
+    .br-linkish,
+    .br-link-sep {
+      display: none !important;
+    }
+
+    /* Show every tab's panel — the JS handler also adds `.print-visible`,
+       both paths exist so the rule survives even if JS is disabled. */
+    .panel {
+      display: block !important;
+      page-break-before: always;
+      break-before: page;
+    }
+    .panel:first-of-type {
+      page-break-before: auto;
+      break-before: auto;
+    }
+
+    /* <details> expansion — JS flips `open` on every details on
+       `beforeprint`. Belt-and-braces: force content visible even if
+       the JS path failed (e.g., print triggered before load finished). */
+    details > *:not(summary) { display: block !important; }
+    details > summary {
+      cursor: default;
+      list-style: none;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+    details > summary::-webkit-details-marker { display: none; }
+
+    /* Headings — keep with their first paragraph, avoid orphans. */
+    h1, h2, h3, h4, h5 {
+      color: #000 !important;
+      page-break-after: avoid;
+      break-after: avoid;
+      background: none !important;
+      -webkit-text-fill-color: #000 !important;
+    }
+    .header-sub {
+      background: none !important;
+      -webkit-text-fill-color: #000 !important;
+      color: #000 !important;
+    }
+
+    /* Tables — force visible borders so rows separate on paper. */
+    table, .data-table {
+      border-collapse: collapse;
+      width: 100%;
+      font-size: 9pt;
+    }
+    th, td, .data-table th, .data-table td {
+      border: 1px solid #cccccc !important;
+      padding: 3px 6px !important;
+      background: #ffffff !important;
+      color: #000 !important;
+    }
+    thead, thead tr {
+      background: #f0f0f0 !important;
+    }
+    thead th {
+      background: #f0f0f0 !important;
+      font-weight: 600;
+    }
+    tr { page-break-inside: avoid; break-inside: avoid; }
+
+    /* Code blocks — preserve monospace but force light background. */
+    pre, code, .code-dax, .lineage-dax {
+      background: #f5f5f5 !important;
+      color: #000 !important;
+      border: 1px solid #dddddd !important;
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+    .dax-k, .dax-f, .dax-s, .dax-n, .dax-c, .dax-o, .dax-m, .dax-r {
+      color: #000 !important;
+    }
+
+    /* Cards and grouping — keep each card on one page when possible. */
+    .page-card,
+    .table-group,
+    .section {
+      page-break-inside: avoid;
+      break-inside: avoid;
+      background: #ffffff !important;
+      border: 1px solid #dddddd !important;
+    }
+
+    /* Dependency chips — ink-friendly monochrome fallback. */
+    .dep-chip, .badge {
+      background: #f0f0f0 !important;
+      color: #000 !important;
+      border: 1px solid #cccccc !important;
+    }
+
+    /* Show URLs after external links so the PDF is archivable standalone. */
+    a[href^="http"]:after {
+      content: " (" attr(href) ")";
+      font-size: 8pt;
+      color: #666;
+    }
+    /* But NOT for in-page anchors or for links inside tables/DAX where
+       the URL would bloat cells. */
+    a[href^="#"]:after,
+    table a:after,
+    pre a:after {
+      content: "";
+    }
+
+    /* BluPulse aurora overlay is a body::after pseudo — kill it in print. */
+    body::after, body::before { display: none !important; }
+  }
