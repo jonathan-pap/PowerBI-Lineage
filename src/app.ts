@@ -590,6 +590,16 @@ const server = http.createServer((req, res) => {
       const pagesMd = generatePagesMd(data, reportName);
       const indexMd = generateIndexMd(data, reportName);
       const improvementsMd = generateImprovementsMd(data, reportName);
+      // Curated welcome / dashboard-tour doc surfaced in the
+      // "What's new" popup. Project-level, not per-report. Missing
+      // file (e.g. global install without the repo) → empty string,
+      // and the popup client-side falls back to the latest changelog
+      // entry.
+      let welcomeMd = "";
+      try {
+        const wnPath = path.resolve(process.cwd(), "WHATS-NEW.md");
+        if (fs.existsSync(wnPath)) welcomeMd = fs.readFileSync(wnPath, "utf8");
+      } catch { /* best-effort */ }
       // Changelog: concatenate per-version files from changelog/
       // newest-first. The root CHANGELOG.md is now a thin pointer
       // (for GitHub display) and intentionally NOT used. See
@@ -611,7 +621,7 @@ const server = http.createServer((req, res) => {
             .join("\n\n---\n\n") + "\n";
         }
       } catch { /* best-effort */ }
-      const html = generateHTML(data, reportName, modelMd, measuresMd, functionsMd, calcGroupsMd, dataDictionaryMd, APP_VERSION, sourcesMd, pagesMd, indexMd, improvementsMd, changelogMd);
+      const html = generateHTML(data, reportName, modelMd, measuresMd, functionsMd, calcGroupsMd, dataDictionaryMd, APP_VERSION, sourcesMd, pagesMd, indexMd, improvementsMd, changelogMd, welcomeMd);
       saveRecent(resolved);
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
       res.end(html);

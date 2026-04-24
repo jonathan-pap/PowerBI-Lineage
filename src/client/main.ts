@@ -81,10 +81,15 @@ function extractLatestRelease(md: string): string {
 }
 
 function showChangelogPopup(): void {
-  const md = extractLatestRelease(MARKDOWN_CHANGELOG || "");
+  // Prefer the curated WHATS-NEW.md tour (user-friendly, product-
+  // focused) over the raw changelog (historically accurate but
+  // often too technical for first-time visitors). Falls back to
+  // the latest release block if WELCOME is empty at build time.
+  const welcome = (typeof MARKDOWN_WELCOME === "string" ? MARKDOWN_WELCOME : "").trim();
+  const md = welcome || extractLatestRelease(MARKDOWN_CHANGELOG || "");
   const body = md
     ? mdRender(md)
-    : '<p style="color:var(--text-muted)">No release notes available.</p>';
+    : '<p style="color:var(--text-muted)">Nothing to show here yet.</p>';
 
   // Remove any pre-existing popup before mounting a new one.
   const existing = document.getElementById("wn-modal");

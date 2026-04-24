@@ -186,7 +186,12 @@ export function generateHTML(
    *  and browser mode; browser-mode's __loadBrowserData hook leaves
    *  this slot alone when a new report loads (changelog doesn't
    *  depend on the report). */
-  changelogMarkdown: string = ""
+  changelogMarkdown: string = "",
+  /** Curated dashboard tour / welcome doc rendered in the "What's
+   *  new" landing-overlay popup. Project-level, not per-report.
+   *  Sourced from WHATS-NEW.md at repo root; empty string triggers
+   *  a fallback to the latest CHANGELOG entry on the client side. */
+  welcomeMarkdown: string = ""
 ): string {
   const ts = new Date().toISOString().replace("T", " ").substring(0, 16);
   // safeJSON escapes <, >, &, U+2028, U+2029 on top of JSON.stringify
@@ -203,6 +208,7 @@ export function generateHTML(
   const indexMarkdownLiteral = safeJSON(indexMarkdown);
   const improvementsMarkdownLiteral = safeJSON(improvementsMarkdown);
   const changelogMarkdownLiteral = safeJSON(changelogMarkdown);
+  const welcomeMarkdownLiteral = safeJSON(welcomeMarkdown);
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -331,6 +337,7 @@ let MARKDOWN_PAGES=${pagesMarkdownLiteral};
 let MARKDOWN_INDEX=${indexMarkdownLiteral};
 let MARKDOWN_IMPROVEMENTS=${improvementsMarkdownLiteral};
 let MARKDOWN_CHANGELOG=${changelogMarkdownLiteral};
+let MARKDOWN_WELCOME=${welcomeMarkdownLiteral};
 let REPORT_NAME=${safeJSON(reportName)};
 let APP_VERSION=${safeJSON(version)};
 let GENERATED_AT=${safeJSON(ts)};
