@@ -72,8 +72,18 @@ jobs:
           test -f docs/.nojekyll || (echo "docs/.nojekyll missing"; exit 1)
           test -f docs/browser/entry.js || (echo "docs/browser/entry.js missing"; exit 1)
 
+      # `enablement: true` lets the action auto-provision Pages on
+      # first run — if Pages isn't enabled yet on the repo, it turns
+      # it on and sets the source to "GitHub Actions". Without this
+      # the first deploy fails with:
+      #   Error: Get Pages site failed. ... Error: Not Found
+      # (because the Pages REST API returns 404 until the site
+      # exists). Auto-enablement spares the user a manual settings
+      # trip.
       - name: Configure Pages
         uses: actions/configure-pages@v5
+        with:
+          enablement: true
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
