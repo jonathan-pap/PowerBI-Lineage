@@ -1,4 +1,5 @@
 import type { FullData, TableData, ModelMeasure } from "./data-builder.js";
+import type { ModelRelationship } from "./model-parser.js";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Semantic-Model Technical Specification — Markdown
@@ -108,21 +109,38 @@ export { adoSlug };
 
 /**
  * Escape a string for use as a Mermaid node LABEL (inside "quotes").
- * Mermaid is stricter than Markdown — double quotes and backticks
- * inside labels break parsing even when they'd be fine in MD.
+ * Targets BOTH GitHub (Mermaid 10+) AND ADO Wiki (Mermaid 8.13.9,
+ * which is fussier). Specifically:
+ *
+ *   - Double quotes inside labels break both renderers. We replace
+ *     with `'` rather than backslash-escape — ADO 8.13 doesn't honour
+ *     `\"` inside a quoted label.
+ *   - Non-ASCII punctuation (middle-dot `·`, ellipsis `…`, em-dash
+ *     `—`) trips ADO's older parser intermittently. Normalise to ASCII.
+ *   - Newlines and excess whitespace get collapsed so a label can't
+ *     smuggle in a linebreak that prematurely closes the node.
  */
 function mmLabel(s: string): string {
-  return String(s).replace(/"/g, "\\\"").replace(/\n/g, " ").replace(/\s+/g, " ").trim();
+  return String(s)
+    .replace(/"/g, "'")
+    .replace(/·/g, "-")
+    .replace(/…/g, "...")
+    .replace(/—/g, "-")
+    .replace(/–/g, "-")
+    .replace(/\n/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 /**
  * Truncate a Mermaid node label so a long visual title or DAX
  * expression doesn't distort the whole graph. Mermaid auto-wraps
- * long labels but layouts get weird past ~40 chars.
+ * long labels but layouts get weird past ~40 chars. Uses ASCII `...`
+ * (not U+2026 `…`) for ADO compatibility.
  */
 function mmTrunc(s: string, max = 40): string {
   const t = String(s);
-  return t.length > max ? t.substring(0, max - 1) + "…" : t;
+  return t.length > max ? t.substring(0, max - 3) + "..." : t;
 }
 
 /**
@@ -162,20 +180,24 @@ function mermaidMeasureLineage(m: ModelMeasure): string {
   });
   // Current measure (always centre)
   lines.push(`  m0("${mmLabel(m.name)}"):::current`);
-  // Downstream visuals
+  // Downstream visuals — use ASCII hyphen as the title/type separator
+  // so the label passes cleanly through Mermaid 8.13 (ADO Wiki).
   shown.forEach((v, i) => {
-    const label = mmTrunc(`${v.title}${v.type && v.type !== v.title ? " · " + v.type : ""}`);
+    const label = mmTrunc(`${v.title}${v.type && v.type !== v.title ? " - " + v.type : ""}`);
     lines.push(`  m0 --> v${i + 1}["${mmLabel(label)}"]:::visual`);
   });
   if (overflow > 0) {
     lines.push(`  m0 --> vMore["+${overflow} more visual${overflow === 1 ? "" : "s"}"]:::more`);
   }
   // Styling — muted pastel fills so the graph stays subtle in both
-  // dashboard + ADO Wiki themes.
+  // dashboard + ADO Wiki themes. Keep classDef properties to
+  // fill/stroke/stroke-width only: ADO Wiki's Mermaid 8.13.9 drops
+  // entire classDef rules when it hits an unknown property like
+  // `color:` (rendered the whole graph as plain-text in testing).
   lines.push("  classDef current fill:#fff3b3,stroke:#b38f00,stroke-width:2px");
   lines.push("  classDef measure fill:#fde4c0,stroke:#b36200");
   lines.push("  classDef visual  fill:#d1e7dd,stroke:#0a7a3b");
-  lines.push("  classDef more    fill:#eee,stroke:#888,color:#555");
+  lines.push("  classDef more    fill:#eeeeee,stroke:#888888");
   lines.push("```");
   return lines.join("\n");
 }
@@ -211,13 +233,125 @@ function mermaidTableRelationships(t: TableData): string {
   lines.push(`  f0("${mmLabel(t.name)}"):::fact`);
   let i = 1;
   for (const [dim, fks] of byDim) {
-    const label = fks.length === 1 ? `[${fks[0]}]` : `[${fks.join(", ")}]`;
+    // ADO Wiki's Mermaid 8.13.9 rejects square brackets inside edge
+    // labels even when the label is quoted — strip to the bare
+    // column name list (comma-separated when multiple FKs).
+    const label = fks.join(", ");
     lines.push(`  f0 -- "${mmLabel(label)}" --> d${i}["${mmLabel(dim)}"]:::dim`);
     i++;
   }
   lines.push("  classDef fact fill:#fde4c0,stroke:#b36200,stroke-width:2px");
   lines.push("  classDef dim  fill:#d1e7dd,stroke:#0a7a3b");
   lines.push("```");
+  return lines.join("\n");
+}
+
+/**
+ * Render a Mermaid `erDiagram` for the entire model — every user
+ * table becomes an entity, every relationship an edge carrying its
+ * from/to column and cardinality. ADO Wiki and GitHub both render
+ * erDiagram natively (via Mermaid).
+ *
+ * Sanitisation notes for entity + column identifiers in erDiagram
+ * syntax: Mermaid only accepts `[A-Za-z0-9_]` unquoted, so any table
+ * or column name with spaces, hyphens, or special characters needs
+ * normalising to underscores. We keep a mapping so labels on edges
+ * can use the normalised name consistently.
+ *
+ * Scale guardrails:
+ *   - Caps at `MAX_ER_TABLES` (30) — above that ADO's renderer
+ *     degrades to unreadable layouts. We emit a note suggesting the
+ *     per-fact star-fragments for drill-down.
+ *   - Per-table column count capped at `MAX_ER_COLUMNS` (10) —
+ *     erDiagram widens vertically and becomes a tall strip otherwise.
+ *
+ * Returns the empty string when the model has no user tables OR no
+ * relationships — both cases have nothing meaningful to draw.
+ */
+const MAX_ER_TABLES = 30;
+const MAX_ER_COLUMNS = 10;
+
+function erIdent(s: string): string {
+  // Mermaid 8.13 erDiagram idents must be [A-Za-z0-9_] only.
+  const cleaned = String(s).replace(/[^A-Za-z0-9_]/g, "_");
+  // Leading-digit identifiers aren't valid — prefix underscore.
+  return /^[0-9]/.test(cleaned) ? "_" + cleaned : cleaned;
+}
+
+function erCardinality(r: ModelRelationship): string {
+  // erDiagram notation uses Crow's-foot glyphs. Bidirectional filter
+  // direction doesn't have a native ER notation — we expose it in the
+  // edge label instead.
+  //
+  //   many -> one : ||--o{    (read: one-to-many, inactive side "o")
+  //   one  -> one : ||--||
+  //   many -> many: }o--o{
+  //   one  -> many: ||--o{ (same as many -> one, just from-side flipped)
+  const f = r.fromCardinality;
+  const t = r.toCardinality;
+  if (f === "one" && t === "one") return "||--||";
+  if (f === "many" && t === "one") return "}o--||";
+  if (f === "one" && t === "many") return "||--o{";
+  return "}o--o{";
+}
+
+function mermaidFullModelErDiagram(data: FullData): string {
+  const userTables = data.tables.filter(t => t.origin !== "auto-date" && !t.isCalcGroup);
+  if (userTables.length === 0 || data.relationships.length === 0) return "";
+
+  const truncated = userTables.length > MAX_ER_TABLES;
+  const shownTables = truncated ? userTables.slice(0, MAX_ER_TABLES) : userTables;
+  const shownNames = new Set(shownTables.map(t => t.name));
+
+  // Only relationships where BOTH endpoints survived the cap appear in
+  // the diagram — otherwise the reader sees an edge to a phantom table.
+  const shownRels = data.relationships.filter(
+    r => shownNames.has(r.fromTable) && shownNames.has(r.toTable),
+  );
+  if (shownRels.length === 0) return "";
+
+  const lines: string[] = [];
+  lines.push("```mermaid");
+  lines.push("erDiagram");
+
+  // Entity declarations — table block with up to MAX_ER_COLUMNS columns.
+  // Mark keys as PK / FK per Mermaid's erDiagram syntax.
+  for (const t of shownTables) {
+    const id = erIdent(t.name);
+    const keyCols = t.columns.filter(c => c.isKey || c.isInferredPK);
+    const fkCols = t.columns.filter(c => c.isFK);
+    const otherCols = t.columns.filter(c => !c.isKey && !c.isInferredPK && !c.isFK);
+    // Keys first, then FKs, then the rest — up to the cap.
+    const ordered = [...keyCols, ...fkCols, ...otherCols].slice(0, MAX_ER_COLUMNS);
+    lines.push(`  ${id} {`);
+    for (const c of ordered) {
+      const dt = c.dataType ? erIdent(c.dataType) : "string";
+      const key = (c.isKey || c.isInferredPK) ? " PK" : c.isFK ? " FK" : "";
+      lines.push(`    ${dt} ${erIdent(c.name)}${key}`);
+    }
+    if (t.columns.length > ordered.length) {
+      lines.push(`    string _and_${t.columns.length - ordered.length}_more "..."`);
+    }
+    lines.push(`  }`);
+  }
+
+  // Edges — one per relationship with cardinality + from/to column label.
+  for (const r of shownRels) {
+    const from = erIdent(r.fromTable);
+    const to = erIdent(r.toTable);
+    const card = erCardinality(r);
+    const bidi = r.crossFilteringBehavior === "bothDirections" ? " bidi" : "";
+    const active = r.isActive ? "" : " inactive";
+    const label = `${r.fromColumn}${bidi || active ? "_" + (bidi || active).trim() : ""}`;
+    lines.push(`  ${from} ${card} ${to} : "${label}"`);
+  }
+  lines.push("```");
+
+  if (truncated) {
+    lines.push("");
+    lines.push(`_Showing the first ${MAX_ER_TABLES} of ${userTables.length} user tables — the per-fact star fragments below cover the rest._`);
+  }
+
   return lines.join("\n");
 }
 
@@ -370,6 +504,7 @@ export function generateMarkdown(data: FullData, reportName: string): string {
   lines.push("    - 2.1 [Schema summary](#21-schema-summary)");
   lines.push("    - 2.2 [Tables by role](#22-tables-by-role)");
   lines.push("    - 2.3 [Relationship inventory](#23-relationship-inventory)");
+  lines.push("    - 2.4 [Entity-relationship diagram](#24-entity-relationship-diagram)");
   lines.push("3. [Data Sources](#3-data-sources)");
   lines.push("    - 3.1 [Storage modes](#31-storage-modes)");
   lines.push("    - 3.2 [Parameters and expressions](#32-parameters-and-expressions)");
@@ -503,6 +638,21 @@ export function generateMarkdown(data: FullData, reportName: string): string {
     });
   }
   lines.push("");
+
+  // ── 2.4 Full-model ER diagram ─────────────────────────────────────────────
+  // Mermaid erDiagram rendering the complete star / constellation. Capped
+  // at 30 tables (ADO Wiki's layout engine chokes above that); per-fact
+  // star fragments in the Data Dictionary doc provide the drill-down.
+  const erDiagram = mermaidFullModelErDiagram(data);
+  if (erDiagram) {
+    lines.push("### 2.4 Entity-relationship diagram");
+    lines.push("");
+    lines.push("_Mermaid `erDiagram` — renders natively on GitHub, ADO Wiki, and in this dashboard. Inactive relationships are tagged `inactive`; bidirectional cross-filter relationships are tagged `bidi`._");
+    lines.push("");
+    lines.push(erDiagram);
+    lines.push("");
+  }
+
   lines.push("---");
   lines.push("");
 
