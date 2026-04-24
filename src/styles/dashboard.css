@@ -103,6 +103,44 @@
     --clr-indirect-soft:  rgba(71,85,105,.10);   --clr-indirect-mid:  rgba(71,85,105,.25);
     --clr-variable-soft:  rgba(194,65,12,.10);   --clr-variable-mid:  rgba(194,65,12,.28);
   }
+
+  /* ─── BluPulse theme ────────────────────────────────────────────────────
+     Dark navy base with blue-to-purple aurora gradients. Palette ported
+     from https://jonathan-pap.github.io (BluPulse blog styles) — purple
+     accent replaces amber, white-at-alpha surfaces replace flat greys,
+     and `body::before` overlays the same three-stop aurora gradient the
+     BluPulse blog uses. Category colours (measures, columns, sources
+     etc.) are kept identical across all three themes for consistency —
+     the theme only repaints surfaces, text, borders, and accent.        */
+  [data-theme="blupulse"]{
+    --bg:#070A1A;--surface:rgba(255,255,255,0.04);--surface-alt:rgba(255,255,255,0.06);
+    --surface-deep:#0B1030;--surface-center:rgba(255,255,255,0.04);
+    --border:rgba(255,255,255,0.12);--border-soft:rgba(255,255,255,0.08);--border-row:rgba(255,255,255,0.06);
+    --text:rgba(255,255,255,0.96);--text-body:rgba(255,255,255,0.92);
+    --text-muted:rgba(255,255,255,0.72);--text-dim:rgba(255,255,255,0.60);
+    --text-faint:rgba(255,255,255,0.48);--text-fainter:rgba(255,255,255,0.36);
+    --row-hover:rgba(255,255,255,0.06);--hover-border:rgba(139,92,246,0.5);
+    --chip-dep-bg:rgba(139,92,246,.18);--chip-dep-bd:rgba(139,92,246,.45);--chip-dep-tx:#C4B5FD;--chip-dep-hover:rgba(139,92,246,.28);
+    --chip-used-bg:rgba(59,130,246,.14);--chip-used-bd:rgba(59,130,246,.40);--chip-used-tx:#BFDBFE;
+    --code-name:#BFDBFE;--code-type:#C4B5FD;--code-punct:rgba(255,255,255,0.35);
+    --accent:#8B5CF6;
+    --glass-bg:rgba(11,16,48,0.72);
+    --glass-border:rgba(255,255,255,0.10);
+    --glass-shadow:0 1px 0 rgba(255,255,255,0.06) inset, 0 12px 34px rgba(0,0,0,0.5);
+    --grid-line:rgba(139,92,246,0.04);
+  }
+  /* Aurora gradient overlay — radial blue + purple blobs bleeding into
+     the navy gradient background. Matches the BluPulse reference.
+     Fixed + pointer-events:none so it never interferes with clicks. */
+  [data-theme="blupulse"] body::after{
+    content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+    background:
+      radial-gradient(900px 520px at 18% 12%, rgba(59,130,246,0.22), transparent 60%),
+      radial-gradient(860px 520px at 82% 18%, rgba(139,92,246,0.20), transparent 60%),
+      radial-gradient(900px 640px at 50% 120%, rgba(59,130,246,0.10), transparent 62%),
+      linear-gradient(180deg, rgba(11,16,48,1) 0%, rgba(7,10,26,1) 70%, rgba(7,10,26,1) 100%);
+  }
+
   body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(--text-body);min-height:100vh;padding-bottom:48px;position:relative;overflow-x:hidden;transition:background .2s,color .2s}
 
   /* Fixed, full-viewport background layers (behind content).

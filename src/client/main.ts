@@ -33,13 +33,29 @@ let mdViewMode="rendered";
 // concatenated into the same inline <script> before this one, so
 // the top-level function declarations are already in scope.
 
+// Three-way theme cycle. Glyph choice:
+//   dark     → ☾   (moon)
+//   light    → ☀   (sun)
+//   blupulse → ✦   (four-point star, hinting at the aurora)
+const THEME_CYCLE = ["dark", "light", "blupulse"] as const;
+const THEME_GLYPHS: Record<string, string> = { dark: "☾", light: "☀", blupulse: "✦" };
+
+function setTheme(name: string){
+  document.documentElement.setAttribute('data-theme', name);
+  try { localStorage.setItem('usage-theme', name); } catch(e) {}
+  const btn = document.getElementById('theme-btn');
+  if (btn) btn.textContent = THEME_GLYPHS[name] || '☾';
+  // Refresh any landing-overlay swatches that reflect the active theme.
+  document.querySelectorAll<HTMLElement>('[data-theme-swatch]').forEach((el) => {
+    el.classList.toggle('active', el.getAttribute('data-theme-swatch') === name);
+  });
+}
+
 function toggleTheme(){
-  var cur=document.documentElement.getAttribute('data-theme')||'dark';
-  var next=cur==='dark'?'light':'dark';
-  document.documentElement.setAttribute('data-theme',next);
-  try{localStorage.setItem('usage-theme',next);}catch(e){}
-  var btn=document.getElementById('theme-btn');
-  if(btn)btn.textContent=next==='dark'?'☾':'☀';
+  const cur = document.documentElement.getAttribute('data-theme') || 'dark';
+  const idx = THEME_CYCLE.indexOf(cur as typeof THEME_CYCLE[number]);
+  const next = THEME_CYCLE[(idx + 1) % THEME_CYCLE.length];
+  setTheme(next);
 }
 
 // Colourise every .lineage-dax block that hasn't been highlighted
@@ -87,7 +103,15 @@ function addCopyButtons(){
     el.appendChild(btn);
   });
 }
-(function(){var t=document.documentElement.getAttribute('data-theme')||'dark';var btn=document.getElementById('theme-btn');if(btn)btn.textContent=t==='dark'?'☾':'☀';})();
+// Initial glyph + swatch-active sync from the stored theme
+(function(){
+  const t = document.documentElement.getAttribute('data-theme') || 'dark';
+  const btn = document.getElementById('theme-btn');
+  if (btn) btn.textContent = THEME_GLYPHS[t] || '☾';
+  document.querySelectorAll<HTMLElement>('[data-theme-swatch]').forEach((el) => {
+    el.classList.toggle('active', el.getAttribute('data-theme-swatch') === t);
+  });
+})();
 
 let activeTab="measures",lastTab="measures";
 // Typed as Record<string, …> so dynamic key access (e.g.
@@ -182,6 +206,7 @@ document.addEventListener('click', function(e){
     case 'sort':            sortTable(d.table, d.key); break;
     case 'unused-filter':   toggleUnused(d.entity); break;
     case 'theme':           toggleTheme(); break;
+    case 'theme-set':       setTheme(d.themeName || 'dark'); break;
     case 'reload':          location.reload(); break;
     case 'md-expand-all':   expandAllDetails(); break;
     case 'md-collapse-all': collapseAllDetails(); break;

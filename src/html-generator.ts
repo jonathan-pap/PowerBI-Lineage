@@ -221,7 +221,7 @@ export function generateHTML(
       <div class="timestamp">Generated: ${ts}</div>
     </div>
     <div class="header-actions">
-      <button class="theme-btn" id="theme-btn" data-action="theme" title="Toggle light/dark theme" aria-label="Toggle theme">☾</button>
+      <button class="theme-btn" id="theme-btn" data-action="theme" title="Cycle theme: dark → light → BluPulse" aria-label="Cycle theme">☾</button>
       <button class="refresh-btn" data-action="reload">↻ Refresh</button>
     </div>
   </div>

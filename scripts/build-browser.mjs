@@ -307,6 +307,29 @@ const overlayStyles = `
   .br-hint { margin-top: 20px; font-size: 11px; color: #6B7280; line-height: 1.5; }
   .br-hint a { color: #9CA3AF; }
   .br-hint a:hover { color: #F9FAFB; }
+
+  /* Theme picker on the landing overlay — 3 small circular swatches.
+     Dashboard header keeps its single cycle-button; this gives
+     landing-page visitors a direct pick without having to learn the
+     cycle. Active swatch gets a highlighted ring. */
+  .br-theme-picker {
+    margin-top: 18px; display: flex; align-items: center; justify-content: center;
+    gap: 8px; font-size: 11px; color: #6B7280;
+  }
+  .br-theme-label { letter-spacing: 0.03em; }
+  .br-theme-swatch {
+    width: 28px; height: 28px; border-radius: 50%;
+    border: 1px solid rgba(255,255,255,0.12);
+    background: rgba(255,255,255,0.04);
+    color: #CBD5E1; font-size: 13px; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+    transition: transform .1s, border-color .12s, background .12s;
+  }
+  .br-theme-swatch:hover { transform: translateY(-1px); border-color: rgba(255,255,255,0.3); }
+  .br-theme-swatch.active { border-color: #F59E0B; box-shadow: 0 0 0 2px rgba(245,158,11,0.18); }
+  .br-theme-swatch--dark     { background: linear-gradient(135deg, #0B0D11, #1A1D27); }
+  .br-theme-swatch--light    { background: linear-gradient(135deg, #F1F5F9, #FFFFFF); color: #0F172A; }
+  .br-theme-swatch--blupulse { background: linear-gradient(135deg, #0B1030, #3B82F6 70%, #8B5CF6); color: rgba(255,255,255,0.92); }
 </style>
 `.trim();
 
@@ -362,6 +385,19 @@ const overlayHtml = `
     <div class="br-hint">
       Requires Chrome, Edge, or Opera (File System Access API).<br>
       Firefox / Safari users: <a href="https://github.com/jonathan-pap/PowerBI-Lineage#running" target="_blank" rel="noopener">run the local CLI</a>.
+    </div>
+
+    <div class="br-theme-picker" role="group" aria-label="Theme">
+      <span class="br-theme-label">Theme:</span>
+      <button type="button" class="br-theme-swatch br-theme-swatch--dark"
+              data-action="theme-set" data-theme-name="dark" data-theme-swatch="dark"
+              title="Dark (default)" aria-label="Dark theme">☾</button>
+      <button type="button" class="br-theme-swatch br-theme-swatch--light"
+              data-action="theme-set" data-theme-name="light" data-theme-swatch="light"
+              title="Light" aria-label="Light theme">☀</button>
+      <button type="button" class="br-theme-swatch br-theme-swatch--blupulse"
+              data-action="theme-set" data-theme-name="blupulse" data-theme-swatch="blupulse"
+              title="BluPulse — dark navy with blue-to-purple aurora" aria-label="BluPulse theme">✦</button>
     </div>
   </div>
 </div>
