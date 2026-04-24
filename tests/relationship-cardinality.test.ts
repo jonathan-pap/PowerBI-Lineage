@@ -99,7 +99,7 @@ test("TMDL — unknown cardinality value falls back to default rather than crash
   assert.equal(r.crossFilteringBehavior, "oneDirection");
 });
 
-test("Health_and_Safety fixture — cardinality fields are populated for every relationship", () => {
+test("Health_and_Safety fixture — cardinality fields are populated for every relationship", { skip: !fs.existsSync(path.resolve(process.cwd(), "test", "Health_and_Safety.Report")) }, () => {
   // Tests compile to ESM under dist-test/, so __dirname isn't defined.
   // The fixture lives at <repoRoot>/test/Health_and_Safety.Report — we
   // trust the suite to be run from the repo root (which run-tests.mjs
