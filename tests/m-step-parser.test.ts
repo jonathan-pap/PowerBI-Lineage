@@ -113,6 +113,27 @@ test("parseMSteps — navigation detected for `Source{[Item=...]}[Data]`", () =>
   assert.equal(steps[1].summary, "Sales");
 });
 
+test("parseMSteps — Table.FromRows / #table() literal constructors are sources with their own primaryFn", () => {
+  // Power BI's "Enter Data" feature generates
+  // `Table.FromRows(Json.Document(Binary.Decompress(Binary.FromText(...))))`.
+  // The outer constructor is what the user sees; we mustn't report the
+  // inner `Json.Document` as primary just because the source-connector
+  // regex happened to match it.
+  const cases: Array<[string, string]> = [
+    ['Table.FromRows(Json.Document(Binary.FromText("abc")))', "Table.FromRows"],
+    ['Table.FromList({1,2,3}, Splitter.SplitByNothing())', "Table.FromList"],
+    ['Table.FromRecords({[a=1]})', "Table.FromRecords"],
+    ['#table({"col"}, {{"x"}, {"y"}})', "#table"],
+  ];
+  for (const [body, expectFn] of cases) {
+    const m = `let S = ${body} in S`;
+    const s = parseMSteps(m);
+    assert.equal(s.length, 1);
+    assert.equal(s[0].kind, "source");
+    assert.equal(s[0].primaryFn, expectFn);
+  }
+});
+
 test("parseMSteps — Csv.Document / Excel.Workbook / Web.Contents all classify as source", () => {
   for (const call of [
     'Csv.Document(File.Contents("data.csv"))',

@@ -635,6 +635,17 @@ const STEP_FUNCTION_MAP: Array<{ fn: string; kind: MStepKind }> = [
 const SOURCE_CONNECTORS_RX =
   /\b(Sql|Odbc|OleDb|Oracle|Snowflake|GoogleBigQuery|BigQuery|AzureStorage|AzureBlob|AzureDataLakeStorage|AzureSynapse|AmazonRedshift|AmazonAthena|AmazonS3|Databricks|Salesforce|SharePoint|Dataverse|Cds|MySql|PostgreSQL|Db2|Teradata|Vertica|Exasol|Hive|Impala|Sap|Mongo|Cosmos|Hdfs|Web|File|Csv|Excel|Json|Xml|Html|Value|AnalysisServices|Pq|PowerBI|Folder)\.(Database|Contents|DataSource|Workbook|Document|Files|Folders|Tables|NativeQuery|DataFeeds|Schemas)\s*\(/;
 
+// In-memory table constructors — Power BI's "Enter Data" feature
+// generates these with an embedded Base64 blob. They're sources in the
+// sense that they instantiate a table, so match them explicitly rather
+// than relying on the nested `Json.Document` / `Binary.FromText` inner
+// calls to trip the connector regex.
+// No leading `\b` because `#table` starts with a non-word character
+// (`#`) which breaks the word-boundary rule. Leading whitespace / start
+// / punctuation is implicit since the match is anchored at the literal
+// constructor name.
+const SOURCE_LITERAL_RX = /(Table\.FromRows|Table\.FromList|Table\.FromRecords|Table\.FromColumns|#table)\s*\(/;
+
 function unquoteMIdent(s: string): string {
   const t = s.trim();
   // #"Some Name" → Some Name
@@ -663,7 +674,14 @@ function classifyStep(body: string): { kind: MStepKind; primaryFn: string } {
   if (/\{\s*\[\s*(Schema|Item|Name|Kind)\s*=[^}]*\}\s*\[\s*(Data|Schema|Item|Name)\s*\]/.test(body)) {
     return { kind: "navigation", primaryFn: "" };
   }
-  // Source — a connector call appearing in the step body.
+  // Source — either a connector call or an in-memory constructor.
+  // Literal-constructor check runs first so `Table.FromRows(Json.Document(…))`
+  // (Power BI "Enter Data") reports its outer constructor as the
+  // primary function rather than the decode-layer `Json.Document`.
+  const literalMatch = body.match(SOURCE_LITERAL_RX);
+  if (literalMatch) {
+    return { kind: "source", primaryFn: literalMatch[1] };
+  }
   if (SOURCE_CONNECTORS_RX.test(body)) {
     const fn = firstFunctionCall(body);
     return { kind: "source", primaryFn: fn };
