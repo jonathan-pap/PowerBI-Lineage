@@ -581,8 +581,71 @@ function showPairPicker(
     }
   };
 
-  // Wire radio change events
-  document.querySelectorAll<HTMLInputElement>('input[name="br-pair-report"], input[name="br-pair-model"]')
+  /**
+   * When the Report radio changes, try to auto-select the matching
+   * Semantic Model. Three tiers, in order:
+   *   1. pbir: read <report>/definition.pbir, follow the
+   *      `datasetReference.byPath.path` pointer to a basename, and
+   *      select the matching model radio if one exists.
+   *   2. Prefix match: training.Report → training.SemanticModel.
+   *   3. No match: leave the model selection alone so the verdict
+   *      surfaces the mismatch and the user picks manually.
+   *
+   * The "(none)" Report branch skips this entirely — the user has
+   * already declared they're doing model-only mode.
+   */
+  const autoSelectModelForReport = (reportPath: string): void => {
+    if (reportPath === NONE_VALUE) return;
+    const reportName = reportPath.split("/").pop() || "";
+
+    // Tier 1: pbir pointer
+    const pbirKey = reportPath + "/definition.pbir";
+    const pbirContent = files.get(pbirKey);
+    if (pbirContent) {
+      try {
+        const parsed = JSON.parse(pbirContent) as {
+          datasetReference?: { byPath?: { path?: string } };
+        };
+        const rawPath = parsed.datasetReference?.byPath?.path;
+        if (rawPath) {
+          const expectedModel = rawPath.split(/[/\\]/).pop() || "";
+          const pbirMatch = candidates.semanticModels.find(m =>
+            (m.split("/").pop() || "").toLowerCase() === expectedModel.toLowerCase());
+          if (pbirMatch) {
+            const radio = document.querySelector<HTMLInputElement>(
+              `input[name="br-pair-model"][value="${CSS.escape(pbirMatch)}"]`,
+            );
+            if (radio) { radio.checked = true; return; }
+          }
+        }
+      } catch { /* malformed pbir — fall through to prefix */ }
+    }
+
+    // Tier 2: prefix heuristic
+    const rPrefix = reportName.replace(/\.Report$/i, "");
+    if (rPrefix) {
+      const prefixMatch = candidates.semanticModels.find(m =>
+        (m.split("/").pop() || "").replace(/\.SemanticModel$/i, "").toLowerCase() === rPrefix.toLowerCase());
+      if (prefixMatch) {
+        const radio = document.querySelector<HTMLInputElement>(
+          `input[name="br-pair-model"][value="${CSS.escape(prefixMatch)}"]`,
+        );
+        if (radio) { radio.checked = true; return; }
+      }
+    }
+    // Tier 3: no match — leave current selection, verdict will flag it
+  };
+
+  // Wire radio change events. Report-change first auto-selects the
+  // matching model, THEN refreshes the verdict. Model-change just
+  // refreshes the verdict (no symmetric auto-pick because one model
+  // can legitimately pair with multiple reports).
+  document.querySelectorAll<HTMLInputElement>('input[name="br-pair-report"]')
+    .forEach(r => r.addEventListener("change", () => {
+      autoSelectModelForReport(r.value);
+      updateVerdict();
+    }));
+  document.querySelectorAll<HTMLInputElement>('input[name="br-pair-model"]')
     .forEach(r => r.addEventListener("change", updateVerdict));
 
   updateVerdict();
