@@ -181,7 +181,9 @@ document.addEventListener('click', function(e){
     case 'orphan-toggle':   toggleOrphanSection(d.section); break;
     case 'toggle-auto-date': toggleAutoDate(); break;
     case 'card-toggle':     el.parentElement.classList.toggle('open'); break;
-    // Source Map tab
+    // Sources tab — view toggle between card view + flat map
+    case 'sources-view':    setSourcesView(d.view as "cards" | "flat"); break;
+    // Source Map (flat view inside Sources tab)
     case 'sm-sort':         sourceMapSortBy(d.key); break;
     case 'sm-filter-type':  sourceMapSetFilterType(d.type); break;
     case 'sm-export-csv':   sourceMapExportCsv(); break;
@@ -244,7 +246,6 @@ function renderTabs(){
   document.getElementById("tabs").innerHTML=[
     // Data layer
     {id:"sources",l:"Sources",b:vt.filter(function(t){return (t.partitions||[]).length>0;}).length},
-    {id:"sourcemap",l:"Source Map",b:sourceMapRowCount()},
     {id:"tables",l:"Tables",b:vt.length},
     {id:"columns",l:"Columns",b:DATA.columns.length},
     {id:"relationships",l:"Relationships",b:DATA.relationships.length},
@@ -779,6 +780,39 @@ function renderUnused(){
     (totalUnused?totalUnused+' unused items · safe to review for removal':'No unused items to review')+
     '</div></div>';
   document.getElementById("unused-content").innerHTML=h;
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Sources tab view-toggle — segmented control that swaps between the
+// original card-grouped breakdown (#sources-content) and the flat
+// row-per-column map (#sourcemap-content). Both renderers populate
+// their respective divs at bootstrap; the toggle just flips which is
+// visible. State persists across tab switches for the session.
+// ─────────────────────────────────────────────────────────────────────
+
+let sourcesView: "cards" | "flat" = "cards";
+
+function setSourcesView(v: "cards" | "flat"): void {
+  sourcesView = v;
+  const cards = document.getElementById("sources-content");
+  const flat  = document.getElementById("sourcemap-content");
+  if (cards) (cards as HTMLElement).hidden = v !== "cards";
+  if (flat)  (flat  as HTMLElement).hidden = v !== "flat";
+  renderSourcesViewToggle();
+}
+
+function renderSourcesViewToggle(): void {
+  const host = document.getElementById("sources-view-toggle");
+  if (!host) return;
+  const seg = (id: "cards" | "flat", label: string) =>
+    `<button data-action="sources-view" data-view="${id}" class="src-view-btn${sourcesView===id?" active":""}" type="button">${label}</button>`;
+  host.innerHTML =
+    `<div class="src-view-row">` +
+      `<div class="src-view-seg">${seg("cards","📋 Cards")}${seg("flat","📊 Flat map")}</div>` +
+      `<div class="src-view-hint">${sourcesView==="cards"
+        ? "Per-table partition detail — storage mode, full M expression, incremental refresh ranges."
+        : "Row-per-column flat lineage — sort, filter, CSV export. Best for impact-analysis."}</div>` +
+    `</div>`;
 }
 
 function renderSources(){
@@ -1327,7 +1361,7 @@ function downloadMarkdown(){
   setTimeout(function(){URL.revokeObjectURL(url);},1000);
 }
 
-renderSummary();renderTabs();renderMeasures();renderColumns();renderTables();renderRelationships();renderSources();renderSourceMap();renderFunctions();renderCalcGroups();renderPages();renderUnused();renderDocs();switchTab("measures");addCopyButtons();
+renderSummary();renderTabs();renderMeasures();renderColumns();renderTables();renderRelationships();renderSources();renderSourceMap();renderSourcesViewToggle();renderFunctions();renderCalcGroups();renderPages();renderUnused();renderDocs();switchTab("measures");addCopyButtons();
 
 // ─────────────────────────────────────────────────────────────────────
 // Browser-mode bootstrap hook
@@ -1439,6 +1473,7 @@ function __loadBrowserData(opts: {
   // Re-run every renderer in the same order as the initial bootstrap.
   renderSummary(); renderTabs(); renderMeasures(); renderColumns();
   renderTables(); renderRelationships(); renderSources(); renderSourceMap();
+  renderSourcesViewToggle();
   renderFunctions(); renderCalcGroups(); renderPages();
   renderUnused(); renderDocs();
   switchTab("measures");

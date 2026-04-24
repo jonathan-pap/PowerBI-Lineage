@@ -205,6 +205,17 @@
   /* Tab count pill — distinct from the shared .badge component used in table rows. */
   .tab-count{font:var(--fs-xs)/1 'JetBrains Mono',monospace;background:var(--border);color:var(--text-muted);padding:1px 6px;border-radius:var(--radius-pill);margin-left:var(--space-3);display:inline-block}
   .tab-count.warn{background:var(--clr-measure-soft);color:var(--clr-measure)}
+  /* Sources-tab view toggle — segmented Cards / Flat map control
+     sits at the top of the Sources panel and swaps which of the
+     two child views is visible. Sticky hint line below explains
+     what each view is for (data-engineer vs architect audiences). */
+  .src-view-row{display:flex;align-items:center;gap:14px;margin-bottom:14px;flex-wrap:wrap}
+  .src-view-seg{display:inline-flex;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:3px}
+  .src-view-btn{padding:6px 14px;font-size:12px;font-weight:500;font-family:inherit;background:transparent;color:var(--text-muted);border:0;border-radius:6px;cursor:pointer;transition:background .12s, color .12s}
+  .src-view-btn:hover:not(.active){color:var(--text);background:rgba(255,255,255,0.04)}
+  .src-view-btn.active{background:rgba(245,158,11,0.12);color:var(--accent);font-weight:600}
+  [data-theme="light"] .src-view-btn.active{background:rgba(245,158,11,0.18)}
+  .src-view-hint{font-size:12px;color:var(--text-dim);flex:1;min-width:200px}
   .panel{display:none}.panel.active{display:block}
   .search-row{display:flex;gap:var(--space-5);margin-bottom:var(--space-4);align-items:center;flex-wrap:wrap}
   /* Docs-tab subtitle — moved out of .search-row and onto its own
