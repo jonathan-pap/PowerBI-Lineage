@@ -19,7 +19,7 @@
  */
 
 import { __setVFS } from "./fs-shim.js";
-import { walkDirectoryHandle, isFsaSupported } from "./fsa-walk.js";
+import { walkDirectoryHandle, walkIntoMap, isFsaSupported } from "./fsa-walk.js";
 import { buildFullData } from "../data-builder.js";
 import {
   generateMarkdown,
@@ -99,8 +99,31 @@ function hideOverlay(): void {
 // Main flow
 // ─────────────────────────────────────────────────────────────────────
 
+type DirHandle = { name: string; entries(): AsyncIterable<[string, unknown]> };
+
+/**
+ * Open a native folder picker. Throws AbortError if the user
+ * cancels; throws a plain Error for any other failure. Returns
+ * the raw handle so callers can inspect `name` before walking.
+ */
+async function openDirectoryPicker(): Promise<DirHandle> {
+  const w = globalThis as unknown as {
+    showDirectoryPicker: (opts?: unknown) => Promise<DirHandle>;
+  };
+  return await w.showDirectoryPicker({ mode: "read" });
+}
+
+/**
+ * Strip the trailing ".Report" or ".SemanticModel" suffix (case-
+ * insensitive) to derive a project prefix the user can recognise
+ * (e.g., "training.Report" → "training", so we can say "now pick
+ * training.SemanticModel").
+ */
+function reportPrefix(name: string): string {
+  return name.replace(/\.(Report|SemanticModel)$/i, "");
+}
+
 async function pickAndLoad(): Promise<void> {
-  const w = globalThis as unknown as { showDirectoryPicker: (opts?: unknown) => Promise<unknown> };
   if (!isFsaSupported()) {
     setStatus(
       "Browser mode needs the File System Access API. Open this page in Chrome, Edge, or Opera.",
@@ -109,9 +132,9 @@ async function pickAndLoad(): Promise<void> {
     return;
   }
 
-  let handle: unknown;
+  let handle: DirHandle;
   try {
-    handle = await w.showDirectoryPicker({ mode: "read" });
+    handle = await openDirectoryPicker();
   } catch (e) {
     const err = e as DOMException;
     if (err.name === "AbortError") {
@@ -122,28 +145,170 @@ async function pickAndLoad(): Promise<void> {
     return;
   }
 
-  // The handle is the folder the user picked. It must CONTAIN the
-  // `.Report` and `.SemanticModel` siblings — matching how Node CLI
-  // users point at the PBIP project root.
-  const dirHandle = handle as { name: string; entries(): AsyncIterable<[string, unknown]> };
-  const pickedName = dirHandle.name;
-
+  const pickedName = handle.name;
   // eslint-disable-next-line no-console
   console.log(`[entry] Picked folder: "${pickedName}"`);
-  setStatus(`Reading ${pickedName}…`);
 
+  // ── Two-step path: user picked a `.Report` (or `.SemanticModel`)
+  // directly. The File System Access API doesn't grant sibling
+  // access, so we walk this handle now and then prompt the user to
+  // pick the matching companion folder. Both get merged into a
+  // synthetic `/virt/__pbip/…` parent so the parser's sibling-scan
+  // finds them as peers.
+  if (/\.report$/i.test(pickedName) || /\.semanticmodel$/i.test(pickedName)) {
+    await beginTwoStepPick(handle);
+    return;
+  }
+
+  // ── One-step path (current behaviour): user picked a parent
+  // containing both folders. Walk, find the .Report, proceed.
+  setStatus(`Reading ${pickedName}…`);
   let files: Map<string, string>;
   try {
-    files = await walkDirectoryHandle(dirHandle, pickedName);
+    files = await walkDirectoryHandle(handle, pickedName);
   } catch (e) {
     setStatus(`Couldn't read folder: ${(e as Error).message}`, "error");
     return;
   }
-
   // eslint-disable-next-line no-console
   console.log(`[entry] Walker read ${files.size} text files under /virt/${pickedName}`);
-
   await processFiles(files, pickedName, /*fromSample=*/ false);
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Two-step picker — handles the "pick .Report directly" flow
+// ─────────────────────────────────────────────────────────────────────
+
+/**
+ * Called after the user picks a `.Report` or `.SemanticModel` folder
+ * directly. Walks the first handle and swaps the overlay to prompt
+ * for the matching companion.
+ */
+async function beginTwoStepPick(firstHandle: DirHandle): Promise<void> {
+  const firstName = firstHandle.name;
+  const firstIsReport = /\.report$/i.test(firstName);
+  const prefix = reportPrefix(firstName);
+  const needKind = firstIsReport ? "SemanticModel" : "Report";
+  const needLabel = prefix ? `${prefix}.${needKind}` : `.${needKind}`;
+
+  setStatus(`Reading ${firstName}…`);
+  const firstFiles = new Map<string, string>();
+  try {
+    // Mount under the synthetic parent so the final VFS layout has
+    // .Report and .SemanticModel as siblings of a shared root.
+    await walkIntoMap(firstHandle, `/virt/__pbip/${firstName}`, firstFiles);
+  } catch (e) {
+    setStatus(`Couldn't read ${firstName}: ${(e as Error).message}`, "error");
+    return;
+  }
+  // eslint-disable-next-line no-console
+  console.log(`[entry] Step 1: walked ${firstFiles.size} text files under /virt/__pbip/${firstName}`);
+
+  showStep2Prompt(needLabel, firstName, firstFiles, firstIsReport);
+}
+
+/**
+ * Swap the overlay's CTA row to a single "Select <X>" button that
+ * drives step 2 of the two-step pick. Once the user picks the
+ * companion, we walk it, merge into the first map, and run
+ * processFiles against the synthetic `__pbip` root.
+ */
+function showStep2Prompt(
+  needLabel: string,
+  firstName: string,
+  firstFiles: Map<string, string>,
+  firstIsReport: boolean,
+): void {
+  const ctas = document.getElementById("br-ctas") as HTMLDivElement | null;
+  if (!ctas) {
+    setStatus("Internal error: CTA row missing. Reload the page.", "error");
+    return;
+  }
+
+  // Remember the original CTA row so we can restore it if the user
+  // cancels step 2.
+  const originalCtas = ctas.innerHTML;
+  // HTML-escape the user-controlled folder name so a cleverly-named
+  // directory can't inject markup into the overlay. `needLabel`
+  // derives from handle.name — trusted in practice (OS picker) but
+  // belt-and-braces.
+  const safeLabel = needLabel.replace(/[&<>"']/g, c => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  }[c]!));
+  ctas.innerHTML = `
+    <button id="br-step2" class="br-btn" type="button"
+            style="background:#F59E0B;color:#0B0D11;"
+            title="Pick the matching ${safeLabel} folder">
+      Select ${safeLabel}
+    </button>
+    <button id="br-cancel-step2" class="br-btn" type="button"
+            style="background:transparent;color:#CBD5E1;border:1px solid rgba(255,255,255,0.18);">
+      Cancel
+    </button>
+  `;
+  setStatus(
+    `Got ${firstName}. Now pick ${needLabel} (must be a sibling of ${firstName}).`,
+  );
+
+  const step2Btn = document.getElementById("br-step2");
+  const cancelBtn = document.getElementById("br-cancel-step2");
+
+  const restore = (): void => {
+    ctas.innerHTML = originalCtas;
+    // Re-wire original buttons (they were destroyed when we replaced innerHTML)
+    const newPick = pickButton();
+    if (newPick) newPick.addEventListener("click", () => { void pickAndLoad(); });
+    const newSample = sampleButton();
+    if (newSample) newSample.addEventListener("click", () => { void loadSample(); });
+  };
+
+  if (cancelBtn) {
+    cancelBtn.addEventListener("click", () => {
+      setStatus("Cancelled. Pick a different folder.");
+      restore();
+    });
+  }
+
+  if (step2Btn) {
+    step2Btn.addEventListener("click", async () => {
+      let second: DirHandle;
+      try {
+        second = await openDirectoryPicker();
+      } catch (e) {
+        const err = e as DOMException;
+        if (err.name === "AbortError") {
+          setStatus(`Cancelled. Click 'Select ${needLabel}' to try again.`);
+          return;
+        }
+        setStatus(`Couldn't open folder: ${err.message}`, "error");
+        return;
+      }
+
+      // Validate kind: must end with the opposite suffix from step 1
+      const wantSuffix = firstIsReport ? /\.semanticmodel$/i : /\.report$/i;
+      if (!wantSuffix.test(second.name)) {
+        setStatus(
+          `"${second.name}" isn't a ${needLabel} folder — pick a folder ending in .${firstIsReport ? "SemanticModel" : "Report"}.`,
+          "error",
+        );
+        return;
+      }
+
+      setStatus(`Reading ${second.name}…`);
+      try {
+        await walkIntoMap(second, `/virt/__pbip/${second.name}`, firstFiles);
+      } catch (e) {
+        setStatus(`Couldn't read ${second.name}: ${(e as Error).message}`, "error");
+        return;
+      }
+      // eslint-disable-next-line no-console
+      console.log(`[entry] Step 2: merged, ${firstFiles.size} total files under /virt/__pbip`);
+
+      // Hand off. The shared processFiles pipeline takes care of
+      // finding the .Report, parsing, and rendering.
+      await processFiles(firstFiles, "__pbip", /*fromSample=*/ false);
+    });
+  }
 }
 
 /**
@@ -157,19 +322,11 @@ async function processFiles(
   fromSample: boolean,
 ): Promise<void> {
   if (files.size === 0) {
-    // If the user picked a `.Report` folder directly, the walker can
-    // only see that folder's descendants — which have no TMDL/BIM
-    // (those live in the sibling `.SemanticModel`) — so the map is
-    // empty. Route to the specific self-correcting message.
-    if (/\.report$/i.test(pickedName)) {
-      setStatus(
-        `You picked "${pickedName}" directly. Browser mode needs access to its matching .SemanticModel sibling too — please go up one level and pick the parent folder that contains both.`,
-        "error",
-      );
-      return;
-    }
+    // The two-step picker handles the ".Report / .SemanticModel
+    // picked directly" case upstream, so if we arrive here with zero
+    // files it's because the user picked an unrelated folder.
     setStatus(
-      `No PBIP files found in "${pickedName}". Pick the parent folder that contains a <Name>.Report + <Name>.SemanticModel pair.`,
+      `No PBIP files found in "${pickedName}". Pick a PBIP project parent folder, or the .Report folder directly (the picker will then ask for the matching .SemanticModel).`,
       "error",
     );
     return;
@@ -187,23 +344,8 @@ async function processFiles(
   // eslint-disable-next-line no-console
   console.log(`[entry] findReportRoot("${pickedName}") →`, reportPath || "(null — no .Report folder found)");
   if (!reportPath) {
-    // Common mistake: user stepped INTO the `.Report` folder and
-    // picked that directly. The File System Access API only grants
-    // access to the picked folder + descendants — not its siblings —
-    // so the matching `.SemanticModel` is invisible to us. The CLI
-    // doesn't hit this because Node has filesystem-wide read access;
-    // the browser genuinely can't reach sideways. Surface that as a
-    // specific, self-correcting message instead of the generic
-    // "no .Report found" error.
-    if (/\.report$/i.test(pickedName)) {
-      setStatus(
-        `You picked "${pickedName}" directly. Browser mode needs access to its matching .SemanticModel sibling too — please go up one level and pick the parent folder that contains both.`,
-        "error",
-      );
-      return;
-    }
     setStatus(
-      `No .Report folder found under "${pickedName}". Pick the parent folder that contains a <Name>.Report and its matching <Name>.SemanticModel.`,
+      `No .Report folder found under "${pickedName}". Pick a PBIP project parent folder, or the .Report folder directly (the picker will then ask for the matching .SemanticModel).`,
       "error",
     );
     return;
@@ -416,6 +558,24 @@ function init(): void {
     sBtn.addEventListener("click", () => { void loadSample(); });
   }
 
+  // Repurpose the header "Re-scan" button for browser mode. The CLI
+  // version does `location.reload()` (which re-runs the server-side
+  // parser); in browser mode that would just dump the loaded
+  // dashboard and force another file pick. Instead: re-open the
+  // overlay, restore default CTAs, let the user switch report
+  // without a hard refresh.
+  const reloadBtn = document.querySelector<HTMLButtonElement>(
+    'button[data-action="reload"]',
+  );
+  if (reloadBtn) {
+    reloadBtn.textContent = "Load another";
+    reloadBtn.title = "Pick a different PBIP — keeps the current tab alive";
+    // Swap the data-action so main.ts's delegator no longer fires
+    // location.reload, and attach our own handler.
+    reloadBtn.setAttribute("data-action", "browser-switch-report");
+    reloadBtn.addEventListener("click", reopenPicker);
+  }
+
   if (!isFsaSupported()) {
     setStatus(
       "Folder picker needs the File System Access API — open this page in Chrome, Edge, or Opera. You can still click 'Try a sample' above.",
@@ -430,6 +590,31 @@ function init(): void {
   showOverlay();
   const btn = pickButton();
   if (btn) btn.addEventListener("click", () => { void pickAndLoad(); });
+}
+
+/**
+ * Bring the landing overlay back up so the user can pick a new
+ * report. Restores default CTA buttons (in case the two-step flow
+ * had swapped them mid-pick) and clears any lingering status text.
+ */
+function reopenPicker(): void {
+  // Restore the default CTA row — step-2 might have replaced it.
+  const ctas = document.getElementById("br-ctas");
+  if (ctas) {
+    ctas.innerHTML = `
+      <button id="br-pick" class="br-btn" type="button">Open folder</button>
+      <button id="br-sample" class="br-btn" type="button" title="Load the bundled sample PBIP — runs entirely in-browser">Try a sample</button>
+    `;
+    const newPick = pickButton();
+    if (newPick) {
+      if (!isFsaSupported()) newPick.disabled = true;
+      else newPick.addEventListener("click", () => { void pickAndLoad(); });
+    }
+    const newSample = sampleButton();
+    if (newSample) newSample.addEventListener("click", () => { void loadSample(); });
+  }
+  setStatus("");
+  showOverlay();
 }
 
 if (document.readyState === "loading") {

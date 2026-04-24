@@ -242,8 +242,8 @@ const overlayHtml = `
       <span><span class="br-dot"></span>15-check health audit</span>
     </div>
 
-    <div class="br-ctas">
-      <button id="br-pick" class="br-btn" type="button">Open folder</button>
+    <div id="br-ctas" class="br-ctas">
+      <button id="br-pick" class="br-btn" type="button" title="Pick either a PBIP project parent folder OR the .Report folder directly — a two-step prompt will ask for the matching .SemanticModel when needed">Open folder</button>
       <button id="br-sample" class="br-btn" type="button" title="Load the bundled sample PBIP — runs entirely in-browser">Try a sample</button>
     </div>
 

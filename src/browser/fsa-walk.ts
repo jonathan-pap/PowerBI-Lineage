@@ -76,6 +76,20 @@ export async function walkDirectoryHandle(
   return files;
 }
 
+/**
+ * Walk into an existing file map under a caller-supplied virtual
+ * root. Used by the two-step picker to mount a `.Report` handle and
+ * its matching `.SemanticModel` handle under a shared synthetic
+ * parent, so the parser's sibling-folder scan finds both as peers.
+ */
+export async function walkIntoMap(
+  handle: DirHandle,
+  virtRoot: string,
+  out: Map<string, string>,
+): Promise<void> {
+  await walk(handle, virtRoot, out);
+}
+
 async function walk(
   dir: DirHandle,
   currentPath: string,
