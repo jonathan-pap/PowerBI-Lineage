@@ -178,6 +178,169 @@ export function deadInactiveRelationships(data: FullData): ModelRelationship[] {
 }
 
 // ─────────────────────────────────────────────────────────────────────
+// Broken-reference detection — DAX that mentions symbols which no
+// longer exist in the model. Common after table/column renames or
+// measure deletions where callers were missed.
+// ─────────────────────────────────────────────────────────────────────
+
+/**
+ * Strip DAX comments + string literals so the subsequent regex scan
+ * can't be tripped up by content inside them. DAX uses C-style
+ * `/* … *\/` and `// …` comments, and `"…"` string literals with
+ * `""` as the embedded-quote escape.
+ */
+function stripDaxCommentsAndStrings(dax: string): string {
+  let out = "";
+  let i = 0;
+  while (i < dax.length) {
+    const c = dax[i];
+    if (c === "/" && dax[i + 1] === "*") {
+      const end = dax.indexOf("*/", i + 2);
+      i = end < 0 ? dax.length : end + 2;
+      continue;
+    }
+    if (c === "/" && dax[i + 1] === "/") {
+      const end = dax.indexOf("\n", i + 2);
+      i = end < 0 ? dax.length : end;
+      continue;
+    }
+    if (c === '"') {
+      i++;
+      while (i < dax.length) {
+        if (dax[i] === '"') {
+          if (dax[i + 1] === '"') { i += 2; continue; }
+          i++;
+          break;
+        }
+        i++;
+      }
+      continue;
+    }
+    out += c;
+    i++;
+  }
+  return out;
+}
+
+/**
+ * Pull every `Table[Column]` / `'Table Name'[Column]` qualified ref
+ * and every bare `[Name]` measure-or-column ref out of a DAX body.
+ *
+ * Deduplicated per expression. Bare refs are collected *after* masking
+ * qualified ones so the regex doesn't double-count the bracket on the
+ * right-hand side of `Sales[Amount]`.
+ */
+export function extractDaxRefs(dax: string): {
+  columnRefs: Array<{ table: string; column: string }>;
+  measureRefs: string[];
+} {
+  const clean = stripDaxCommentsAndStrings(dax || "");
+  const columnRefs: Array<{ table: string; column: string }> = [];
+  const measureRefs: string[] = [];
+  const seenCol = new Set<string>();
+  const seenMeas = new Set<string>();
+
+  // Qualified ref: optional 'quoted name' OR unquoted identifier (no
+  // spaces — DAX requires quoting for spaced names) directly followed
+  // by `[column]`.
+  const qualRx = /(?:'([^']+)'|([A-Za-z_]\w*))\[([^\]]*)\]/g;
+  let m: RegExpExecArray | null;
+  while ((m = qualRx.exec(clean)) !== null) {
+    const table = (m[1] || m[2] || "").trim();
+    const column = (m[3] || "").trim();
+    if (!table || !column) continue;
+    const key = `${table}|${column}`;
+    if (seenCol.has(key)) continue;
+    seenCol.add(key);
+    columnRefs.push({ table, column });
+  }
+
+  // Bare ref: `[Name]` with the preceding qualifier stripped out so we
+  // don't re-match the column side of a qualified ref.
+  const masked = clean.replace(qualRx, " ");
+  const bareRx = /\[([^\]]+)\]/g;
+  while ((m = bareRx.exec(masked)) !== null) {
+    const name = (m[1] || "").trim();
+    if (!name || seenMeas.has(name)) continue;
+    seenMeas.add(name);
+    measureRefs.push(name);
+  }
+
+  return { columnRefs, measureRefs };
+}
+
+export interface BrokenRefFinding {
+  /** Which expression contains the broken reference. */
+  where: string;
+  /** The broken ref itself, rendered as it appears in DAX. */
+  broken: string;
+  /** Human-readable reason. */
+  reason: string;
+}
+
+/**
+ * Scan every DAX-carrying expression in the model (measures, calc
+ * group items, user-defined DAX functions) and report refs that don't
+ * resolve to anything in the model.
+ *
+ * Three resolution rules:
+ *   - `Table[X]` needs the table to exist. If it does, `X` must resolve
+ *     to either a column on that table OR a measure anywhere in the
+ *     model (DAX accepts `Table[Measure]` as a qualifier too).
+ *   - Bare `[X]` must match either a measure name or a column name
+ *     somewhere in the model — row context means a column on the
+ *     iterating table is valid without qualification.
+ *   - EXTERNALMEASURE-proxy measures are skipped; their DAX body is a
+ *     string literal pointing at an external model, which we can't
+ *     cross-check without that model in hand.
+ */
+export function brokenReferences(data: FullData): BrokenRefFinding[] {
+  const tableSet = new Set(data.tables.map(t => t.name));
+  const columnSet = new Set<string>();
+  for (const c of data.columns) columnSet.add(`${c.table}|${c.name}`);
+  const measureNames = new Set(data.measures.map(m => m.name));
+  const columnNamesAny = new Set(data.columns.map(c => c.name));
+
+  const findings: BrokenRefFinding[] = [];
+
+  const check = (expression: string, where: string): void => {
+    if (!expression) return;
+    const { columnRefs, measureRefs } = extractDaxRefs(expression);
+    for (const cr of columnRefs) {
+      if (!tableSet.has(cr.table)) {
+        findings.push({ where, broken: `${cr.table}[${cr.column}]`, reason: "table not in model" });
+        continue;
+      }
+      const hasColumn = columnSet.has(`${cr.table}|${cr.column}`);
+      const hasMeasure = measureNames.has(cr.column);
+      if (!hasColumn && !hasMeasure) {
+        findings.push({ where, broken: `${cr.table}[${cr.column}]`, reason: "column not on table" });
+      }
+    }
+    for (const mr of measureRefs) {
+      if (!measureNames.has(mr) && !columnNamesAny.has(mr)) {
+        findings.push({ where, broken: `[${mr}]`, reason: "measure/column not found" });
+      }
+    }
+  };
+
+  for (const m of data.measures) {
+    if (m.externalProxy) continue;
+    check(m.daxExpression, `${m.table}[${m.name}]`);
+  }
+  for (const cg of data.calcGroups) {
+    for (const it of cg.items) {
+      check(it.expression, `${cg.name} · ${it.name}`);
+    }
+  }
+  for (const fn of data.functions) {
+    check(fn.expression, `Function ${fn.name}`);
+  }
+
+  return findings;
+}
+
+// ─────────────────────────────────────────────────────────────────────
 // Pipeline — run every check, collect Improvement entries
 // ─────────────────────────────────────────────────────────────────────
 
@@ -215,6 +378,29 @@ export function runImprovementChecks(data: FullData): Improvement[] {
       rationale: "Circular DAX dependencies cause infinite-recursion errors at query time. Each cycle below shows the path that loops back on itself.",
       items: cycles.map(c => c.join(" → ")),
       maxListed: 5,
+    });
+  }
+  const broken = brokenReferences(data);
+  if (broken.length > 0) {
+    // Group by (where) so a measure with several broken refs reports
+    // once with the refs inlined — cleaner than N duplicate rows.
+    const byWhere = new Map<string, BrokenRefFinding[]>();
+    for (const f of broken) {
+      if (!byWhere.has(f.where)) byWhere.set(f.where, []);
+      byWhere.get(f.where)!.push(f);
+    }
+    const items: string[] = [];
+    for (const [where, fs] of byWhere) {
+      const refs = fs.map(f => `${f.broken} _(${f.reason})_`).join(", ");
+      items.push(`**${esc(where)}** → ${refs}`);
+    }
+    out.push({
+      severity: "high",
+      title: `${broken.length} broken DAX reference${broken.length === 1 ? "" : "s"}`,
+      summary: `${byWhere.size} expression${byWhere.size === 1 ? "" : "s"} reference${byWhere.size === 1 ? "s" : ""} a table / column / measure that doesn't exist in the model.`,
+      rationale: "Broken references fire a runtime error the moment the measure is evaluated. Common cause: a table or column was renamed and not every caller was updated. Fix each ref below by pointing it at the new name, or remove the expression if it's dead.",
+      items,
+      maxListed: 20,
     });
   }
   const calcInDQ = userTables.filter(
