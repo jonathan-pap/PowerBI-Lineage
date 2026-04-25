@@ -28,7 +28,7 @@ Drop in a PBIP folder — get a **searchable dashboard** plus **nine Markdown do
 ## Under the hood
 
 - Runs **entirely in your browser** (File System Access API — nothing uploads) *or* as a **local CLI**
-- **Zero runtime dependencies**, MIT-licensed, 262 tests
+- **Zero runtime dependencies**, MIT-licensed, 268 tests
 - Three themes: dark · light · BluPulse — pick from the bottom of this overlay
 
 ## Running locally (CLI mode)

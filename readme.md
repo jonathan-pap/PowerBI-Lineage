@@ -9,7 +9,7 @@ Open a PBIP project folder — get a searchable dashboard plus nine Markdown doc
 </p>
 
 <p align="center">
-  <img alt="Tests 262/262" src="https://img.shields.io/badge/tests-262%2F262-22c55e?style=flat-square">
+  <img alt="Tests 268/268" src="https://img.shields.io/badge/tests-268%2F268-22c55e?style=flat-square">
   <img alt="Runtime deps 0" src="https://img.shields.io/badge/runtime%20deps-0-64748b?style=flat-square">
   <img alt="Node ≥18" src="https://img.shields.io/badge/node-%E2%89%A518-5E6A7B?style=flat-square">
 </p>
@@ -199,7 +199,7 @@ scripts/
   serve-browser.mjs    Tiny static server for local testing
 
 changelog/             Per-version release notes (one file per release)
-tests/                 node:test suites — 262 tests, zero framework deps
+tests/                 node:test suites — 268 tests, zero framework deps
 ```
 
 ## Zero runtime dependencies
@@ -240,6 +240,8 @@ Each of the nine generated MDs starts with an HTML comment suggesting its wiki p
 | Feature | ADO Wiki | GitHub | Dashboard |
 |---|---|---|---|
 | Anchors (jump-to nav, cross-references) | ✅ via `adoSlug` algorithm | ✅ | ✅ |
+| Same-doc anchor links (`[text](#anchor)`) | ✅ | ✅ | ✅ scrolls within doc |
+| Cross-doc links (`[text](DocName.md#anchor)`) | ⚠ rename `.md` → page-path on paste | ✅ if files share a folder | ✅ tab-switches + scrolls |
 | `<details>` / `<summary>` collapsibles | ✅ native | ✅ native | ✅ native |
 | Pipe tables | ✅ | ✅ | ✅ |
 | Fenced `dax` code blocks | ✅ syntax-highlighted | ✅ | ✅ syntax-highlighted |
@@ -254,4 +256,4 @@ Every anchor link is verified by `tests/md-anchors.test.ts` — drift fires CI.
 - **What shipped** — [`changelog/`](changelog/), one file per release. Full index in [`changelog/README.md`](changelog/README.md).
 - **What's parked for future design** — [`ROADMAP.md`](ROADMAP.md). Not a commitment — a scratchpad of ideas (XMLA endpoint support, broken-DAX audit, column drill-down, physical-source index, M-query steps, CSV exports) with rough scopes.
 
-Latest release: **[v0.10.0](changelog/0.10.0.md)** — Lite / Detailed MD modes: every doc now has a paste-into-wiki summary alongside the full engineer reference. Toggle in the Docs tab. Lite is 21% the size of Detailed.
+Latest release: **[v0.10.1](changelog/0.10.1.md)** — Cross-doc xref links (F13): jump from a measure to its home table, from a UDF to each calling measure, from a Sources entry to the table schema. Tab-switches inside the dashboard MD viewer; rendered as relative links on GitHub + ADO Wiki paste.

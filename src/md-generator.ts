@@ -17,6 +17,54 @@ import type { ModelRelationship, PhysicalSource } from "./model-parser.js";
 
 export type MdMode = "lite" | "detailed";
 
+/**
+ * Sibling MD files we cross-link to. Filenames match what the dashboard's
+ * Download button produces (`<reportName>-<doc>.md`), so cross-doc links
+ * resolve cleanly when users paste both files into the same folder /
+ * GitHub repo. ADO Wiki paste needs filename adjustment per the README's
+ * compatibility table.
+ *
+ * `null` doc means "same-doc anchor" — emits `[text](#anchor)`.
+ */
+export type XrefDoc =
+  | "Model"
+  | "DataDictionary"
+  | "Sources"
+  | "Measures"
+  | "Functions"
+  | "CalcGroups"
+  | "Pages"
+  | "Improvements"
+  | "Index"
+  | null;
+
+/**
+ * Cross-document link helper (F13).
+ *
+ * Returns a markdown link `[text](DocName.md#anchor)` for cross-doc
+ * references, or `[text](#anchor)` when `doc === null` (same-doc).
+ *
+ * Anchor passed through `adoSlug()` so the heading anchors line up
+ * with what the destination doc actually emits — the same algorithm
+ * that built the destination's `<h>` ids when it was rendered.
+ *
+ * Emitted form works on:
+ *   - GitHub (relative file ref + anchor) ✓
+ *   - Dashboard MD viewer — clicks intercepted by main.ts to tab-switch
+ *   - ADO Wiki — needs `.md` stripped on paste; documented in compat table
+ *
+ * This is the consolidated cross-link helper that lets Measures, DataDict,
+ * Sources, Pages, Functions, and Improvements docs reference each other
+ * without each generator re-inventing the anchor-slugging.
+ */
+function xref(text: string, doc: XrefDoc, anchor: string): string {
+  const safeText = String(text).replace(/[\[\]]/g, ""); // strip brackets that'd close the link
+  const slug = adoSlug(anchor);
+  return doc === null
+    ? `[${safeText}](#${slug})`
+    : `[${safeText}](${doc}.md#${slug})`;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // Semantic-Model Technical Specification — Markdown
 //
@@ -996,7 +1044,11 @@ export function generateMeasuresMd(data: FullData, reportName: string, mode: MdM
     for (const m of sorted) {
       const ext = m.externalProxy ? " 🔗" : "";
       const desc = (m.description || "").replace(/\s+/g, " ").substring(0, 100) + ((m.description || "").length > 100 ? "…" : "");
-      lines.push(`| ${esc(m.name)}${ext} | ${esc(m.table)} | ${m.status} | ${esc(m.formatString) || "—"} | ${esc(desc) || "—"} |`);
+      // F13: "Table" cell cross-links to the DataDictionary's per-table
+      // section so the reader can jump from "this measure lives where?"
+      // to the schema+columns of the home table in one click.
+      const tableCell = xref(m.table, "DataDictionary", m.table);
+      lines.push(`| ${esc(m.name)}${ext} | ${tableCell} | ${m.status} | ${esc(m.formatString) || "—"} | ${esc(desc) || "—"} |`);
     }
     lines.push("");
     if (data.measures.some(m => m.externalProxy)) {
@@ -1123,8 +1175,11 @@ export function generateMeasuresMd(data: FullData, reportName: string, mode: MdM
       lines.push(`<a id="${adoSlug(m.name)}"></a>`);
       lines.push(`<summary><strong>${esc(m.name)}</strong>${proxyTag(m)} <small>— ${esc(m.table)}${statusTag}</small></summary>`);
       lines.push("");
+      // F13: per-measure metadata's `**Table:**` cell cross-links to
+      // the DataDictionary section for that table — so a reader on a
+      // measure page can jump straight to the schema/columns context.
       const meta = [
-        `**Table:** ${esc(m.table)}`,
+        `**Table:** ${xref(m.table, "DataDictionary", m.table)}`,
         `**Format:** ${esc(m.formatString) || "—"}`,
         `**Status:** ${isProxy ? '<span class="badge badge--calc">🌐 External proxy</span>' : statusLabel(m.status)}`,
         `**Visuals:** ${m.usageCount}`,
@@ -1301,8 +1356,12 @@ export function generateFunctionsMd(data: FullData, reportName: string, _mode: M
       lines.push("_No measures reference this function._");
       lines.push("");
     } else {
+      // F13: chips link to Measures.md A–Z entries. Span styling is
+      // preserved on the dashboard via mdRender's HTML passthrough;
+      // ADO Wiki strips the span class and renders the inner anchor
+      // text as a normal link — same target, different style.
       const chips = [...refMeasures].sort((a, b) => a.name.localeCompare(b.name))
-        .map(m => `<span class="chip chip--measure">${esc(m.name)}</span>`)
+        .map(m => `<span class="chip chip--measure">${xref(m.name, "Measures", m.name)}</span>`)
         .join(" ");
       lines.push(chips);
       lines.push("");
@@ -1518,6 +1577,13 @@ export function generateDataDictionaryMd(data: FullData, reportName: string, mod
   };
   const orderedRoles = ROLE_ORDER.filter(r => (tablesByRole.get(r) || []).length > 0);
 
+  // F13: build the set of table names that DataDict actually emits a
+  // section for — used by the FK / Ref xref to decide whether to emit
+  // a markdown link or fall back to plain text. Auto-date tables go
+  // into a collapsed appendix without per-table headings, so an FK
+  // pointing at one needs to render plain.
+  const linkableTables = new Set<string>(userTablesSorted.map(t => t.name));
+
   // ── Jump nav — grouped by role for fast scanning ──────────────────────────
   lines.push("## Jump to");
   lines.push("");
@@ -1590,10 +1656,24 @@ export function generateDataDictionaryMd(data: FullData, reportName: string, mod
           const constraints: string[] = [];
           if (c.isKey) constraints.push(BADGE_PK);
           else if (c.isInferredPK) constraints.push(BADGE_PK_INF);
-          if (c.isFK && c.fkTarget) constraints.push(`${BADGE_FK} → ${c.fkTarget.table}[${c.fkTarget.column}]`);
+          // F13: FK → target uses xref to link to the target table's
+          // section in this same DataDict doc — but only when the
+          // target HAS a section. Auto-date and otherwise-omitted
+          // tables fall back to plain text so we don't emit broken
+          // anchors that the md-anchors test would catch.
+          if (c.isFK && c.fkTarget) {
+            const targetName = c.fkTarget.table;
+            const tablePart = linkableTables.has(targetName)
+              ? xref(targetName, null, targetName)
+              : esc(targetName);
+            constraints.push(`${BADGE_FK} → ${tablePart}[${esc(c.fkTarget.column)}]`);
+          }
           if (c.incomingRefs && c.incomingRefs.length > 0) {
             for (const r of c.incomingRefs) {
-              constraints.push(`Ref ← ${r.table}[${r.column}]${r.isActive ? "" : " (inactive)"}`);
+              const tablePart = linkableTables.has(r.table)
+                ? xref(r.table, null, r.table)
+                : esc(r.table);
+              constraints.push(`Ref ← ${tablePart}[${esc(r.column)}]${r.isActive ? "" : " (inactive)"}`);
             }
           }
           if (c.isCalculated) constraints.push(BADGE_CALC);
@@ -1850,9 +1930,14 @@ export function generateSourcesMd(data: FullData, reportName: string, mode: MdMo
     lines.push("|------|---------------|----------|-----------------|--------------|:------------:|:------:|:-----:|");
     for (const entry of data.physicalSourceIndex) {
       const s = entry.source;
+      // F13: Lite mode keeps the model-tables column as plain backticks
+      // (no DataDictionary doc to link to); Detailed cross-links each
+      // table name to its DataDict per-table section.
+      const linkOrPlain = (n: string) =>
+        isLite ? `\`${esc(n)}\`` : xref(n, "DataDictionary", n);
       const tList = entry.tables.length <= 3
-        ? entry.tables.map(n => `\`${esc(n)}\``).join(", ")
-        : `\`${esc(entry.tables[0])}\`, \`${esc(entry.tables[1])}\` (+${entry.tables.length - 2} more)`;
+        ? entry.tables.map(linkOrPlain).join(", ")
+        : `${linkOrPlain(entry.tables[0])}, ${linkOrPlain(entry.tables[1])} (+${entry.tables.length - 2} more)`;
       lines.push(`| ${esc(s.kind) || "—"} | ${esc(s.server) || "—"} | ${esc(s.database) || "—"} | ${esc(s.schema) || "—"} | ${esc(s.name) || "—"} | ${tList} | ${entry.visualCount} | ${entry.pageCount} |`);
     }
     lines.push("");
@@ -2228,10 +2313,16 @@ export function generatePagesMd(data: FullData, reportName: string, mode: MdMode
       lines.push("|--:|---|---|---|");
       p.visuals.forEach((v, i) => {
         const title = v.title && v.title !== v.type ? v.title : "_(no title)_";
+        // F13: link measure bindings to Measures.md; column bindings
+        // to DataDictionary.md (per-column anchors don't exist there
+        // but per-table do, which is the useful navigation target).
         const bindings = v.bindings && v.bindings.length > 0
           ? v.bindings.map(b => {
               const kindIcon = b.fieldType === "measure" ? "ƒ" : "▦";
-              return `${kindIcon} \`${esc(b.fieldTable)}[${esc(b.fieldName)}]\``;
+              const linked = b.fieldType === "measure"
+                ? xref(`${b.fieldTable}[${b.fieldName}]`, "Measures", b.fieldName)
+                : xref(`${b.fieldTable}[${b.fieldName}]`, "DataDictionary", b.fieldTable);
+              return `${kindIcon} ${linked}`;
             }).join("<br>")
           : "_(none)_";
         lines.push(`| ${i + 1} | \`${esc(v.type)}\` | ${esc(title)} | ${bindings} |`);
