@@ -11,6 +11,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 | Version | Date | Theme |
 |---|---|---|
+| [0.10.1](0.10.1.md) | 2026-04-25 | Cross-doc xref links (F13) across Measures / DataDict / Sources / Pages / Functions; F6 source-alias dropped after post-cleanup re-examination |
 | [0.10.0](0.10.0.md) | 2026-04-25 | Lite / Detailed MD modes — paste-into-wiki stakeholder summary alongside the engineer reference; Detailed-mode cleanup (F5/F7/F8/F9/F10 from /sc:analyze audit) |
 | [0.9.0](0.9.0.md) | 2026-04-24 | Data-engineer depth — relationship cardinality + cross-filter, Value.NativeQuery SQL preview, broken-ref detection, M-step parser (10 kinds) |
 | [0.8.1](0.8.1.md) | 2026-04-24 | Post-/sc:analyze hardening — CI bundle guard, pair-picker extraction + 37 tests, strict typing on main.ts |

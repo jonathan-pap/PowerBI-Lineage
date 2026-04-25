@@ -144,4 +144,53 @@ if (FIXTURE_EXISTS) {
     // Each letter section's contents go into a <details> block
     assert.ok(/<details><summary>/.test(det), "letter contents should be wrapped in <details>");
   });
+
+  // ────────────────────────────────────────────────────────────────────
+  // F13 — cross-doc xref linking
+  // ────────────────────────────────────────────────────────────────────
+
+  test("F13 — Detailed Sources.md physical-source index links Model tables to DataDictionary", () => {
+    const det = generateSourcesMd(data, "H", "detailed");
+    // At least one of the index rows should carry a DataDictionary.md
+    // markdown link in the Model tables column.
+    assert.ok(/\]\(DataDictionary\.md#[^)]+\)/.test(det),
+      "Detailed Sources.md should link Model tables to DataDictionary anchors");
+  });
+
+  test("F13 — Lite Sources.md physical-source index does NOT link (no DataDict in Lite)", () => {
+    const lit = generateSourcesMd(data, "H", "lite");
+    // Lite has no DataDictionary doc, so cross-links would 404.
+    assert.ok(!/\]\(DataDictionary\.md/.test(lit),
+      "Lite Sources.md must not link to DataDictionary (it's skipped in Lite)");
+  });
+
+  test("F13 — Detailed Measures.md table cells link Home Table to DataDictionary", () => {
+    const det = generateMeasuresMd(data, "H", "detailed");
+    assert.ok(/\]\(DataDictionary\.md#[^)]+\)/.test(det),
+      "Detailed Measures.md should link Home Table cells to DataDictionary anchors");
+  });
+
+  test("F13 — Detailed Pages.md visual bindings link to Measures.md / DataDictionary.md", () => {
+    const det = generatePagesMd(data, "H", "detailed");
+    // At least one binding row should carry a Measures.md link
+    assert.ok(/\]\(Measures\.md#[^)]+\)/.test(det),
+      "Detailed Pages.md should link measure bindings to Measures.md");
+  });
+
+  test("F13 — Detailed DataDictionary FK chips link to target table within same doc", () => {
+    const det = generateDataDictionaryMd(data, "H", "detailed");
+    // FK chips emit `→ [Table](#anchor)[Col]` — same-doc link form.
+    assert.ok(/→ \[[^\]]+\]\(#[^)]+\)\[/.test(det),
+      "Detailed DataDictionary FK chips should link to target table sections");
+  });
+
+  test("F13 — DataDictionary FK pointing at auto-date table falls back to plain text (no broken anchor)", () => {
+    // The H&S fixture has FKs from various tables to LocalDateTable_*
+    // auto-date tables. Those tables have no per-table sections in
+    // DataDict (collapsed appendix), so we must NOT emit links to
+    // their (non-existent) anchors.
+    const det = generateDataDictionaryMd(data, "H", "detailed");
+    assert.ok(!/\]\(#localdatetable_/i.test(det),
+      "no link should point at LocalDateTable_* anchors (no headings exist)");
+  });
 }

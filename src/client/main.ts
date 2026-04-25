@@ -234,27 +234,57 @@ const pageData=(DATA.pages||[]).slice();
 document.addEventListener('click', function(e){
   var target = e.target as HTMLElement | null;
   if (!target) return;
-  var link = target.closest && target.closest('a[href^="#"]') as HTMLAnchorElement | null;
-  if (!link) return;
-  // Only handle links inside the rendered Docs pane — elsewhere
-  // (e.g. the landing page's recent-report buttons) the default
-  // browser behaviour is correct.
-  if (!link.closest('.md-rendered')) return;
-  var href = link.getAttribute('href') || '';
+  // F13: handle BOTH same-doc (`#anchor`) and cross-doc (`Doc.md#anchor`)
+  // links inside the rendered Docs pane. Cross-doc clicks tab-switch
+  // to the named doc and then scroll to the anchor; same-doc clicks
+  // scroll within the active doc (existing behaviour preserved).
+  var anyLink = target.closest && target.closest('a[href]') as HTMLAnchorElement | null;
+  if (!anyLink) return;
+  if (!anyLink.closest('.md-rendered')) return;
+  var href = anyLink.getAttribute('href') || '';
   if (href === '#' || href.length < 2) {
-    // Placeholder links — do nothing instead of scrolling to top.
     e.preventDefault();
     return;
   }
+
+  // Cross-doc link — `Measures.md#total-sales` style. Tab-switch to
+  // the matching Docs sub-tab, then scroll to the anchor on the next
+  // tick (after renderDocs has populated the new pane).
+  const xrefMatch = href.match(/^([A-Za-z]+)\.md(?:#(.+))?$/);
+  if (xrefMatch) {
+    const docName = xrefMatch[1];
+    const anchor = xrefMatch[2] || "";
+    const docMap: Record<string, string> = {
+      Model: "model", DataDictionary: "datadict", Sources: "sources",
+      Measures: "measures", Functions: "functions", CalcGroups: "calcgroups",
+      Pages: "pages", Improvements: "improvements", Index: "index",
+    };
+    const targetTab = docMap[docName];
+    if (targetTab) {
+      e.preventDefault();
+      switchMd(targetTab);
+      if (anchor) {
+        // Defer until renderDocs has populated the new pane.
+        setTimeout(function(){
+          const pane2 = document.getElementById("md-rendered");
+          if (!pane2) return;
+          const dst2 = pane2.querySelector('#' + CSS.escape(anchor)) as HTMLElement | null
+                    || pane2.querySelector('[name="' + anchor + '"]') as HTMLElement | null;
+          if (dst2) dst2.scrollIntoView({ behavior: "smooth", block: "start" });
+        }, 50);
+      }
+      return;
+    }
+  }
+
+  // Same-doc anchor link — `#some-anchor`. Original behaviour.
+  if (href.charAt(0) !== '#') return;
   var id = href.slice(1);
-  // Only match within the Docs pane so an anchor doesn't accidentally
-  // jump to a like-named element elsewhere on the page.
-  var pane = link.closest('.md-rendered') as HTMLElement | null;
+  var pane = anyLink.closest('.md-rendered') as HTMLElement | null;
   if (!pane) return;
-  // Prefer an id= match; fall back to name= for legacy anchors.
   var dst = pane.querySelector('#' + CSS.escape(id)) as HTMLElement | null
          || pane.querySelector('[name="' + id + '"]') as HTMLElement | null;
-  if (!dst) return;   // unknown anchor — let browser default fire
+  if (!dst) return;
   e.preventDefault();
   dst.scrollIntoView({ behavior: 'smooth', block: 'start' });
 });
