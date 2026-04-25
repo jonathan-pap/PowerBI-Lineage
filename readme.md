@@ -245,15 +245,14 @@ Each of the nine generated MDs starts with an HTML comment suggesting its wiki p
 | `<details>` / `<summary>` collapsibles | ✅ native | ✅ native | ✅ native |
 | Pipe tables | ✅ | ✅ | ✅ |
 | Fenced `dax` code blocks | ✅ syntax-highlighted | ✅ | ✅ syntax-highlighted |
-| ```` ```mermaid ```` lineage / star fragments | ⛔ not emitted (parked in ROADMAP) | ⛔ not emitted | ⛔ not emitted |
+| ```` ```mermaid ```` lineage / star fragments | ⛔ not emitted (render-quality wasn't reliable across targets) | ⛔ not emitted | ⛔ not emitted |
 | Badge `<span>` styling | ⚠ CSS stripped — emoji-prefixed plain text (`🔑 PK`) | ⚠ same fallback | ✅ styled pill |
 | Auto-anchor from heading | ✅ | ✅ | ✅ |
 
 Every anchor link is verified by `tests/md-anchors.test.ts` — drift fires CI.
 
-## Changelog + roadmap
+## Changelog
 
-- **What shipped** — [`changelog/`](changelog/), one file per release. Full index in [`changelog/README.md`](changelog/README.md).
-- **What's parked for future design** — [`ROADMAP.md`](ROADMAP.md). Not a commitment — a scratchpad of ideas (XMLA endpoint support, broken-DAX audit, column drill-down, physical-source index, M-query steps, CSV exports) with rough scopes.
+[`changelog/`](changelog/) — one file per release. Full index in [`changelog/README.md`](changelog/README.md). Future direction is open-ended; feature requests welcome via Issues.
 
 Latest release: **[v0.11.1](changelog/0.11.1.md)** — Lineage tab gets a search bar with typeahead. Type any measure or column to trace it directly; no more "click an entity elsewhere to populate" empty state. External clicks still work and now sync into the search box.

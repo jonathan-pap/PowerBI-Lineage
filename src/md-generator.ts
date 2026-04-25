@@ -33,7 +33,8 @@ export type MdMode = "lite" | "detailed";
  *     as a code block) — users have to switch to the interactive
  *     Lineage / Tables tabs for graph visualisations anyway.
  *
- * Mermaid revival is parked in ROADMAP.md. The helper functions
+ * Mermaid revival is deferred until grammar reliability across all
+ * three targets is verifiable. The helper functions
  * (mermaidMeasureLineage, mermaidTableRelationships,
  * mermaidFullModelErDiagram) are retained so flipping this flag back
  * to `true` re-enables the full pipeline; tests asserting "no Mermaid

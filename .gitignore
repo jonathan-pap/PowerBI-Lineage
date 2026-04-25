@@ -33,6 +33,15 @@ sample/
 # you want to exercise the composite-model / markdown-fixture tests.
 test/
 
+# Internal-only docs — kept on disk for the maintainer but not shipped
+# to GitHub. Forward-looking design notes leak direction; parked
+# sponsorship copy isn't useful to readers; the roadmap is a working
+# scratchpad whose visibility tends to invite feature requests for
+# things that may not ship.
+ROADMAP.md
+claudedocs/
+.github/SPONSOR-DRAFT.md
+
 # Editor/agent state
 .claude/
 
