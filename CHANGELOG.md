@@ -6,6 +6,7 @@ See [`changelog/README.md`](changelog/README.md) for the full index.
 
 ## Latest releases
 
+- **[0.10.0](changelog/0.10.0.md)** — 2026-04-25 · Lite / Detailed MD modes (paste-into-wiki summary alongside the full reference) + Detailed-mode cleanup pass (F5/F7/F8/F9/F10)
 - **[0.9.0](changelog/0.9.0.md)** — 2026-04-24 · Data-engineer depth pass (relationship cardinality, Value.NativeQuery SQL, broken-ref detection, M-step parser)
 - **[0.8.1](changelog/0.8.1.md)** — 2026-04-24 · Post-/sc:analyze hardening (CI bundle guard, pair-picker extraction, strict typing)
 - **[0.8.0](changelog/0.8.0.md)** — 2026-04-24 · Browser mode, pair picker, Source Map, page-layout wireframe

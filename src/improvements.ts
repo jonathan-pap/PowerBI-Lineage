@@ -720,10 +720,19 @@ function renderImprovementItem(it: Improvement): string[] {
   return lines;
 }
 
-export function generateImprovementsMd(data: FullData, reportName: string): string {
+/** Output mode toggle. Improvements is identical in lite vs detailed
+ *  per the design doc — the audit is already paced for stakeholders.
+ *  Param accepted for symmetry with the other generators. */
+export type ImprovementsMdMode = "lite" | "detailed";
+
+export function generateImprovementsMd(data: FullData, reportName: string, _mode: ImprovementsMdMode = "detailed"): string {
   const ts = new Date().toISOString().replace("T", " ").substring(0, 16);
   const items = runImprovementChecks(data);
 
+  // Note: unlike Functions / Calc Groups, an empty Improvements list
+  // is a meaningful signal (clean model — no flags). Keep the doc
+  // emitted with the "No improvement items flagged" note instead of
+  // returning empty.
   const bySev = new Map<ImprovementSeverity, Improvement[]>();
   for (const sev of Object.keys(SEVERITY_META) as ImprovementSeverity[]) {
     bySev.set(sev, []);

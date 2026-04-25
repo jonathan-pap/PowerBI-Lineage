@@ -37,6 +37,21 @@ declare let MARKDOWN_INDEX: string;
 declare let MARKDOWN_IMPROVEMENTS: string;
 declare let MARKDOWN_CHANGELOG: string;
 declare let MARKDOWN_WELCOME: string;
+
+// Lite-mode counterparts of the per-doc markdowns. Empty string when
+// the doc isn't emitted in Lite (Data Dictionary + Index always; others
+// when underlying entity list is empty). The dashboard's Docs-tab
+// Lite/Detailed toggle picks between MARKDOWN_* and MARKDOWN_*_LITE.
+declare let MARKDOWN_LITE: string;
+declare let MARKDOWN_MEASURES_LITE: string;
+declare let MARKDOWN_FUNCTIONS_LITE: string;
+declare let MARKDOWN_CALCGROUPS_LITE: string;
+declare let MARKDOWN_DATADICT_LITE: string;
+declare let MARKDOWN_SOURCES_LITE: string;
+declare let MARKDOWN_PAGES_LITE: string;
+declare let MARKDOWN_INDEX_LITE: string;
+declare let MARKDOWN_IMPROVEMENTS_LITE: string;
+
 declare let REPORT_NAME: string;
 declare let APP_VERSION: string;
 declare let GENERATED_AT: string;

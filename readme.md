@@ -9,7 +9,7 @@ Open a PBIP project folder — get a searchable dashboard plus nine Markdown doc
 </p>
 
 <p align="center">
-  <img alt="Tests 248/248" src="https://img.shields.io/badge/tests-248%2F248-22c55e?style=flat-square">
+  <img alt="Tests 262/262" src="https://img.shields.io/badge/tests-262%2F262-22c55e?style=flat-square">
   <img alt="Runtime deps 0" src="https://img.shields.io/badge/runtime%20deps-0-64748b?style=flat-square">
   <img alt="Node ≥18" src="https://img.shields.io/badge/node-%E2%89%A518-5E6A7B?style=flat-square">
 </p>
@@ -199,7 +199,7 @@ scripts/
   serve-browser.mjs    Tiny static server for local testing
 
 changelog/             Per-version release notes (one file per release)
-tests/                 node:test suites — 248 tests, zero framework deps
+tests/                 node:test suites — 262 tests, zero framework deps
 ```
 
 ## Zero runtime dependencies
@@ -254,4 +254,4 @@ Every anchor link is verified by `tests/md-anchors.test.ts` — drift fires CI.
 - **What shipped** — [`changelog/`](changelog/), one file per release. Full index in [`changelog/README.md`](changelog/README.md).
 - **What's parked for future design** — [`ROADMAP.md`](ROADMAP.md). Not a commitment — a scratchpad of ideas (XMLA endpoint support, broken-DAX audit, column drill-down, physical-source index, M-query steps, CSV exports) with rough scopes.
 
-Latest release: **[v0.9.0](changelog/0.9.0.md)** — Data-engineer depth pass: relationship cardinality + cross-filter, `Value.NativeQuery` SQL preview, broken-reference detection in Improvements, M-step parser with 10-kind ETL classification.
+Latest release: **[v0.10.0](changelog/0.10.0.md)** — Lite / Detailed MD modes: every doc now has a paste-into-wiki summary alongside the full engineer reference. Toggle in the Docs tab. Lite is 21% the size of Detailed.
