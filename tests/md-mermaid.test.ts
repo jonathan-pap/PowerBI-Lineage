@@ -10,7 +10,8 @@
  *
  * These tests pin the current state — no Mermaid blocks anywhere in
  * the generated MDs. When the gate flips back on (Mermaid revival
- * is parked in ROADMAP.md), the assertions invert: replace the
+ * is deferred until render-quality is verifiable across all three
+ * target surfaces), the assertions invert: replace the
  * `assert.ok(!hasBlocks)` with the original `assert.ok(blocks.length >= N)`
  * structural checks. The helper functions
  * (mermaidMeasureLineage / mermaidTableRelationships /

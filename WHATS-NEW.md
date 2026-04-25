@@ -42,4 +42,4 @@ Loopback only — nothing leaves your machine. Requires Node.js 18+.
 
 ---
 
-Looking for per-release technical details? See [`changelog/`](https://github.com/jonathan-pap/PowerBI-Lineage/tree/main/changelog). Planned work lives in [`ROADMAP.md`](https://github.com/jonathan-pap/PowerBI-Lineage/blob/main/ROADMAP.md).
+Looking for per-release technical details? See [`changelog/`](https://github.com/jonathan-pap/PowerBI-Lineage/tree/main/changelog).
