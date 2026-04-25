@@ -592,10 +592,15 @@ async function processFiles(
   setStatus(`Parsed ${fullData.tables.length} tables. Rendering docs…`);
   await new Promise(r => setTimeout(r, 10));
 
-  // Generate all 9 MD exports the Docs tab reads.
+  // Generate all 9 MD exports in BOTH modes — the Docs tab toggle
+  // picks between Detailed (the rich reference) and Lite (the
+  // paste-into-wiki summary).
   let md = "", measuresMd = "", functionsMd = "", calcGroupsMd = "",
       dataDictionaryMd = "", sourcesMd = "", pagesMd = "", indexMd = "",
       improvementsMd = "";
+  let mdLite = "", measuresMdLite = "", functionsMdLite = "", calcGroupsMdLite = "",
+      dataDictionaryMdLite = "", sourcesMdLite = "", pagesMdLite = "", indexMdLite = "",
+      improvementsMdLite = "";
   try {
     md = generateMarkdown(fullData, reportName);
     measuresMd = generateMeasuresMd(fullData, reportName);
@@ -606,6 +611,15 @@ async function processFiles(
     pagesMd = generatePagesMd(fullData, reportName);
     indexMd = generateIndexMd(fullData, reportName);
     improvementsMd = generateImprovementsMd(fullData, reportName);
+    mdLite = generateMarkdown(fullData, reportName, "lite");
+    measuresMdLite = generateMeasuresMd(fullData, reportName, "lite");
+    functionsMdLite = generateFunctionsMd(fullData, reportName, "lite");
+    calcGroupsMdLite = generateCalcGroupsMd(fullData, reportName, "lite");
+    dataDictionaryMdLite = generateDataDictionaryMd(fullData, reportName, "lite");
+    sourcesMdLite = generateSourcesMd(fullData, reportName, "lite");
+    pagesMdLite = generatePagesMd(fullData, reportName, "lite");
+    indexMdLite = generateIndexMd(fullData, reportName, "lite");
+    improvementsMdLite = generateImprovementsMd(fullData, reportName, "lite");
   } catch (e) {
     // MD generation is secondary — log but don't block the dashboard.
     // eslint-disable-next-line no-console
@@ -616,6 +630,9 @@ async function processFiles(
   applyToDashboard(fullData, reportName, reportPath, {
     md, measuresMd, functionsMd, calcGroupsMd, dataDictionaryMd,
     sourcesMd, pagesMd, indexMd, improvementsMd,
+    mdLite, measuresMdLite, functionsMdLite, calcGroupsMdLite,
+    dataDictionaryMdLite, sourcesMdLite, pagesMdLite, indexMdLite,
+    improvementsMdLite,
   }, loadMode);
 
   hideOverlay();
@@ -680,6 +697,18 @@ interface MarkdownBundle {
   pagesMd: string;
   indexMd: string;
   improvementsMd: string;
+  // Lite-mode siblings. Empty string when the doc is skipped in lite
+  // (Data Dictionary + Index always; Functions / Calc Groups when
+  // their underlying entity list is empty).
+  mdLite: string;
+  measuresMdLite: string;
+  functionsMdLite: string;
+  calcGroupsMdLite: string;
+  dataDictionaryMdLite: string;
+  sourcesMdLite: string;
+  pagesMdLite: string;
+  indexMdLite: string;
+  improvementsMdLite: string;
 }
 
 /**
@@ -738,6 +767,17 @@ function applyToDashboard(
       pagesMd: md.pagesMd,
       indexMd: md.indexMd,
       improvementsMd: md.improvementsMd,
+      // Lite-mode counterparts. Empty strings signal "doc skipped in
+      // lite" — main.ts hides the corresponding tab + Lite button.
+      mdLite: md.mdLite,
+      measuresMdLite: md.measuresMdLite,
+      functionsMdLite: md.functionsMdLite,
+      calcGroupsMdLite: md.calcGroupsMdLite,
+      dataDictionaryMdLite: md.dataDictionaryMdLite,
+      sourcesMdLite: md.sourcesMdLite,
+      pagesMdLite: md.pagesMdLite,
+      indexMdLite: md.indexMdLite,
+      improvementsMdLite: md.improvementsMdLite,
     },
   });
 }

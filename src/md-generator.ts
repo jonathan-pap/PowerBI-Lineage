@@ -1,5 +1,21 @@
 import type { FullData, TableData, ModelMeasure } from "./data-builder.js";
-import type { ModelRelationship } from "./model-parser.js";
+import type { ModelRelationship, PhysicalSource } from "./model-parser.js";
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Output modes
+//
+// `detailed` — current shape, full reference for maintainers and data
+//              engineers. Every section, every per-entity drill-down,
+//              cross-doc links, raw M expressions, etc.
+// `lite`     — paste-into-a-wiki-page summary for stakeholders. Drops
+//              per-entity drill-downs, raw M, native queries, and
+//              skips Data Dictionary + Index entirely.
+//
+// Every public generator accepts `mode` defaulting to `"detailed"` for
+// back-compat with callers that haven't been updated.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export type MdMode = "lite" | "detailed";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Semantic-Model Technical Specification — Markdown
@@ -425,7 +441,8 @@ function proxyTag(m: ModelMeasure): string {
 // generateMarkdown — Technical specification for the semantic model
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export function generateMarkdown(data: FullData, reportName: string): string {
+export function generateMarkdown(data: FullData, reportName: string, mode: MdMode = "detailed"): string {
+  const isLite = mode === "lite";
   const ts = new Date().toISOString().replace("T", " ").substring(0, 16);
   const hiddenSet = new Set(data.hiddenPages || []);
   const lines: string[] = [];
@@ -509,8 +526,10 @@ export function generateMarkdown(data: FullData, reportName: string): string {
   lines.push("");
   lines.push("1. [Introduction](#1-introduction)");
   lines.push("    - 1.1 [Purpose](#11-purpose)");
-  lines.push("    - 1.2 [Conventions](#12-conventions)");
-  lines.push("    - 1.3 [Terminology](#13-terminology)");
+  if (!isLite) {
+    lines.push("    - 1.2 [Conventions](#12-conventions)");
+    lines.push("    - 1.3 [Terminology](#13-terminology)");
+  }
   lines.push("2. [Model Architecture](#2-model-architecture)");
   lines.push("    - 2.1 [Schema summary](#21-schema-summary)");
   lines.push("    - 2.2 [Tables by role](#22-tables-by-role)");
@@ -518,20 +537,26 @@ export function generateMarkdown(data: FullData, reportName: string): string {
   lines.push("    - 2.4 [Entity-relationship diagram](#24-entity-relationship-diagram)");
   lines.push("3. [Data Sources](#3-data-sources)");
   lines.push("    - 3.1 [Storage modes](#31-storage-modes)");
-  lines.push("    - 3.2 [Parameters and expressions](#32-parameters-and-expressions)");
+  if (!isLite) {
+    lines.push("    - 3.2 [Parameters and expressions](#32-parameters-and-expressions)");
+  }
   lines.push("    - 3.3 [Per-table sources](#33-per-table-sources)");
   // adoSlug collapses consecutive hyphens — "## 4. Data Dictionary — Summary"
   // (em-dash between two spaces) slugs to 4-data-dictionary-summary, not
   // 4-data-dictionary--summary. Matched here so the anchor-resolution
   // test passes on ADO Wiki.
-  lines.push("4. [Data Dictionary — Summary](#4-data-dictionary-summary)  _(full inventory: Data Dictionary Reference)_");
+  if (!isLite) {
+    lines.push("4. [Data Dictionary — Summary](#4-data-dictionary-summary)  _(full inventory: Data Dictionary Reference)_");
+  }
   lines.push("5. [Measures — Summary](#5-measures-summary)");
   lines.push("6. [Calculation Groups](#6-calculation-groups-summary)");
   lines.push("7. [User-Defined Functions](#7-user-defined-functions-summary)");
   lines.push("8. [Report Pages](#8-report-pages)");
   lines.push("");
-  lines.push("Appendix A — [Generation metadata](#appendix-a-generation-metadata)");
-  lines.push("");
+  if (!isLite) {
+    lines.push("Appendix A — [Generation metadata](#appendix-a-generation-metadata)");
+    lines.push("");
+  }
   lines.push("---");
   lines.push("");
 
@@ -550,6 +575,10 @@ export function generateMarkdown(data: FullData, reportName: string): string {
     `It reflects the current state of those folders at generation time.`);
   lines.push("");
 
+  // Lite mode skips Conventions + Terminology — those are reference
+  // material for maintainers, not stakeholders skimming the model
+  // overview. Detailed retains them.
+  if (!isLite) {
   lines.push("### 1.2 Conventions");
   lines.push("");
   lines.push("- Table **roles** are inferred from relationship topology:");
@@ -587,6 +616,7 @@ export function generateMarkdown(data: FullData, reportName: string): string {
   lines.push("| Storage mode | How a table's data is loaded: **Import** (data copied into the model), **DirectQuery** (queried live), or **Dual** (both). |");
   lines.push("| Partition | A unit of storage backing a table — most tables have one. Each partition has its own source query (M code). |");
   lines.push("");
+  } // /isLite skip — Conventions + Terminology
 
   lines.push("---");
   lines.push("");
@@ -698,59 +728,52 @@ export function generateMarkdown(data: FullData, reportName: string): string {
     lines.push("");
   }
 
-  lines.push("### 3.2 Parameters and expressions");
-  lines.push("");
-  if (data.expressions.length === 0) {
-    lines.push("_No top-level parameters or M expressions._");
+  // §3.2 Parameters and expressions — skipped in Lite (these are
+  // composite-model / parameter implementation details, not stakeholder
+  // content). Detailed retains the full table.
+  if (!isLite) {
+    lines.push("### 3.2 Parameters and expressions");
     lines.push("");
-  } else {
-    lines.push("Model-level M expressions defined in `expressions.tmdl`. Parameters are referenced by other queries via their name; `DirectQuery to AS - …` expressions back composite-model entity partitions pointing at a remote Analysis Services cube.");
-    lines.push("");
-    // Recognised AS.Database(...) expressions get a structured row
-    // (cluster + database extracted from the first two args); everything
-    // else uses the generic truncated-value form.
-    const asRx = /AnalysisServices\.Database\s*\(\s*"([^"]+)"\s*,\s*"([^"]+)"/i;
-    lines.push("| Name | Kind | Value | Description |");
-    lines.push("|------|------|-------|-------------|");
-    for (const e of data.expressions) {
-      const kind = e.kind === "parameter" ? "Parameter" : "M expression";
-      const as = e.value?.match(asRx);
-      let valCell: string;
-      if (as) {
-        // Split so the cluster URL and database name survive the 80-char
-        // truncation that was eating the second argument.
-        valCell = `**AnalysisServices.Database** · cluster \`${esc(as[1])}\` · database \`${esc(as[2])}\``;
-      } else {
-        let val = e.value || "";
-        if (val.length > 80) val = val.substring(0, 77) + "…";
-        valCell = `\`${esc(val)}\``;
+    if (data.expressions.length === 0) {
+      lines.push("_No top-level parameters or M expressions._");
+      lines.push("");
+    } else {
+      lines.push("Model-level M expressions defined in `expressions.tmdl`. Parameters are referenced by other queries via their name; `DirectQuery to AS - …` expressions back composite-model entity partitions pointing at a remote Analysis Services cube.");
+      lines.push("");
+      // Recognised AS.Database(...) expressions get a structured row
+      // (cluster + database extracted from the first two args); everything
+      // else uses the generic truncated-value form.
+      const asRx = /AnalysisServices\.Database\s*\(\s*"([^"]+)"\s*,\s*"([^"]+)"/i;
+      lines.push("| Name | Kind | Value | Description |");
+      lines.push("|------|------|-------|-------------|");
+      for (const e of data.expressions) {
+        const kind = e.kind === "parameter" ? "Parameter" : "M expression";
+        const as = e.value?.match(asRx);
+        let valCell: string;
+        if (as) {
+          // Split so the cluster URL and database name survive the 80-char
+          // truncation that was eating the second argument.
+          valCell = `**AnalysisServices.Database** · cluster \`${esc(as[1])}\` · database \`${esc(as[2])}\``;
+        } else {
+          let val = e.value || "";
+          if (val.length > 80) val = val.substring(0, 77) + "…";
+          valCell = `\`${esc(val)}\``;
+        }
+        lines.push(`| ${esc(e.name)} | ${kind} | ${valCell} | ${esc(e.description) || "—"} |`);
       }
-      lines.push(`| ${esc(e.name)} | ${kind} | ${valCell} | ${esc(e.description) || "—"} |`);
+      lines.push("");
     }
-    lines.push("");
   }
 
+  // F9: §3.3 Per-table sources removed.
+  // Sources.md owns per-table source detail (with bucket grouping, the
+  // physical-source index, and consumer counts — all richer than the
+  // flat table this section emitted). Replaced by a one-line pointer
+  // so readers know where to look.
   lines.push("### 3.3 Per-table sources");
   lines.push("");
-  // User tables only — auto-date infrastructure sources are noise.
-  const tablesWithPartitions = userTablesSorted.filter(t => t.partitions.length > 0);
-  if (tablesWithPartitions.length === 0) {
-    lines.push("_No per-table partition information found._");
-    lines.push("");
-  } else {
-    lines.push("| Table | Mode | Source type | Location |");
-    lines.push("|-------|------|-------------|----------|");
-    for (const t of tablesWithPartitions) {
-      // One row per partition. Most tables have exactly one.
-      for (const p of t.partitions) {
-        const loc = p.sourceLocation ? "`" + esc(p.sourceLocation) + "`" : "—";
-        // Plain text — see §2.2 comment for the rationale (no
-        // per-table section in this doc).
-        lines.push(`| ${esc(t.name)} | ${esc(p.mode)} | ${esc(p.sourceType)} | ${loc} |`);
-      }
-    }
-    lines.push("");
-  }
+  lines.push(`_Per-table source detail moved to the **Sources** companion document — see [Sources.md](#) for the full bucket-grouped view, the physical-source index, and downstream consumer counts._`);
+  lines.push("");
   lines.push("---");
   lines.push("");
 
@@ -758,30 +781,51 @@ export function generateMarkdown(data: FullData, reportName: string): string {
   // Full per-table column inventories, constraints, and hierarchies live in
   // the Data Dictionary Reference companion document. The main spec keeps
   // only a summary so it stays scale-invariant on big models.
+  // F8: §4 trimmed.
+  // Was a 53-row table with role / columns / hierarchies / source /
+  // description for every table — duplicating §2.2 (already shown
+  // above) and the Data Dictionary's per-table headers (the dedicated
+  // reference doc). Replaced with a tight pointer + a "biggest tables
+  // by column count" top-10 list, which gives reviewers an at-a-glance
+  // sense of where the model's surface area lives without re-stating
+  // the §2.2 content.
+  //
+  // Lite skips §4 entirely — the §2.2 table-by-role content already
+  // gave the reader the surface area, and Lite has no Data Dictionary
+  // companion doc to point at anyway.
+  if (!isLite) {
   lines.push("## 4. Data Dictionary — Summary");
   lines.push("");
   if (tables.length === 0) {
     lines.push("_No tables found._");
     lines.push("");
   } else {
-    lines.push(`**${tables.length}** table${tables.length === 1 ? "" : "s"} · **${data.totals.columnsInModel}** columns · **${tables.reduce((a, t) => a + t.hierarchies.length, 0)}** hierarch${tables.reduce((a, t) => a + t.hierarchies.length, 0) === 1 ? "y" : "ies"}. Per-table column inventories, constraints, hierarchies, and format / aggregation / sort / category metadata live in the companion **Data Dictionary Reference**.`);
+    const totalHierarchies = tables.reduce((a, t) => a + t.hierarchies.length, 0);
+    lines.push(`**${tables.length}** table${tables.length === 1 ? "" : "s"} · **${data.totals.columnsInModel}** columns · **${totalHierarchies}** hierarch${totalHierarchies === 1 ? "y" : "ies"}.`);
     lines.push("");
-    lines.push("| Table | Role | Columns | Hierarchies | Source | Description |");
-    lines.push("|-------|------|--------:|------------:|--------|-------------|");
-    tables.forEach(tbl => {
-      const role = rolesByTable.get(tbl.name) || "Disconnected";
-      const src = tbl.partitions.length > 0
-        ? `${esc(tbl.partitions[0].mode)} · ${esc(tbl.partitions[0].sourceType)}`
-        : "—";
-      // Truncate long descriptions for this summary row.
-      let desc = tbl.description ? esc(tbl.description) : "—";
-      if (desc.length > 90) desc = desc.substring(0, 87) + "…";
-      lines.push(`| ${esc(tbl.name)} | ${role} | ${tbl.columnCount} | ${tbl.hierarchies.length} | ${src} | ${desc} |`);
-    });
+    lines.push(`Per-table column inventories, constraints, hierarchies, format / aggregation / sort / category metadata, and the Mermaid star fragments live in the companion **Data Dictionary Reference**.`);
     lines.push("");
+    // Top-N biggest tables — a useful navigation hint (where's the
+    // mass of the model?) without re-listing every row.
+    const top = [...tables]
+      .filter(t => t.origin !== "auto-date")
+      .sort((a, b) => b.columnCount - a.columnCount)
+      .slice(0, 10);
+    if (top.length > 0 && top[0].columnCount > 0) {
+      lines.push(`### Largest user tables`);
+      lines.push("");
+      lines.push("| # | Table | Role | Columns | Measures |");
+      lines.push("|--:|-------|------|--------:|---------:|");
+      top.forEach((tbl, i) => {
+        const role = rolesByTable.get(tbl.name) || "Disconnected";
+        lines.push(`| ${i + 1} | ${esc(tbl.name)} | ${role} | ${tbl.columnCount} | ${tbl.measureCount} |`);
+      });
+      lines.push("");
+    }
   }
   lines.push("---");
   lines.push("");
+  } // /isLite skip — §4 Data Dictionary Summary
 
   // ── 4. Measures — Summary ─────────────────────────────────────────────────
   lines.push("## 5. Measures — Summary");
@@ -894,17 +938,21 @@ export function generateMarkdown(data: FullData, reportName: string): string {
   // strictly technical / structural.
 
   // ── Appendix ──────────────────────────────────────────────────────────────
-  lines.push("## Appendix A — Generation metadata");
-  lines.push("");
-  lines.push("| | |");
-  lines.push("|---|---|");
-  lines.push(`| Generated at | ${ts} |`);
-  lines.push(`| Generator | powerbi-lineage |`);
-  lines.push(`| Source format | TMDL or BIM (.SemanticModel) + PBIR (.Report) |`);
-  lines.push(`| Report name | ${reportName} |`);
-  lines.push("");
-  lines.push(`_This document is regenerated on every run; manual edits will be lost. Edit the source model instead._`);
-  lines.push("");
+  // Lite mode: stakeholders don't need the generation-metadata appendix
+  // (it's reference-overhead). Detailed retains it.
+  if (!isLite) {
+    lines.push("## Appendix A — Generation metadata");
+    lines.push("");
+    lines.push("| | |");
+    lines.push("|---|---|");
+    lines.push(`| Generated at | ${ts} |`);
+    lines.push(`| Generator | powerbi-lineage |`);
+    lines.push(`| Source format | TMDL or BIM (.SemanticModel) + PBIR (.Report) |`);
+    lines.push(`| Report name | ${reportName} |`);
+    lines.push("");
+    lines.push(`_This document is regenerated on every run; manual edits will be lost. Edit the source model instead._`);
+    lines.push("");
+  }
 
   return lines.join("\n");
 }
@@ -915,10 +963,48 @@ export function generateMarkdown(data: FullData, reportName: string): string {
 //   <details> per measure.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export function generateMeasuresMd(data: FullData, reportName: string): string {
+export function generateMeasuresMd(data: FullData, reportName: string, mode: MdMode = "detailed"): string {
+  const isLite = mode === "lite";
   const ts = new Date().toISOString().replace("T", " ").substring(0, 16);
   const lines: string[] = [];
   const t = data.totals;
+
+  // ── Lite-mode early branch ───────────────────────────────────────────────
+  // Lite emits a flat A–Z summary table only (Name · Table · Status ·
+  // Format · Description). No per-measure block, no DAX, no Mermaid
+  // lineage. Wiki-page-of-record for "what numbers does this report
+  // compute?" — for Detailed, scroll past the front matter to the
+  // collapsible per-measure entries.
+  if (isLite) {
+    lines.push(`<!-- Suggested ADO Wiki page name: ${reportName}/Measures -->`);
+    lines.push(`# Measures Reference`);
+    lines.push("");
+    lines.push(`## ${reportName}`);
+    lines.push("");
+    lines.push(`**${t.measuresInModel}** measures · ${t.measuresDirect} direct · ${t.measuresIndirect} indirect · ${t.measuresUnused} unused.`);
+    lines.push("");
+    lines.push(`_Lite view — for per-measure DAX dependencies, usage chips, and Mermaid lineage, switch to the Detailed mode of this doc._`);
+    lines.push("");
+    if (data.measures.length === 0) {
+      lines.push("_No measures defined in this model._");
+      lines.push("");
+      return lines.join("\n");
+    }
+    lines.push("| Name | Table | Status | Format | Description |");
+    lines.push("|------|-------|:------:|--------|-------------|");
+    const sorted = [...data.measures].sort((a, b) => a.name.localeCompare(b.name));
+    for (const m of sorted) {
+      const ext = m.externalProxy ? " 🔗" : "";
+      const desc = (m.description || "").replace(/\s+/g, " ").substring(0, 100) + ((m.description || "").length > 100 ? "…" : "");
+      lines.push(`| ${esc(m.name)}${ext} | ${esc(m.table)} | ${m.status} | ${esc(m.formatString) || "—"} | ${esc(desc) || "—"} |`);
+    }
+    lines.push("");
+    if (data.measures.some(m => m.externalProxy)) {
+      lines.push(`_🔗 marks an EXTERNALMEASURE proxy — a local re-export of a measure from a remote Analysis Services model._`);
+      lines.push("");
+    }
+    return lines.join("\n");
+  }
 
   // ── Front matter ──────────────────────────────────────────────────────────
   lines.push(`<!-- Suggested ADO Wiki page name: ${reportName}/Measures -->`);
@@ -964,35 +1050,13 @@ export function generateMeasuresMd(data: FullData, reportName: string): string {
   lines.push("---");
   lines.push("");
 
-  // ── Proxy summary (composite models only) ────────────────────────────────
-  if (proxies.length > 0) {
-    const byModel = new Map<string, ModelMeasure[]>();
-    for (const m of proxies) {
-      const model = m.externalProxy!.externalModel;
-      if (!byModel.has(model)) byModel.set(model, []);
-      byModel.get(model)!.push(m);
-    }
-    lines.push("## External proxy measures");
-    lines.push("");
-    lines.push(`${proxies.length} measure${proxies.length === 1 ? "" : "s"} are \`EXTERNALMEASURE\` proxies re-exposing measures from ${byModel.size} remote Analysis Services model${byModel.size === 1 ? "" : "s"}. Grouped by external model below; each link jumps to the measure's A–Z entry.`);
-    lines.push("");
-    for (const [model, ms] of [...byModel.entries()].sort()) {
-      ms.sort((a, b) => a.name.localeCompare(b.name));
-      const sample = ms[0].externalProxy!;
-      lines.push(`### \`${esc(model)}\`${sample.cluster ? " &nbsp; <small>" + esc(sample.cluster) + "</small>" : ""}`);
-      lines.push("");
-      lines.push("| Local name | Remote name | Type | Home table |");
-      lines.push("|------------|-------------|------|------------|");
-      for (const m of ms) {
-        const p = m.externalProxy!;
-        const remote = p.remoteName === m.name ? "_same_" : `\`${esc(p.remoteName)}\``;
-        lines.push(`| [${esc(m.name)}](#${adoSlug(m.name)}) | ${remote} | ${esc(p.type)} | ${esc(m.table)} |`);
-      }
-      lines.push("");
-    }
-    lines.push("---");
-    lines.push("");
-  }
+  // F7: External-proxy summary table removed.
+  // The same information was repeated twice — once here as a front-matter
+  // table (Local name / Remote name / Type / Home table per proxy), and
+  // again inline in each proxy's A–Z entry via the EXTERNAL badge + the
+  // "from external model X" callout. Readers were scrolling past the
+  // same measure twice. Inline badge stays; the duplicate front-matter
+  // table is gone.
 
   if (data.measures.length === 0) {
     lines.push("_No measures defined in this model._");
@@ -1143,11 +1207,17 @@ export function generateMeasuresMd(data: FullData, reportName: string): string {
 //   flat alphabetical list is easier to scan.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export function generateFunctionsMd(data: FullData, reportName: string): string {
-  const ts = new Date().toISOString().replace("T", " ").substring(0, 16);
-  const lines: string[] = [];
+export function generateFunctionsMd(data: FullData, reportName: string, _mode: MdMode = "detailed"): string {
   // Same convention as the dashboard: drop Tabular Editor's `.About` shim entries.
   const fns = [...data.functions].filter(f => !f.name.endsWith(".About")).sort((a, b) => a.name.localeCompare(b.name));
+
+  // F5: skip-when-empty in both modes. Returning empty string signals
+  // "don't emit this doc" — html-generator + dashboard hide the tab.
+  // Three placeholder docs vanishing from real outputs.
+  if (fns.length === 0) return "";
+
+  const ts = new Date().toISOString().replace("T", " ").substring(0, 16);
+  const lines: string[] = [];
 
   // ── Front matter ──────────────────────────────────────────────────────────
   lines.push(`<!-- Suggested ADO Wiki page name: ${reportName}/Functions -->`);
@@ -1155,19 +1225,6 @@ export function generateFunctionsMd(data: FullData, reportName: string): string 
   lines.push("");
   lines.push(`## ${reportName}`);
   lines.push("");
-
-  // Empty-model short-circuit — skip the entire front-matter block
-  // and how-to-read preamble. A minimal doc reads better than a
-  // full skeleton with one "no UDFs" line buried at the bottom.
-  if (fns.length === 0) {
-    lines.push("_This model defines no user-defined DAX functions._");
-    lines.push("");
-    lines.push("> User-defined functions are a Tabular 1702+ feature. When present, this document lists each one with its parameters, description, body, and the measures that reference it.");
-    lines.push("");
-    lines.push(`_Generated by powerbi-lineage · ${ts}_`);
-    lines.push("");
-    return lines.join("\n");
-  }
 
   lines.push(`> User-defined DAX functions declared in the model.`);
   lines.push("");
@@ -1280,10 +1337,15 @@ export function generateFunctionsMd(data: FullData, reportName: string): string 
 //   the same reason as functions: they ARE the definition.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export function generateCalcGroupsMd(data: FullData, reportName: string): string {
+export function generateCalcGroupsMd(data: FullData, reportName: string, _mode: MdMode = "detailed"): string {
+  const cgs = data.calcGroups;
+
+  // F5: skip-when-empty — return empty string so html-generator can
+  // omit the global and the dashboard hides the Calc Groups tab.
+  if (cgs.length === 0) return "";
+
   const ts = new Date().toISOString().replace("T", " ").substring(0, 16);
   const lines: string[] = [];
-  const cgs = data.calcGroups;
   const totalItems = cgs.reduce((acc, cg) => acc + cg.items.length, 0);
 
   // ── Front matter ──────────────────────────────────────────────────────────
@@ -1292,18 +1354,6 @@ export function generateCalcGroupsMd(data: FullData, reportName: string): string
   lines.push("");
   lines.push(`## ${reportName}`);
   lines.push("");
-
-  // Empty-model short-circuit — skip the whole front-matter and
-  // teaching block when there are no calc groups to document.
-  if (cgs.length === 0) {
-    lines.push("_This model defines no calculation groups._");
-    lines.push("");
-    lines.push("> Calculation groups are a Tabular feature that rewrites measure expressions based on a slicer-selected item — classic use is Time Intelligence (Current / YTD / Prior Year). When present, this document lists each group's items, precedence, and DAX bodies.");
-    lines.push("");
-    lines.push(`_Generated by powerbi-lineage · ${ts}_`);
-    lines.push("");
-    return lines.join("\n");
-  }
 
   lines.push(`> Tabular calculation groups — items rewrite measure expressions based on slicer selection (e.g. Current / YTD / Prior Year).`);
   lines.push("");
@@ -1388,7 +1438,10 @@ export function generateCalcGroupsMd(data: FullData, reportName: string): string
 //   spec keeps only a summary pointing here.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export function generateDataDictionaryMd(data: FullData, reportName: string): string {
+export function generateDataDictionaryMd(data: FullData, reportName: string, mode: MdMode = "detailed"): string {
+  // Lite mode skips the Data Dictionary entirely — stakeholders don't
+  // column-shop. Return empty signals "don't emit this doc".
+  if (mode === "lite") return "";
   const ts = new Date().toISOString().replace("T", " ").substring(0, 16);
   const lines: string[] = [];
 
@@ -1685,7 +1738,8 @@ function fileSubFor(t: TableData): string {
   return file || "";
 }
 
-export function generateSourcesMd(data: FullData, reportName: string): string {
+export function generateSourcesMd(data: FullData, reportName: string, mode: MdMode = "detailed"): string {
+  const isLite = mode === "lite";
   const ts = new Date().toISOString().replace("T", " ").substring(0, 16);
   const lines: string[] = [];
 
@@ -1781,11 +1835,41 @@ export function generateSourcesMd(data: FullData, reportName: string): string {
     lines.push("");
   }
 
+  // ── Physical-source index ─────────────────────────────────────────────────
+  // Aggregated external-source → model-table → visual-consumer table.
+  // Separate from §2 (which groups by connector bucket) because the
+  // index answers "what breaks if this source goes away?" rather than
+  // "which connectors do we use?". Emitted in BOTH modes — Lite keeps
+  // this as the headline "what feeds this model" summary.
+  if (data.physicalSourceIndex && data.physicalSourceIndex.length > 0) {
+    lines.push(`## Physical-source index`);
+    lines.push("");
+    lines.push(`**${data.physicalSourceIndex.length}** unique external source${data.physicalSourceIndex.length === 1 ? "" : "s"} detected from M bodies. Columns show the fully-qualified coordinate, the model tables sourced from it, and the downstream report reach.`);
+    lines.push("");
+    lines.push("| Kind | Server / Host | Database | Schema / Folder | Table / File | Model tables | Visuals | Pages |");
+    lines.push("|------|---------------|----------|-----------------|--------------|:------------:|:------:|:-----:|");
+    for (const entry of data.physicalSourceIndex) {
+      const s = entry.source;
+      const tList = entry.tables.length <= 3
+        ? entry.tables.map(n => `\`${esc(n)}\``).join(", ")
+        : `\`${esc(entry.tables[0])}\`, \`${esc(entry.tables[1])}\` (+${entry.tables.length - 2} more)`;
+      lines.push(`| ${esc(s.kind) || "—"} | ${esc(s.server) || "—"} | ${esc(s.database) || "—"} | ${esc(s.schema) || "—"} | ${esc(s.name) || "—"} | ${tList} | ${entry.visualCount} | ${entry.pageCount} |`);
+    }
+    lines.push("");
+    lines.push("---");
+    lines.push("");
+  }
+
+  // ── Detailed-only sections — Native queries, M-step breakdown, Raw M ──────
+  // Lite skips all three: they're reference-territory for engineers,
+  // not stakeholder content. Lite ends at the Physical-source index
+  // above + the special-case sections (Field Parameters, Composite
+  // proxies, Calc groups) below.
+  if (!isLite) {
+
   // ── Native queries ────────────────────────────────────────────────────────
   // Surface the actual SQL that each `Value.NativeQuery(...)` or
   // `Sql.Database(..., [Query="..."])` partition runs against its source.
-  // Power BI's folded query output is machine-generated — the hand-written
-  // SQL in the partition is what the data engineer needs to review.
   const nativeQueries: Array<{ table: string; partition: string; sql: string }> = [];
   for (const t of regularTables) {
     for (const p of t.partitions) {
@@ -1811,30 +1895,6 @@ export function generateSourcesMd(data: FullData, reportName: string): string {
       lines.push("```");
       lines.push("");
     }
-    lines.push("---");
-    lines.push("");
-  }
-
-  // ── Physical-source index ─────────────────────────────────────────────────
-  // Aggregated external-source → model-table → visual-consumer table.
-  // Separate from §2 (which groups by connector bucket) because the
-  // index answers "what breaks if this source goes away?" rather than
-  // "which connectors do we use?".
-  if (data.physicalSourceIndex && data.physicalSourceIndex.length > 0) {
-    lines.push(`## Physical-source index`);
-    lines.push("");
-    lines.push(`**${data.physicalSourceIndex.length}** unique external source${data.physicalSourceIndex.length === 1 ? "" : "s"} detected from M bodies. Columns show the fully-qualified coordinate, the model tables sourced from it, and the downstream report reach.`);
-    lines.push("");
-    lines.push("| Kind | Server / Host | Database | Schema / Folder | Table / File | Model tables | Visuals | Pages |");
-    lines.push("|------|---------------|----------|-----------------|--------------|:------------:|:------:|:-----:|");
-    for (const entry of data.physicalSourceIndex) {
-      const s = entry.source;
-      const tList = entry.tables.length <= 3
-        ? entry.tables.map(n => `\`${esc(n)}\``).join(", ")
-        : `\`${esc(entry.tables[0])}\`, \`${esc(entry.tables[1])}\` (+${entry.tables.length - 2} more)`;
-      lines.push(`| ${esc(s.kind) || "—"} | ${esc(s.server) || "—"} | ${esc(s.database) || "—"} | ${esc(s.schema) || "—"} | ${esc(s.name) || "—"} | ${tList} | ${entry.visualCount} | ${entry.pageCount} |`);
-    }
-    lines.push("");
     lines.push("---");
     lines.push("");
   }
@@ -1956,6 +2016,7 @@ export function generateSourcesMd(data: FullData, reportName: string): string {
     lines.push("---");
     lines.push("");
   }
+  } // /isLite skip — Native queries + M-step breakdown + Raw M
 
   lines.push(`## 3. Field Parameters`);
   lines.push("");
@@ -2063,7 +2124,8 @@ export function generateSourcesMd(data: FullData, reportName: string): string {
 // want "what's actually on page X" without opening Power BI.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export function generatePagesMd(data: FullData, reportName: string): string {
+export function generatePagesMd(data: FullData, reportName: string, mode: MdMode = "detailed"): string {
+  const isLite = mode === "lite";
   const ts = new Date().toISOString().replace("T", " ").substring(0, 16);
   const lines: string[] = [];
   const hiddenSet = new Set(data.hiddenPages || []);
@@ -2127,7 +2189,15 @@ export function generatePagesMd(data: FullData, reportName: string): string {
   lines.push("---");
   lines.push("");
 
-  // Visible pages — full sections
+  // Visible pages — full sections (Detailed only). Lite stops here:
+  // the page index above already gives binding counts per page.
+  if (isLite) {
+    lines.push(`_Lite view — for per-visual binding tables and the hidden-page appendix, switch to Detailed mode._`);
+    lines.push("");
+    lines.push(`_Generated by powerbi-lineage · ${ts}_`);
+    return lines.join("\n");
+  }
+
   if (visible.length > 0) {
     lines.push(`## Visible pages (${visible.length})`);
     lines.push("");
@@ -2236,7 +2306,10 @@ interface IndexEntry {
   note: string;
 }
 
-export function generateIndexMd(data: FullData, reportName: string): string {
+export function generateIndexMd(data: FullData, reportName: string, mode: MdMode = "detailed"): string {
+  // Lite mode skips the Index — glossary is reference territory and
+  // Cmd-F serves it better. Return empty signals "don't emit".
+  if (mode === "lite") return "";
   const ts = new Date().toISOString().replace("T", " ").substring(0, 16);
   const entries: IndexEntry[] = [];
 
@@ -2371,10 +2444,19 @@ export function generateIndexMd(data: FullData, reportName: string): string {
     "UDF": 3, "Calc item": 4, "Column": 5,
   };
 
+  // F10: Per-letter contents wrapped in collapsible <details> blocks,
+  // closed by default. Glossary is reference territory — readers Cmd-F
+  // or click a jump-bar entry, they don't browse top-to-bottom.
+  // Collapsing cuts perceived size from "wall of 600 lines" to "22
+  // letter buckets". Markdown `## A` heading is kept outside the
+  // <details> so jump-bar anchors still resolve cleanly on ADO Wiki
+  // (HTML headings inside <summary> don't slug the same way).
   for (const l of letters) {
     const header = l === "#" ? "Other" : l;
     const letterEntries = byLetter.get(l)!;
     lines.push(`## ${header}`);
+    lines.push("");
+    lines.push(`<details><summary><b>${letterEntries.length} entr${letterEntries.length === 1 ? "y" : "ies"}</b> &nbsp; <small>(click to expand)</small></summary>`);
     lines.push("");
 
     // Group within letter by Kind
@@ -2406,6 +2488,8 @@ export function generateIndexMd(data: FullData, reportName: string): string {
       }
       lines.push("");
     }
+    lines.push("</details>");
+    lines.push("");
   }
 
   lines.push("---");

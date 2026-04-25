@@ -581,6 +581,7 @@ const server = http.createServer((req, res) => {
     try {
       const data = buildFullData(resolved);
       const reportName = path.basename(resolved).replace(/\.Report$/, "");
+      // Detailed-mode (default) — current full reference shape.
       const modelMd = generateMarkdown(data, reportName);
       const measuresMd = generateMeasuresMd(data, reportName);
       const functionsMd = generateFunctionsMd(data, reportName);
@@ -590,6 +591,20 @@ const server = http.createServer((req, res) => {
       const pagesMd = generatePagesMd(data, reportName);
       const indexMd = generateIndexMd(data, reportName);
       const improvementsMd = generateImprovementsMd(data, reportName);
+      // Lite mode — paste-into-wiki summary shape. Data Dictionary +
+      // Index return "" (skipped); Functions / Calc Groups skip when
+      // empty in either mode (handled by the generators themselves).
+      const liteMarkdowns = {
+        markdown:               generateMarkdown(data, reportName, "lite"),
+        measuresMarkdown:       generateMeasuresMd(data, reportName, "lite"),
+        functionsMarkdown:      generateFunctionsMd(data, reportName, "lite"),
+        calcGroupsMarkdown:     generateCalcGroupsMd(data, reportName, "lite"),
+        dataDictionaryMarkdown: generateDataDictionaryMd(data, reportName, "lite"),
+        sourcesMarkdown:        generateSourcesMd(data, reportName, "lite"),
+        pagesMarkdown:          generatePagesMd(data, reportName, "lite"),
+        indexMarkdown:          generateIndexMd(data, reportName, "lite"),
+        improvementsMarkdown:   generateImprovementsMd(data, reportName, "lite"),
+      };
       // Curated welcome / dashboard-tour doc surfaced in the
       // "What's new" popup. Project-level, not per-report. Missing
       // file (e.g. global install without the repo) → empty string,
@@ -621,7 +636,7 @@ const server = http.createServer((req, res) => {
             .join("\n\n---\n\n") + "\n";
         }
       } catch { /* best-effort */ }
-      const html = generateHTML(data, reportName, modelMd, measuresMd, functionsMd, calcGroupsMd, dataDictionaryMd, APP_VERSION, sourcesMd, pagesMd, indexMd, improvementsMd, changelogMd, welcomeMd);
+      const html = generateHTML(data, reportName, modelMd, measuresMd, functionsMd, calcGroupsMd, dataDictionaryMd, APP_VERSION, sourcesMd, pagesMd, indexMd, improvementsMd, changelogMd, welcomeMd, liteMarkdowns);
       saveRecent(resolved);
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
       res.end(html);

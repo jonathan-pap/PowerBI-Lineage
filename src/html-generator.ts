@@ -191,7 +191,24 @@ export function generateHTML(
    *  new" landing-overlay popup. Project-level, not per-report.
    *  Sourced from WHATS-NEW.md at repo root; empty string triggers
    *  a fallback to the latest CHANGELOG entry on the client side. */
-  welcomeMarkdown: string = ""
+  welcomeMarkdown: string = "",
+  /** Lite-mode versions of each MD doc. Optional object — when
+   *  provided, the dashboard's Docs-tab toggle can switch between
+   *  Detailed (positional args above) and Lite (this object). Empty
+   *  strings within the object signal "skip this doc in lite mode"
+   *  (Data Dictionary + Index always skip, Functions / Calc Groups
+   *  skip when empty in either mode). */
+  liteMarkdowns: {
+    markdown?: string;
+    measuresMarkdown?: string;
+    functionsMarkdown?: string;
+    calcGroupsMarkdown?: string;
+    dataDictionaryMarkdown?: string;
+    sourcesMarkdown?: string;
+    pagesMarkdown?: string;
+    indexMarkdown?: string;
+    improvementsMarkdown?: string;
+  } = {},
 ): string {
   const ts = new Date().toISOString().replace("T", " ").substring(0, 16);
   // safeJSON escapes <, >, &, U+2028, U+2029 on top of JSON.stringify
@@ -209,6 +226,18 @@ export function generateHTML(
   const improvementsMarkdownLiteral = safeJSON(improvementsMarkdown);
   const changelogMarkdownLiteral = safeJSON(changelogMarkdown);
   const welcomeMarkdownLiteral = safeJSON(welcomeMarkdown);
+  // Lite-mode literals — same safeJSON treatment, default to "" so
+  // dashboards built without a lite payload still parse (the toggle
+  // hides Lite when the global is empty).
+  const markdownLiteLiteral = safeJSON(liteMarkdowns.markdown || "");
+  const measuresMarkdownLiteLiteral = safeJSON(liteMarkdowns.measuresMarkdown || "");
+  const functionsMarkdownLiteLiteral = safeJSON(liteMarkdowns.functionsMarkdown || "");
+  const calcGroupsMarkdownLiteLiteral = safeJSON(liteMarkdowns.calcGroupsMarkdown || "");
+  const dataDictionaryMarkdownLiteLiteral = safeJSON(liteMarkdowns.dataDictionaryMarkdown || "");
+  const sourcesMarkdownLiteLiteral = safeJSON(liteMarkdowns.sourcesMarkdown || "");
+  const pagesMarkdownLiteLiteral = safeJSON(liteMarkdowns.pagesMarkdown || "");
+  const indexMarkdownLiteLiteral = safeJSON(liteMarkdowns.indexMarkdown || "");
+  const improvementsMarkdownLiteLiteral = safeJSON(liteMarkdowns.improvementsMarkdown || "");
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -288,6 +317,10 @@ export function generateHTML(
         <button class="filter-btn" id="md-tab-index" data-action="md-tab" data-md="index">Index</button>
       </div>
       <div style="flex:1"></div>
+      <div style="display:flex;gap:4px" title="Lite — paste-into-wiki summary. Detailed — full reference for engineers.">
+        <button class="filter-btn" id="md-lite-lite" data-action="md-lite-mode" data-mode="lite">Lite</button>
+        <button class="filter-btn active" id="md-lite-detailed" data-action="md-lite-mode" data-mode="detailed">Detailed</button>
+      </div>
       <div style="display:flex;gap:4px">
         <button class="filter-btn active" id="md-mode-rendered" data-action="md-mode" data-mode="rendered">Rendered</button>
         <button class="filter-btn" id="md-mode-raw" data-action="md-mode" data-mode="raw">Raw</button>
@@ -340,6 +373,17 @@ let MARKDOWN_INDEX=${indexMarkdownLiteral};
 let MARKDOWN_IMPROVEMENTS=${improvementsMarkdownLiteral};
 let MARKDOWN_CHANGELOG=${changelogMarkdownLiteral};
 let MARKDOWN_WELCOME=${welcomeMarkdownLiteral};
+// Lite-mode globals — empty when not baked. Dashboard's Docs-tab
+// Lite/Detailed toggle picks between MARKDOWN_* and MARKDOWN_*_LITE.
+let MARKDOWN_LITE=${markdownLiteLiteral};
+let MARKDOWN_MEASURES_LITE=${measuresMarkdownLiteLiteral};
+let MARKDOWN_FUNCTIONS_LITE=${functionsMarkdownLiteLiteral};
+let MARKDOWN_CALCGROUPS_LITE=${calcGroupsMarkdownLiteLiteral};
+let MARKDOWN_DATADICT_LITE=${dataDictionaryMarkdownLiteLiteral};
+let MARKDOWN_SOURCES_LITE=${sourcesMarkdownLiteLiteral};
+let MARKDOWN_PAGES_LITE=${pagesMarkdownLiteLiteral};
+let MARKDOWN_INDEX_LITE=${indexMarkdownLiteLiteral};
+let MARKDOWN_IMPROVEMENTS_LITE=${improvementsMarkdownLiteLiteral};
 let REPORT_NAME=${safeJSON(reportName)};
 let APP_VERSION=${safeJSON(version)};
 let GENERATED_AT=${safeJSON(ts)};

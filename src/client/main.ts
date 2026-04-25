@@ -270,6 +270,7 @@ document.addEventListener('click', function(e){
     case 'tab':             switchTab(d.tab); break;
     case 'md-tab':          switchMd(d.md); break;
     case 'md-mode':         switchMdMode(d.mode); break;
+    case 'md-lite-mode':    switchMdLiteMode((d.mode as "lite" | "detailed") || "detailed"); break;
     case 'sort':            sortTable(d.table, d.key); break;
     case 'unused-filter':   toggleUnused(d.entity); break;
     case 'theme':           toggleTheme(); break;
@@ -1715,17 +1716,29 @@ function sortTable( t: any, k: any) {const s=sortState[t];if(s.key===k)s.desc=!s
 function filterTable( t: any, v: any) {searchTerms[t]=v;t==="measures"?renderMeasures():renderColumns();}
 function toggleUnused( t: any) {showUnusedOnly[t]=!showUnusedOnly[t];document.getElementById("btn-unused-"+(t==="measures"?"m":"c"))!.classList.toggle("active");t==="measures"?renderMeasures():renderColumns();}
 
+// Docs-tab Lite/Detailed mode toggle. "detailed" preserves the current
+// behaviour (the rich reference shape); "lite" emits the paste-into-
+// wiki summary version, sourced from MARKDOWN_*_LITE globals baked
+// alongside their detailed siblings. Initialised below so old dashboards
+// (built before this PR) safely fall back to detailed when *_LITE is "".
+let mdMode: "detailed" | "lite" = "detailed";
+
 function currentMd(){
+  // When Lite is selected but the *_LITE global is empty (doc skipped
+  // in lite, or older dashboard with no lite payload), fall back to
+  // the Detailed version so the user always sees content.
+  const pick = (lite: string, detailed: string) =>
+    (mdMode === "lite" && lite) ? lite : detailed;
   switch(activeMd){
-    case "datadict":     return MARKDOWN_DATADICT;
-    case "measures":     return MARKDOWN_MEASURES;
-    case "functions":    return MARKDOWN_FUNCTIONS;
-    case "calcgroups":   return MARKDOWN_CALCGROUPS;
-    case "sources":      return MARKDOWN_SOURCES;
-    case "pages":        return MARKDOWN_PAGES;
-    case "index":        return MARKDOWN_INDEX;
-    case "improvements": return MARKDOWN_IMPROVEMENTS;
-    default:             return MARKDOWN;
+    case "datadict":     return pick(MARKDOWN_DATADICT_LITE,     MARKDOWN_DATADICT);
+    case "measures":     return pick(MARKDOWN_MEASURES_LITE,     MARKDOWN_MEASURES);
+    case "functions":    return pick(MARKDOWN_FUNCTIONS_LITE,    MARKDOWN_FUNCTIONS);
+    case "calcgroups":   return pick(MARKDOWN_CALCGROUPS_LITE,   MARKDOWN_CALCGROUPS);
+    case "sources":      return pick(MARKDOWN_SOURCES_LITE,      MARKDOWN_SOURCES);
+    case "pages":        return pick(MARKDOWN_PAGES_LITE,        MARKDOWN_PAGES);
+    case "index":        return pick(MARKDOWN_INDEX_LITE,        MARKDOWN_INDEX);
+    case "improvements": return pick(MARKDOWN_IMPROVEMENTS_LITE, MARKDOWN_IMPROVEMENTS);
+    default:             return pick(MARKDOWN_LITE,              MARKDOWN);
   }
 }
 function currentMdFilename(){
@@ -1738,7 +1751,18 @@ function currentMdFilename(){
   else if(activeMd==="pages")        suffix="-pages.md";
   else if(activeMd==="index")        suffix="-index.md";
   else if(activeMd==="improvements") suffix="-improvements.md";
+  // Lite-mode downloads include "-lite" infix so users archiving
+  // both versions don't overwrite each other.
+  if (mdMode === "lite") suffix = suffix.replace(/\.md$/, "-lite.md");
   return REPORT_NAME+suffix;
+}
+
+/** Returns true when the current activeMd has a non-empty MD payload
+ *  in the current mdMode. Used by the toggle buttons to disable
+ *  themselves cleanly when a doc is skipped in lite. */
+function isCurrentMdAvailable(): boolean {
+  const md = currentMd();
+  return typeof md === "string" && md.trim().length > 0;
 }
 
 function switchMd( which: any) {
@@ -1774,6 +1798,56 @@ function switchMdMode( mode: any) {
   if(rendered)rendered.style.display=mode==="rendered"?"":"none";
   if(source)source.style.display=mode==="raw"?"":"none";
   renderDocs();
+}
+
+// Lite/Detailed mode toggle on the Docs tab. Independent of the
+// rendered/raw toggle — users can mix them (Lite + Raw to see
+// the underlying MD that'll be pasted into the wiki).
+function switchMdLiteMode(mode: "lite" | "detailed"): void {
+  mdMode = mode;
+  const litBtn = document.getElementById("md-lite-lite");
+  const detBtn = document.getElementById("md-lite-detailed");
+  if (litBtn) litBtn.classList.toggle("active", mode === "lite");
+  if (detBtn) detBtn.classList.toggle("active", mode === "detailed");
+  // The current doc may be skipped in lite — refresh tab visibility
+  // so the user can pick a doc that exists in this mode.
+  refreshMdTabVisibility();
+  renderDocs();
+}
+
+/** Hide MD-tab buttons whose corresponding global is empty in the
+ *  current mdMode. Detailed: hide only when both lite + detailed are
+ *  empty (entity-skipped Functions/CalcGroups). Lite: hide whenever
+ *  the lite global is empty (also Data Dictionary + Index always). */
+function refreshMdTabVisibility(): void {
+  const tabs: Array<{ id: string; lite: string; detailed: string }> = [
+    { id: "md-tab-model",        lite: MARKDOWN_LITE,              detailed: MARKDOWN },
+    { id: "md-tab-datadict",     lite: MARKDOWN_DATADICT_LITE,     detailed: MARKDOWN_DATADICT },
+    { id: "md-tab-measures",     lite: MARKDOWN_MEASURES_LITE,     detailed: MARKDOWN_MEASURES },
+    { id: "md-tab-functions",    lite: MARKDOWN_FUNCTIONS_LITE,    detailed: MARKDOWN_FUNCTIONS },
+    { id: "md-tab-calcgroups",   lite: MARKDOWN_CALCGROUPS_LITE,   detailed: MARKDOWN_CALCGROUPS },
+    { id: "md-tab-sources",      lite: MARKDOWN_SOURCES_LITE,      detailed: MARKDOWN_SOURCES },
+    { id: "md-tab-pages",        lite: MARKDOWN_PAGES_LITE,        detailed: MARKDOWN_PAGES },
+    { id: "md-tab-index",        lite: MARKDOWN_INDEX_LITE,        detailed: MARKDOWN_INDEX },
+    { id: "md-tab-improvements", lite: MARKDOWN_IMPROVEMENTS_LITE, detailed: MARKDOWN_IMPROVEMENTS },
+  ];
+  for (const t of tabs) {
+    const el = document.getElementById(t.id);
+    if (!el) continue;
+    const empty = mdMode === "lite" ? !t.lite : !t.detailed;
+    el.style.display = empty ? "none" : "";
+  }
+  // If the active tab just got hidden, jump to the first visible one.
+  const activeEl = document.getElementById("md-tab-" + activeMd);
+  if (activeEl && activeEl.style.display === "none") {
+    const firstVisible = tabs.find(t => {
+      const el = document.getElementById(t.id);
+      return el && el.style.display !== "none";
+    });
+    if (firstVisible) {
+      activeMd = firstVisible.id.replace("md-tab-", "");
+    }
+  }
 }
 
 function expandAllDetails(){
@@ -1853,7 +1927,7 @@ function downloadMarkdown(){
   setTimeout(function(){URL.revokeObjectURL(url);},1000);
 }
 
-renderSummary();renderTabs();renderMeasures();renderColumns();renderTables();renderRelationships();renderSources();renderSourceMap();renderSourcesViewToggle();renderFunctions();renderCalcGroups();renderPages();renderUnused();renderDocs();switchTab("measures");addCopyButtons();
+renderSummary();renderTabs();renderMeasures();renderColumns();renderTables();renderRelationships();renderSources();renderSourceMap();renderSourcesViewToggle();renderFunctions();renderCalcGroups();renderPages();renderUnused();renderDocs();refreshMdTabVisibility();switchTab("measures");addCopyButtons();
 
 // ─────────────────────────────────────────────────────────────────────
 // Print support — Ctrl-P produces a PDF covering every tab.
@@ -1916,6 +1990,18 @@ function __loadBrowserData(opts: {
     pagesMd?: string;
     indexMd?: string;
     improvementsMd?: string;
+    // Lite-mode payloads. Empty strings = "doc skipped in lite";
+    // missing fields = "old caller, no lite version" (Lite toggle
+    // gracefully falls back to Detailed in that case).
+    mdLite?: string;
+    measuresMdLite?: string;
+    functionsMdLite?: string;
+    calcGroupsMdLite?: string;
+    dataDictionaryMdLite?: string;
+    sourcesMdLite?: string;
+    pagesMdLite?: string;
+    indexMdLite?: string;
+    improvementsMdLite?: string;
   };
 }) {
   // Clear + repopulate DATA in place so closures (e.g., pageData
@@ -1940,6 +2026,7 @@ function __loadBrowserData(opts: {
   sourceMapSort = { key: "table", desc: false };
   activeMd = "model";
   mdViewMode = "rendered";
+  mdMode = "detailed";  // reset Lite/Detailed toggle on each load
 
   // pageData is `const` inside this script — can't reassign, but can
   // mutate length + refill with the new pages.
@@ -1961,6 +2048,17 @@ function __loadBrowserData(opts: {
     if (typeof opts.markdown.pagesMd === "string") MARKDOWN_PAGES = opts.markdown.pagesMd;
     if (typeof opts.markdown.indexMd === "string") MARKDOWN_INDEX = opts.markdown.indexMd;
     if (typeof opts.markdown.improvementsMd === "string") MARKDOWN_IMPROVEMENTS = opts.markdown.improvementsMd;
+    // Lite payloads — fall back to "" so older callers (no lite
+    // payload) get the safe default and the toggle just hides Lite.
+    MARKDOWN_LITE              = typeof opts.markdown.mdLite              === "string" ? opts.markdown.mdLite              : "";
+    MARKDOWN_MEASURES_LITE     = typeof opts.markdown.measuresMdLite      === "string" ? opts.markdown.measuresMdLite      : "";
+    MARKDOWN_FUNCTIONS_LITE    = typeof opts.markdown.functionsMdLite     === "string" ? opts.markdown.functionsMdLite     : "";
+    MARKDOWN_CALCGROUPS_LITE   = typeof opts.markdown.calcGroupsMdLite    === "string" ? opts.markdown.calcGroupsMdLite    : "";
+    MARKDOWN_DATADICT_LITE     = typeof opts.markdown.dataDictionaryMdLite === "string" ? opts.markdown.dataDictionaryMdLite : "";
+    MARKDOWN_SOURCES_LITE      = typeof opts.markdown.sourcesMdLite       === "string" ? opts.markdown.sourcesMdLite       : "";
+    MARKDOWN_PAGES_LITE        = typeof opts.markdown.pagesMdLite         === "string" ? opts.markdown.pagesMdLite         : "";
+    MARKDOWN_INDEX_LITE        = typeof opts.markdown.indexMdLite         === "string" ? opts.markdown.indexMdLite         : "";
+    MARKDOWN_IMPROVEMENTS_LITE = typeof opts.markdown.improvementsMdLite  === "string" ? opts.markdown.improvementsMdLite  : "";
   }
 
   // Refresh every piece of chrome baked at build time that shows the
@@ -2009,6 +2107,17 @@ function __loadBrowserData(opts: {
   renderSourcesViewToggle();
   renderFunctions(); renderCalcGroups(); renderPages();
   renderUnused(); renderDocs();
+  refreshMdTabVisibility();
+  // Reset the Lite/Detailed toggle button state to match `mdMode`.
+  // Cast deliberately — TS narrows mdMode after the "detailed"
+  // assignment above, but switchMdLiteMode could have been called
+  // since (it can't have inside __loadBrowserData itself, but we keep
+  // the symmetric reset for clarity).
+  const currentMode = mdMode as "lite" | "detailed";
+  const litBtn = document.getElementById("md-lite-lite");
+  const detBtn = document.getElementById("md-lite-detailed");
+  if (litBtn) litBtn.classList.toggle("active", currentMode === "lite");
+  if (detBtn) detBtn.classList.toggle("active", currentMode === "detailed");
   switchTab("measures");
   addCopyButtons();
 };
