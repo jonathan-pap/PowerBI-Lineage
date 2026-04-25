@@ -256,4 +256,4 @@ Every anchor link is verified by `tests/md-anchors.test.ts` — drift fires CI.
 - **What shipped** — [`changelog/`](changelog/), one file per release. Full index in [`changelog/README.md`](changelog/README.md).
 - **What's parked for future design** — [`ROADMAP.md`](ROADMAP.md). Not a commitment — a scratchpad of ideas (XMLA endpoint support, broken-DAX audit, column drill-down, physical-source index, M-query steps, CSV exports) with rough scopes.
 
-Latest release: **[v0.11.0](changelog/0.11.0.md)** — Mermaid emission dropped from generated MDs. Render-quality across GitHub / ADO Wiki / dashboard never stabilised; the textual Depends-on / FK / Relationship-inventory fallbacks already cover the same data. Revival parked in `ROADMAP.md` §5.
+Latest release: **[v0.11.1](changelog/0.11.1.md)** — Lineage tab gets a search bar with typeahead. Type any measure or column to trace it directly; no more "click an entity elsewhere to populate" empty state. External clicks still work and now sync into the search box.

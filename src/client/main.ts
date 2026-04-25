@@ -345,6 +345,20 @@ document.addEventListener('input', function(e){
   var d = el.dataset;
   switch (a) {
     case 'filter': filterTable(d.entity, el.value); break;
+    case 'lineage-search': renderLineageSearchResults(el.value); break;
+  }
+});
+
+// Hide the lineage typeahead dropdown when the user clicks anywhere
+// outside it. Without this the dropdown stays visible after the user
+// has moved on, partially obscuring the lineage canvas.
+document.addEventListener('click', function(e){
+  const target = e.target as HTMLElement | null;
+  if (!target) return;
+  const inSearch = target.closest('#lineage-search-row');
+  if (!inSearch) {
+    const results = document.getElementById("lineage-search-results");
+    if (results) results.style.display = "none";
   }
 });
 
@@ -425,8 +439,24 @@ function switchTab( id: any) {
   activeTab=id;renderTabs();
   document.querySelectorAll(".panel").forEach((p: any) =>p.classList.remove("active"));
   document.getElementById("panel-"+id)!.classList.add("active");
-  if(id==="lineage"&&!document.getElementById("lineage-content")!.innerHTML.trim())
-    document.getElementById("lineage-content")!.innerHTML='<div style="text-align:center;padding:60px 20px;color:var(--text-faint)"><div style="font-size:16px;margin-bottom:8px">Click a measure or column name to view its lineage</div><div style="font-size:12px">Go to the Measures or Columns tab and click any field name</div></div>';
+  if (id === "lineage") {
+    // Lineage tab is search-driven. Show the search box at the top
+    // of the panel + a softer prompt in the content area when nothing
+    // is selected yet. External clicks (Measures / Columns / Pages /
+    // Tables / Calc-groups) still call navigateLineage() which
+    // populates the content directly.
+    const content = document.getElementById("lineage-content")!;
+    if (!content.innerHTML.trim()) {
+      content.innerHTML = '<div style="text-align:center;padding:48px 20px;color:var(--text-faint)">'
+        + '<div style="font-size:14px">Type above to search any measure or column,</div>'
+        + '<div style="font-size:14px;margin-top:4px">or click an entity in <strong>Measures</strong> · <strong>Columns</strong> · <strong>Pages</strong> · <strong>Tables</strong> to trace it.</div>'
+        + '</div>';
+    }
+    // Focus the search input on entry — single keystroke from tab-switch
+    // to typing the entity name.
+    const input = document.getElementById("lineage-search-input") as HTMLInputElement | null;
+    if (input) setTimeout(function(){ input.focus(); }, 0);
+  }
   // Functions + Calc Groups tabs display DAX bodies. Running through
   // addCopyButtons() here (which also highlights) colourises any new
   // blocks that weren't highlighted at initial render.
@@ -474,11 +504,100 @@ function renderColumns(){
     sortIndicator(sortState.columns));
 }
 
+/** Lineage typeahead result count — keep small so the dropdown
+ *  stays scannable; users can refine the query for more matches. */
+const LINEAGE_SEARCH_MAX = 12;
+
+/**
+ * Lineage tab's search-driven entry point. Replaces the old passive
+ * "click an entity elsewhere to populate" empty state — the user can
+ * now type a measure / column name and pick from the typeahead
+ * directly. External clicks still call navigateLineage() and continue
+ * to work; we sync the search input's value so the user can see what
+ * lineage they're looking at without scrolling up.
+ */
+function renderLineageSearchResults(query: string): void {
+  const host = document.getElementById("lineage-search-results");
+  if (!host) return;
+  const q = (query || "").toLowerCase().trim();
+  if (q.length === 0) {
+    host.style.display = "none";
+    host.innerHTML = "";
+    return;
+  }
+  type SearchHit = { kind: "measure" | "column"; name: string; table: string; status: string };
+  const hits: SearchHit[] = [];
+  for (const m of (DATA.measures || []) as any[]) {
+    if (m.name.toLowerCase().includes(q)) {
+      hits.push({ kind: "measure", name: m.name, table: m.table, status: m.status });
+      if (hits.length >= LINEAGE_SEARCH_MAX * 2) break; // gather extras for ranking
+    }
+  }
+  for (const c of (DATA.columns || []) as any[]) {
+    if (c.name.toLowerCase().includes(q)) {
+      hits.push({ kind: "column", name: c.name, table: c.table, status: c.status });
+      if (hits.length >= LINEAGE_SEARCH_MAX * 4) break;
+    }
+  }
+  // Rank: prefix-match wins over substring, exact wins over both.
+  hits.sort(function(a, b){
+    const an = a.name.toLowerCase(), bn = b.name.toLowerCase();
+    const ax = an === q ? 0 : an.startsWith(q) ? 1 : 2;
+    const bx = bn === q ? 0 : bn.startsWith(q) ? 1 : 2;
+    if (ax !== bx) return ax - bx;
+    // Stable tiebreaker: measures first (they're typically what users search for)
+    if (a.kind !== b.kind) return a.kind === "measure" ? -1 : 1;
+    return a.name.localeCompare(b.name);
+  });
+  const top = hits.slice(0, LINEAGE_SEARCH_MAX);
+  if (top.length === 0) {
+    host.style.display = "block";
+    host.innerHTML = '<div style="padding:14px;color:var(--text-faint);font-size:13px">No measures or columns match <strong>' + escHtml(query) + '</strong>.</div>';
+    return;
+  }
+  // Template literals throughout — string concatenation that splices
+  // around `data-type="` / `data-name="` patterns trips the XSS-fuzz
+  // structural test which scans HTML for raw single-quotes in those
+  // attributes (the test sees the JS source literally inside the
+  // inline script). Templates keep the single-quotes outside the
+  // attribute syntax.
+  const rows = top.map(function(h){
+    const kindChip = h.kind === "measure"
+      ? `<span class="dep-chip" style="background:rgba(245,158,11,.12);color:var(--clr-measure);border-color:rgba(245,158,11,.25);font-size:10px;padding:1px 6px">ƒ measure</span>`
+      : `<span class="dep-chip" style="background:rgba(59,130,246,.12);color:var(--clr-column);border-color:rgba(59,130,246,.25);font-size:10px;padding:1px 6px">▦ column</span>`;
+    const statusBadge = h.status === "unused"
+      ? ` <span class="badge badge--unused" style="font-size:9px">⚠ UNUSED</span>`
+      : h.status === "indirect"
+        ? ` <span class="badge badge--indirect" style="font-size:9px">↻ INDIRECT</span>`
+        : ``;
+    return `<div class="lineage-search-hit" data-action="lineage" data-type="${escAttr(h.kind)}" data-name="${escAttr(h.name)}" `
+      + `style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border-subtle);display:flex;align-items:center;gap:8px">`
+      + kindChip
+      + `<span style="font-weight:500;color:var(--text)">${escHtml(h.name)}</span>`
+      + statusBadge
+      + `<span style="margin-left:auto;color:var(--text-muted);font-size:11px">${escHtml(h.table)}</span>`
+      + `</div>`;
+  }).join("");
+  const overflow = hits.length > LINEAGE_SEARCH_MAX
+    ? `<div style="padding:6px 12px;color:var(--text-faint);font-size:11px;text-align:center">+ ${hits.length - LINEAGE_SEARCH_MAX} more — refine to narrow.</div>`
+    : ``;
+  host.style.display = "block";
+  host.innerHTML = rows + overflow;
+}
+
 function navigateLineage( type: any, name: any) {
   lastTab=activeTab!=="lineage"?activeTab:lastTab;
   activeTab="lineage";renderTabs();
   document.querySelectorAll(".panel").forEach((p: any) =>p.classList.remove("active"));
   document.getElementById("panel-lineage")!.classList.add("active");
+  // Sync the lineage-tab search input + hide the typeahead. External
+  // clicks (from Measures / Columns / Pages chips) land here too;
+  // showing the entity name in the search box gives the user a clear
+  // "this is what I'm looking at" signal at the top of the panel.
+  const lineageInput = document.getElementById("lineage-search-input") as HTMLInputElement | null;
+  if (lineageInput) lineageInput.value = name;
+  const lineageResults = document.getElementById("lineage-search-results");
+  if (lineageResults) { lineageResults.style.display = "none"; lineageResults.innerHTML = ""; }
 
   const el=document.getElementById("lineage-content")!;
   const backTab=type==="column"?"columns":"measures";

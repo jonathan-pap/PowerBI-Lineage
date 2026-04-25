@@ -301,7 +301,13 @@ export function generateHTML(
   <div class="panel" id="panel-functions"><div id="functions-content"></div></div>
   <div class="panel" id="panel-calcgroups"><div id="calcgroups-content"></div></div>
   <div class="panel" id="panel-pages"><div id="pages-content"></div></div>
-  <div class="panel" id="panel-lineage"><div id="lineage-content"></div></div>
+  <div class="panel" id="panel-lineage">
+    <div id="lineage-search-row" class="search-row" style="position:relative">
+      <input class="search-input" id="lineage-search-input" placeholder="Search any measure or column to trace its lineage…" data-action="lineage-search" autocomplete="off">
+      <div id="lineage-search-results" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:20;max-height:340px;overflow-y:auto;background:var(--surface);border:1px solid var(--border);border-top:none;border-radius:0 0 var(--radius-md) var(--radius-md);margin-top:-1px"></div>
+    </div>
+    <div id="lineage-content"></div>
+  </div>
   <div class="panel" id="panel-unused"><div id="unused-content"></div></div>
   <div class="panel" id="panel-docs">
     <div class="search-row">
