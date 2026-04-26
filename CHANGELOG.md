@@ -9,7 +9,7 @@ See [`changelog/README.md`](changelog/README.md) for the full index.
 - **[0.11.3](changelog/0.11.3.md)** — 2026-04-26 · Mobile responsive — landing + tabs + primary tabs cleaned up for phone viewports; sample loads cleanly from a LinkedIn-arriving mobile click
 - **[0.11.2](changelog/0.11.2.md)** — 2026-04-25 · Lineage typeahead — fix empty-state bleed-through on translucent themes; hide placeholder while typing
 - **[0.11.1](changelog/0.11.1.md)** — 2026-04-25 · Lineage tab gets a search bar — type any measure / column to trace it; no more "click elsewhere to populate" placeholder
-- **[0.11.0](changelog/0.11.0.md)** — 2026-04-25 · Drop Mermaid from generated MDs (parked for revival in ROADMAP) — render-quality across GitHub / ADO Wiki / dashboard never stabilised; textual fallbacks already cover the same data
+- **[0.11.0](changelog/0.11.0.md)** — 2026-04-25 · Drop Mermaid from generated MDs — render-quality across GitHub / ADO Wiki / dashboard never stabilised; textual fallbacks already cover the same data
 - **[0.10.2](changelog/0.10.2.md)** — 2026-04-25 · erDiagram render fix (underscore-leader entity names broke GitHub Mermaid parsing) + Measures Depends-on chips now linked
 - **[0.10.1](changelog/0.10.1.md)** — 2026-04-25 · Cross-doc links (F13) — Measures ↔ DataDict ↔ Sources ↔ Pages ↔ Functions; F6 dropped after re-examination
 - **[0.10.0](changelog/0.10.0.md)** — 2026-04-25 · Lite / Detailed MD modes (paste-into-wiki summary alongside the full reference) + Detailed-mode cleanup pass (F5/F7/F8/F9/F10)

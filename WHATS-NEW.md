@@ -15,7 +15,7 @@ Drop in a PBIP folder — get a **searchable dashboard** plus **nine Markdown do
 
 ### Report
 - **Pages** — each page's layout wireframe (scaled SVG showing real visual positions) + per-visual field bindings
-- **Lineage** — click any measure or column → upstream dependencies + source tables + downstream visuals in one view
+- **Lineage** — search any measure or column from the tab itself, or click any entity in Measures / Columns / Pages / Tables. Shows upstream dependencies + source tables + downstream visuals in one view.
 
 ### Analysis
 - **Unused** — orphan measures, dead-chain measures, indirect-use detection
