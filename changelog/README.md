@@ -14,7 +14,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 | [0.11.3](0.11.3.md) | 2026-04-26 | Mobile responsive — landing card + tabs row + primary tabs + modals clean up at ≤720 / ≤480 |
 | [0.11.2](0.11.2.md) | 2026-04-25 | Lineage typeahead bleed-through fix — solid dropdown background + hide placeholder while typing |
 | [0.11.1](0.11.1.md) | 2026-04-25 | Lineage tab is search-driven — typeahead replaces the passive empty state; external clicks still work |
-| [0.11.0](0.11.0.md) | 2026-04-25 | Drop Mermaid from generated MDs (parked for revival in ROADMAP §5) — `EMIT_MERMAID = false`; helpers retained for one-line revival |
+| [0.11.0](0.11.0.md) | 2026-04-25 | Drop Mermaid from generated MDs — render-quality across GitHub / ADO Wiki / dashboard never stabilised; `EMIT_MERMAID = false`; helpers retained for one-line revival |
 | [0.10.2](0.10.2.md) | 2026-04-25 | erDiagram render fix (underscore-leader entity names broke Mermaid parsing on GitHub) + Measures Depends-on chips linked |
 | [0.10.1](0.10.1.md) | 2026-04-25 | Cross-doc xref links (F13) across Measures / DataDict / Sources / Pages / Functions; F6 source-alias dropped after post-cleanup re-examination |
 | [0.10.0](0.10.0.md) | 2026-04-25 | Lite / Detailed MD modes — paste-into-wiki stakeholder summary alongside the engineer reference; Detailed-mode cleanup (F5/F7/F8/F9/F10 from /sc:analyze audit) |

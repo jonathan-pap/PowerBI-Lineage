@@ -20,9 +20,9 @@ Open a PBIP project folder — get a searchable dashboard plus nine Markdown doc
 
 ## What you get
 
-- **Interactive dashboard** — 10 tabs covering measures, columns, tables, relationships, sources, calc groups, UDFs, pages with layout wireframe, unused/orphan analysis, lineage click-through
-- **Nine Markdown docs** auto-generated, paste-ready for ADO Wiki or GitHub
-- **Improvements audit** — 16 checks across five severity tiers (high / medium / low / info / strengths)
+- **Interactive dashboard** — 11 tabs: Sources, Tables, Columns, Relationships, Measures, Calc Groups, Functions, Pages (with layout wireframe), Unused, Lineage (search-driven), Docs
+- **Wiki-ready Markdown** — up to 9 generated docs, paste-ready for ADO Wiki or GitHub. **Lite / Detailed toggle** per doc — paste-into-wiki summary for stakeholders, full reference for engineers. Cross-doc links between them resolve in the dashboard, on GitHub, and on ADO Wiki
+- **Improvements audit** — 16 checks across five severity tiers (high / medium / low / info / strengths) including broken-DAX-reference detection
 - **Source Map** — flat PBI-column → physical-source lineage with CSV export
 - **Page layout wireframe** — SVG thumbnail of each page showing visuals at true canvas positions
 - **Privacy by default** — browser-mode files never leave your machine; CLI binds to loopback only
@@ -66,7 +66,7 @@ Open a PBIP project folder — get a searchable dashboard plus nine Markdown doc
 <td width="50%"><img src="docs/screenshots/10-Unused.png" alt="Unused tab"></td>
 </tr>
 <tr>
-<td><b>Click-to-trace lineage</b> — upstream DAX dependencies, source tables, functions. Downstream visuals + measures that feed into it.</td>
+<td><b>Lineage</b> — search any measure or column from the tab itself, or click an entity from any other tab. Shows upstream DAX dependencies + source tables + functions, and downstream visuals + measures that feed into it.</td>
 <td><b>Unused</b> — orphan measures, dead-chain measures, indirect-use detection. Pairs with the Improvements audit's broken-reference detection.</td>
 </tr>
 </table>
@@ -183,7 +183,7 @@ src/
   model-parser.ts      findSemanticModelPath + TMDL + BIM parsers
   report-scanner.ts    Walks visuals/filters/objects to extract field bindings + positions
   data-builder.ts      Cross-references model + report into FullData
-  md-generator.ts      Nine MD docs, ADO Wiki-safe anchors, Mermaid lineage/star blocks
+  md-generator.ts      9 MD docs (Lite + Detailed modes), ADO Wiki-safe anchors, cross-doc xref links
   improvements.ts      16-check audit (incl. broken-ref detection) — severity-tiered
   html-generator.ts    Dashboard HTML template
   client/              Dashboard runtime (tabs, search, sort, lineage view, wireframe)
