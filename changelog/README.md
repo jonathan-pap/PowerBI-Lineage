@@ -11,6 +11,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 | Version | Date | Theme |
 |---|---|---|
+| [0.11.6](0.11.6.md) | 2026-04-26 | Cross-doc link integrity — fix `[Sources.md](#)` regression in Model.md §3.3 + wire Index.md entries through `xref()` so glossary terms link to their companion docs |
 | [0.11.5](0.11.5.md) | 2026-04-26 | Improvements: tables / measures / columns lacking descriptions now list the actual offenders inline (was: count + percentage only) |
 | [0.11.3](0.11.3.md) | 2026-04-26 | Mobile responsive — landing card + tabs row + primary tabs + modals clean up at ≤720 / ≤480 |
 | [0.11.2](0.11.2.md) | 2026-04-25 | Lineage typeahead bleed-through fix — solid dropdown background + hide placeholder while typing |

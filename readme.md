@@ -9,7 +9,7 @@ Open a PBIP project folder — get a searchable dashboard plus nine Markdown doc
 </p>
 
 <p align="center">
-  <img alt="Tests 267/267" src="https://img.shields.io/badge/tests-267%2F267-22c55e?style=flat-square">
+  <img alt="Tests 276/276" src="https://img.shields.io/badge/tests-276%2F276-22c55e?style=flat-square">
   <img alt="Runtime deps 0" src="https://img.shields.io/badge/runtime%20deps-0-64748b?style=flat-square">
   <img alt="Node ≥18" src="https://img.shields.io/badge/node-%E2%89%A518-5E6A7B?style=flat-square">
 </p>
@@ -116,7 +116,7 @@ Nine Markdown documents — paste-ready for ADO Wiki or GitHub, anchor-stable, w
 | **Calc Groups** | Calculation-group reference with per-item descriptions |
 | **Pages** | Per-page visual catalog — type, title, field bindings for every visual |
 | **Improvements** | Prioritised action list — severity-tiered with rationale |
-| **Index** | Alphabetical glossary of every named entity across the model |
+| **Index** | Alphabetical glossary — every named entity links to its full reference in the companion docs |
 
 Plus a **Changelog** tab exposing the project's release history.
 
@@ -199,7 +199,7 @@ scripts/
   serve-browser.mjs    Tiny static server for local testing
 
 changelog/             Per-version release notes (one file per release)
-tests/                 node:test suites — 267 tests, zero framework deps
+tests/                 node:test suites — 276 tests, zero framework deps
 ```
 
 ## Zero runtime dependencies
@@ -255,4 +255,4 @@ Every anchor link is verified by `tests/md-anchors.test.ts` — drift fires CI.
 
 [`changelog/`](changelog/) — one file per release. Full index in [`changelog/README.md`](changelog/README.md). Future direction is open-ended; feature requests welcome via Issues.
 
-Latest release: **[v0.11.5](changelog/0.11.5.md)** — Improvements audit names the entities. The three "tables / measures / columns lacking descriptions" findings used to report only a count + percentage; now each lists the actual offenders inline so they're directly actionable.
+Latest release: **[v0.11.6](changelog/0.11.6.md)** — Cross-doc link integrity. Fixes a stale `[Sources.md](#)` link in Model.md §3.3 and wires every Index.md glossary entry through `xref()` so terms link straight to their companion docs (Measures, Data Dictionary, Functions, Calc Groups). Eight new "no empty-fragment link" tests close the regression class.

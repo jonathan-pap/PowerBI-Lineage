@@ -84,6 +84,12 @@ export type XrefDoc =
  */
 function xref(text: string, doc: XrefDoc, anchor: string): string {
   const safeText = String(text).replace(/[\[\]]/g, ""); // strip brackets that'd close the link
+  // Empty anchor → doc-level link with no `#` fragment. Without this
+  // guard, `xref(t, "Sources", "")` would emit `[t](Sources.md#)` which
+  // resolves to top-of-page on every render target — silently broken.
+  if (!anchor) {
+    return doc === null ? `[${safeText}](#)` : `[${safeText}](${doc}.md)`;
+  }
   const slug = adoSlug(anchor);
   return doc === null
     ? `[${safeText}](#${slug})`
@@ -857,7 +863,7 @@ export function generateMarkdown(data: FullData, reportName: string, mode: MdMod
   // so readers know where to look.
   lines.push("### 3.3 Per-table sources");
   lines.push("");
-  lines.push(`_Per-table source detail moved to the **Sources** companion document — see [Sources.md](#) for the full bucket-grouped view, the physical-source index, and downstream consumer counts._`);
+  lines.push(`_Per-table source detail moved to the **Sources** companion document — see [Sources.md](Sources.md) for the full bucket-grouped view, the physical-source index, and downstream consumer counts._`);
   lines.push("");
   lines.push("---");
   lines.push("");
@@ -2614,14 +2620,41 @@ export function generateIndexMd(data: FullData, reportName: string, mode: MdMode
                   : kind + "s";
       lines.push(`### ${label} (${items.length})`);
       lines.push("");
-      // Compact one-line entries — parent in italics, description trimmed
+      // Compact one-line entries — name links to the companion doc that
+      // owns the entity's full reference, parent in italics, description
+      // trimmed.
+      //
+      // Anchor-availability per kind:
+      //   Table       → DataDictionary.md#<table-name>     (heading exists)
+      //   Calc group  → DataDictionary.md#<table-name>     (rendered as a table)
+      //   Measure     → Measures.md#<measure-name>         (<a id> exists)
+      //   Column      → DataDictionary.md#<parent-table>   (no per-column anchor; link to owning table)
+      //   UDF         → Functions.md                       (no per-UDF anchor today)
+      //   Calc item   → CalcGroups.md#<parent-cg>          (numeric prefix on the heading is ignored by adoSlug — close enough to land near it)
       for (const e of items) {
+        const linked = (() => {
+          switch (e.kind) {
+            case "Table":
+            case "Calc group":
+              return xref(e.name, "DataDictionary", e.name);
+            case "Measure":
+              return xref(e.name, "Measures", e.name);
+            case "Column":
+              return e.parent ? xref(e.name, "DataDictionary", e.parent) : esc(e.name);
+            case "UDF":
+              return xref(e.name, "Functions", "");
+            case "Calc item":
+              return e.parent ? xref(e.name, "CalcGroups", e.parent) : esc(e.name);
+            default:
+              return esc(e.name);
+          }
+        })();
         const parent = e.parent ? ` _(in \`${esc(e.parent)}\`)_` : "";
         const note = e.note ? ` · _${esc(e.note)}_` : "";
         const desc = e.description
           ? " — " + esc(e.description).substring(0, 110) + (e.description.length > 110 ? "…" : "")
           : "";
-        lines.push(`- **\`${esc(e.name)}\`**${parent}${note}${desc}`);
+        lines.push(`- **${linked}**${parent}${note}${desc}`);
       }
       lines.push("");
     }
