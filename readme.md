@@ -255,4 +255,4 @@ Every anchor link is verified by `tests/md-anchors.test.ts` — drift fires CI.
 
 [`changelog/`](changelog/) — one file per release. Full index in [`changelog/README.md`](changelog/README.md). Future direction is open-ended; feature requests welcome via Issues.
 
-Latest release: **[v0.11.6](changelog/0.11.6.md)** — Cross-doc link integrity. Fixes a stale `[Sources.md](#)` link in Model.md §3.3 and wires every Index.md glossary entry through `xref()` so terms link straight to their companion docs (Measures, Data Dictionary, Functions, Calc Groups). Eight new "no empty-fragment link" tests close the regression class.
+Latest release: **[v0.11.7](changelog/0.11.7.md)** — Default tab on first load is now **Sources** (was Measures), and Measures + Columns sort no longer flips to ascending on report reload. Small UX defaults that were quietly wrong.
