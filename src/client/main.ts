@@ -180,7 +180,7 @@ function addCopyButtons(){
   });
 })();
 
-let activeTab="measures",lastTab="measures";
+let activeTab="sources",lastTab="sources";
 // Typed as Record<string, …> so dynamic key access (e.g.
 // sortState[t] where t is a string) type-checks. Runtime keys
 // are still only "measures" / "columns" but a string-key index
@@ -2109,7 +2109,7 @@ function downloadMarkdown(){
   setTimeout(function(){URL.revokeObjectURL(url);},1000);
 }
 
-renderSummary();renderTabs();renderMeasures();renderColumns();renderTables();renderRelationships();renderSources();renderSourceMap();renderSourcesViewToggle();renderFunctions();renderCalcGroups();renderPages();renderUnused();renderDocs();refreshMdTabVisibility();switchTab("measures");addCopyButtons();
+renderSummary();renderTabs();renderMeasures();renderColumns();renderTables();renderRelationships();renderSources();renderSourceMap();renderSourcesViewToggle();renderFunctions();renderCalcGroups();renderPages();renderUnused();renderDocs();refreshMdTabVisibility();switchTab("sources");addCopyButtons();
 
 // ─────────────────────────────────────────────────────────────────────
 // Print support — Ctrl-P produces a PDF covering every tab.
@@ -2199,7 +2199,12 @@ function __loadBrowserData(opts: {
   // "Ghost", giving the impression the dashboard was broken.
   for (const k of Object.keys(searchTerms)) searchTerms[k] = "";
   for (const k of Object.keys(showUnusedOnly)) showUnusedOnly[k] = false;
-  for (const k of Object.keys(sortState)) sortState[k] = { key: sortState[k].key, desc: false };
+  // Reload should land on the same sort the initial render uses —
+  // usage-count descending so the busiest measures / columns are at
+  // the top. Flipping desc:false here used to send the user to a
+  // bottom-up view on every report swap.
+  sortState.measures = { key: "usageCount", desc: true };
+  sortState.columns  = { key: "usageCount", desc: true };
   openPages.clear();
   openTables.clear();
   showAutoDate = false;
@@ -2300,6 +2305,6 @@ function __loadBrowserData(opts: {
   const detBtn = document.getElementById("md-lite-detailed");
   if (litBtn) litBtn.classList.toggle("active", currentMode === "lite");
   if (detBtn) detBtn.classList.toggle("active", currentMode === "detailed");
-  switchTab("measures");
+  switchTab("sources");
   addCopyButtons();
 };

@@ -6,6 +6,7 @@ See [`changelog/README.md`](changelog/README.md) for the full index.
 
 ## Latest releases
 
+- **[0.11.7](changelog/0.11.7.md)** — 2026-04-28 · Default tab is now Sources (was Measures); fix Measures + Columns flipping to ascending sort on report reload
 - **[0.11.6](changelog/0.11.6.md)** — 2026-04-26 · Cross-doc link integrity — fix `[Sources.md](#)` regression in Model.md §3.3 + Index.md glossary entries now link to their companion docs (Measures, DataDictionary, Functions, CalcGroups)
 - **[0.11.5](changelog/0.11.5.md)** — 2026-04-26 · Improvements audit names the entities — tables / measures / columns missing descriptions now list the actual offenders inline
 - **[0.11.3](changelog/0.11.3.md)** — 2026-04-26 · Mobile responsive — landing + tabs + primary tabs cleaned up for phone viewports; sample loads cleanly from a LinkedIn-arriving mobile click
