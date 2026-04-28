@@ -28,6 +28,9 @@ import {
   generateFunctionsMd,
   generateCalcGroupsMd,
   generateDataDictionaryMd,
+  generateSourcesMd,
+  generatePagesMd,
+  generateIndexMd,
 } from "../src/md-generator.js";
 import { buildFullData } from "../src/data-builder.js";
 
@@ -152,6 +155,71 @@ for (const { name, md } of docs) {
       `(If these should resolve, either adjust the heading text or ` +
       `fix the hand-rolled link to match adoSlug of the heading.)`
     );
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Empty-fragment guard — catches links of the form `[text](#)` or
+// `[text](Doc.md#)` that resolve to top-of-page on every render
+// target. Older code emitted `[Sources.md](#)` from §3.3 of Model.md
+// (regression caught in v0.11.5+); this test makes that class of
+// bug fail CI rather than ship.
+// ─────────────────────────────────────────────────────────────────────
+
+const ALL_DOCS: Array<{ name: string; md: () => string }> = FIXTURE_EXISTS ? (() => {
+  const data = buildFullData(path.resolve(FIXTURE));
+  const reportName = "Health_and_Safety";
+  return [
+    { name: "model.md",           md: () => generateMarkdown(data, reportName) },
+    { name: "measures.md",        md: () => generateMeasuresMd(data, reportName) },
+    { name: "functions.md",       md: () => generateFunctionsMd(data, reportName) },
+    { name: "calc-groups.md",     md: () => generateCalcGroupsMd(data, reportName) },
+    { name: "data-dictionary.md", md: () => generateDataDictionaryMd(data, reportName) },
+    { name: "sources.md",         md: () => generateSourcesMd(data, reportName) },
+    { name: "pages.md",           md: () => generatePagesMd(data, reportName) },
+    { name: "index.md",           md: () => generateIndexMd(data, reportName) },
+  ];
+})() : [];
+
+for (const { name, md } of ALL_DOCS) {
+  test(`${name} — no [text](#) or [text](Doc.md#) empty-fragment links`, () => {
+    const body = md();
+    // Match a link with an empty fragment in any target form:
+    //   [text](#)             → same-doc, empty
+    //   [text](Doc.md#)       → cross-doc, empty
+    // The character class on the closing side is precisely `)` so we
+    // don't get false positives from `#section` followed by extra text.
+    const broken: string[] = [];
+    const rx = /\[[^\]]*\]\(([^)]*#)\)/g;
+    let m: RegExpExecArray | null;
+    while ((m = rx.exec(body))) broken.push(m[0]);
+    assert.equal(
+      broken.length,
+      0,
+      `Empty-fragment links in ${name}:\n  ${broken.join("\n  ")}\n` +
+      `(These resolve to top-of-page on every target. Either drop the # or wire through xref().)`
+    );
+  });
+}
+
+// Index.md must wire its glossary entries through cross-doc links —
+// the doc is meant as a navigation hub, not a flat list. Asserts at
+// least one [text](Doc.md#anchor) reference for each of the kinds
+// the Index inventories.
+if (FIXTURE_EXISTS) {
+  test("index.md cross-links entries to companion docs", () => {
+    const data = buildFullData(path.resolve(FIXTURE));
+    const body = generateIndexMd(data, "Health_and_Safety");
+    const expectAtLeastOne = [
+      /\]\(Measures\.md#/,
+      /\]\(DataDictionary\.md/,
+    ];
+    for (const rx of expectAtLeastOne) {
+      assert.ok(
+        rx.test(body),
+        `Index doc should contain at least one ${rx} link — without these the glossary is a dead-end.`
+      );
+    }
   });
 }
 
