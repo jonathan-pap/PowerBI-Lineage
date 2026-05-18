@@ -15,7 +15,9 @@ import { generateImprovementsMd } from "./improvements.js";
 import { findSemanticModelPath } from "./model-parser.js";
 import { escHtml } from "./render/safe.js";
 import { validateReportPath } from "./path-guard.js";
-import { buildCleanupPrompt, type CleanupCategory } from "./ai-prompts.js";
+import { buildCleanupPrompt, buildTabularEditorScript, type CleanupCategory } from "./ai-prompts.js";
+
+type CleanupFormat = "ai-prompt" | "te-script";
 
 // Resolve the package version once at module load (falls back if unavailable).
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -66,6 +68,14 @@ function runPromptSubcommand(args: string[]): never {
     process.exit(2);
   }
 
+  const validFormats: CleanupFormat[] = ["ai-prompt", "te-script"];
+  const format: CleanupFormat = (flags.format as CleanupFormat) || "ai-prompt";
+  if (!validFormats.includes(format)) {
+    console.error(`--format must be one of: ${validFormats.join(", ")}`);
+    printPromptUsage();
+    process.exit(2);
+  }
+
   if (!flags.report) {
     console.error(`--report <path-to-.Report-folder> is required.`);
     printPromptUsage();
@@ -94,32 +104,35 @@ function runPromptSubcommand(args: string[]): never {
     process.exit(1);
   }
 
-  const prompt = buildCleanupPrompt(data, category);
+  const body = format === "te-script"
+    ? buildTabularEditorScript(data, category)
+    : buildCleanupPrompt(data, category);
 
   if (flags.output) {
     try {
-      fs.writeFileSync(flags.output, prompt, "utf8");
-      console.error(`Wrote ${prompt.length} bytes to ${flags.output}`);
+      fs.writeFileSync(flags.output, body, "utf8");
+      console.error(`Wrote ${body.length} bytes to ${flags.output}`);
     } catch (e) {
       console.error(`Could not write output: ${(e as Error).message}`);
       process.exit(1);
     }
   } else {
-    process.stdout.write(prompt);
+    process.stdout.write(body);
   }
   process.exit(0);
 }
 
 function printPromptUsage(): void {
   console.error(`
-  powerbi-lineage prompt --category <c> --report <path> [--output <file>]
+  powerbi-lineage prompt --category <c> --report <path> [--format <f>] [--output <file>]
 
-  Generates a markdown prompt for an AI agent (Claude Code + pbi-desktop,
-  Cursor, etc.) to delete the measures the audit flags. Lineage does NOT
-  run the prompt — it just emits the markdown.
+  Generates a cleanup artefact for the measures the audit flags.
+  Lineage does NOT run it — it just emits the text.
 
   --category   unused-measures | dead-chain-measures | measures-all
   --report     Path to a .Report folder inside a PBIP project
+  --format     ai-prompt (default — markdown for Claude Code / any AI) |
+               te-script (C# .csx for Tabular Editor 2 / 3)
   --output     Optional file path (defaults to stdout)
 `);
 }

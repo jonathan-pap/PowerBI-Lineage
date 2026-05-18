@@ -333,6 +333,7 @@ document.addEventListener('click', function(e){
     case 'close-cleanup-modal':       closeCleanupModal(); break;
     case 'cleanup-modal-copy':        copyCleanupPromptToClipboard(); break;
     case 'cleanup-modal-download':    downloadCleanupPromptAsMd(); break;
+    case 'cleanup-modal-format':      switchCleanupModalFormat((d.format as CleanupModalFormat) || "ai-prompt"); break;
   }
 });
 
@@ -1200,6 +1201,7 @@ function renderUnused(){
 // ─────────────────────────────────────────────────────────────────────
 
 type CleanupModalCategory = "unused-measures" | "dead-chain-measures" | "measures-all";
+type CleanupModalFormat = "ai-prompt" | "te-script";
 
 /**
  * Build the "Generate AI cleanup prompt" toolbar shown above the
@@ -1239,27 +1241,73 @@ function renderCleanupBar(): string {
   '</div>';
 }
 
-let currentCleanupPrompt: { category: CleanupModalCategory; body: string } | null = null;
+let currentCleanupPrompt: { category: CleanupModalCategory; format: CleanupModalFormat; body: string } | null = null;
+
+const CLEANUP_FORMAT_HINTS: Record<CleanupModalFormat, string> = {
+  "ai-prompt": "Paste into Claude Code (with the <code>pbi-desktop</code> plugin) or any AI agent that can drive TOM / Tabular Editor CLI. PowerBI-Lineage will not run it — you do.",
+  "te-script": "Paste into Tabular Editor 2 or 3 (Advanced Scripting tab) and press F5. TE doesn't auto-save — press Ctrl+S after to persist. Works in both TE2 (free) and TE3.",
+};
+
+const CLEANUP_TITLE_PREFIX: Record<CleanupModalFormat, string> = {
+  "ai-prompt": "AI cleanup prompt",
+  "te-script": "Tabular Editor cleanup script",
+};
+
+const CLEANUP_DOWNLOAD_LABEL: Record<CleanupModalFormat, string> = {
+  "ai-prompt": "Download .md",
+  "te-script": "Download .csx",
+};
+
+function buildCleanupBody(data: any, category: CleanupModalCategory, format: CleanupModalFormat): string {  // eslint-disable-line @typescript-eslint/no-explicit-any
+  return format === "te-script" ? buildTabularEditorScript(data, category) : buildCleanupPrompt(data, category);
+}
+
+function categorySuffix(category: CleanupModalCategory): string {
+  switch (category) {
+    case "unused-measures":     return "directly unused measures";
+    case "dead-chain-measures": return "dead-chain measures";
+    case "measures-all":        return "unused + dead-chain measures";
+  }
+}
+
+function renderCleanupModal(category: CleanupModalCategory, format: CleanupModalFormat): void {
+  if (!DATA || !DATA.measures) return;
+  const body = buildCleanupBody(DATA, category, format);
+  currentCleanupPrompt = { category, format, body };
+  const pre   = document.getElementById("cleanup-modal-pre");
+  const title = document.getElementById("cleanup-modal-title");
+  const hint  = document.getElementById("cleanup-modal-hint");
+  const dlBtn = document.getElementById("cleanup-modal-download-btn");
+  const stat  = document.getElementById("cleanup-modal-status");
+  if (!pre || !title) return;
+  title.textContent = CLEANUP_TITLE_PREFIX[format] + " — " + categorySuffix(category);
+  pre.textContent = body;
+  if (hint) hint.innerHTML = CLEANUP_FORMAT_HINTS[format];
+  if (dlBtn) dlBtn.textContent = CLEANUP_DOWNLOAD_LABEL[format];
+  // Update the format tabs' active state.
+  const tabs = document.querySelectorAll<HTMLElement>("[data-action='cleanup-modal-format']");
+  tabs.forEach(t => {
+    const isActive = t.dataset.format === format;
+    t.classList.toggle("is-active", isActive);
+    t.setAttribute("aria-selected", isActive ? "true" : "false");
+  });
+  if (stat) { stat.textContent = ""; stat.className = "cleanup-modal-status"; }
+}
 
 function openCleanupModal(category: CleanupModalCategory): void {
   if (!DATA || !DATA.measures) return;
-  const body = buildCleanupPrompt(DATA, category);
-  currentCleanupPrompt = { category, body };
   const modal = document.getElementById("cleanup-modal");
-  const pre   = document.getElementById("cleanup-modal-pre");
-  const title = document.getElementById("cleanup-modal-title");
-  const stat  = document.getElementById("cleanup-modal-status");
-  if (!modal || !pre || !title) return;
-  const titles: Record<CleanupModalCategory, string> = {
-    "unused-measures":     "AI cleanup prompt — directly unused measures",
-    "dead-chain-measures": "AI cleanup prompt — dead-chain measures",
-    "measures-all":        "AI cleanup prompt — unused + dead-chain measures",
-  };
-  title.textContent = titles[category];
-  pre.textContent = body;
-  if (stat) { stat.textContent = ""; stat.className = "cleanup-modal-status"; }
+  if (!modal) return;
+  // Always re-open in the AI-prompt view; user can toggle to TE script
+  // from within the modal. This keeps the default familiar.
+  renderCleanupModal(category, "ai-prompt");
   modal.hidden = false;
   document.body.style.overflow = "hidden";
+}
+
+function switchCleanupModalFormat(format: CleanupModalFormat): void {
+  if (!currentCleanupPrompt) return;
+  renderCleanupModal(currentCleanupPrompt.category, format);
 }
 
 function closeCleanupModal(): void {
@@ -1308,8 +1356,11 @@ function cleanupPromptSelectAllFallback(): void {
 function downloadCleanupPromptAsMd(): void {
   if (!currentCleanupPrompt) return;
   const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-  const filename = "cleanup-" + currentCleanupPrompt.category + "-" + stamp + ".md";
-  const blob = new Blob([currentCleanupPrompt.body], { type: "text/markdown;charset=utf-8" });
+  const isTe = currentCleanupPrompt.format === "te-script";
+  const ext = isTe ? "csx" : "md";
+  const mime = isTe ? "text/plain;charset=utf-8" : "text/markdown;charset=utf-8";
+  const filename = "cleanup-" + currentCleanupPrompt.category + "-" + stamp + "." + ext;
+  const blob = new Blob([currentCleanupPrompt.body], { type: mime });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url; a.download = filename;

@@ -93,3 +93,9 @@ declare function buildCleanupPrompt(
 declare function countCleanupTargets(
   data: any,  // eslint-disable-line @typescript-eslint/no-explicit-any
 ): { stage1: number; stage2: number };
+
+declare function buildTabularEditorScript(
+  data: any,  // eslint-disable-line @typescript-eslint/no-explicit-any
+  category: "unused-measures" | "dead-chain-measures" | "measures-all",
+  opts?: { now?: Date },
+): string;
