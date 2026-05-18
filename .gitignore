@@ -37,9 +37,13 @@ test/
 # to GitHub. Forward-looking design notes leak direction; parked
 # sponsorship copy isn't useful to readers; the roadmap is a working
 # scratchpad whose visibility tends to invite feature requests for
-# things that may not ship.
+# things that may not ship. CLAUDE.md is the AI-agent workspace
+# blueprint — useful locally for routing tasks across claudedocs/
+# rooms, but reveals internal workflow choreography that doesn't
+# belong on the public repo.
 ROADMAP.md
 claudedocs/
+CLAUDE.md
 .github/SPONSOR-DRAFT.md
 
 # Editor/agent state
