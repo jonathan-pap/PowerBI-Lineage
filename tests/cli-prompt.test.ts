@@ -61,6 +61,23 @@ test("CLI prompt — emits prompt to stdout against H&S fixture", { skip: !APP_E
     "expected Targets section");
 });
 
+test("CLI prompt — --format te-script emits a Tabular Editor script", { skip: !APP_EXISTS || !FIXTURE_EXISTS }, () => {
+  const r = runCli(["prompt", "--category", "measures-all", "--format", "te-script", "--report", path.resolve(FIXTURE)]);
+  assert.equal(r.code, 0, `expected exit 0, got ${r.code}. stderr: ${r.stderr}`);
+  assert.ok(r.stdout.startsWith("// PowerBI-Lineage cleanup script"),
+    "TE script must start with the C# comment header");
+  assert.ok(r.stdout.includes("Model.Tables.FindByName"),
+    "TE script must use the TE/TOM API");
+  assert.ok(!r.stdout.includes("# Cleanup task"),
+    "TE script output must not contain the markdown prompt header");
+});
+
+test("CLI prompt — unknown --format value exits non-zero", { skip: !APP_EXISTS }, () => {
+  const r = runCli(["prompt", "--category", "measures-all", "--format", "bogus", "--report", "anywhere"]);
+  assert.notEqual(r.code, 0, "expected non-zero exit for unknown --format");
+  assert.ok(r.stderr.includes("--format"), "stderr should mention --format");
+});
+
 test("CLI prompt — --output writes to file instead of stdout", { skip: !APP_EXISTS || !FIXTURE_EXISTS }, () => {
   const outFile = path.resolve("dist-test/cli-prompt-output.tmp.md");
   // Best-effort cleanup if a prior run crashed mid-flight.

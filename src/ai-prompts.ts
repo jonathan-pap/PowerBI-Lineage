@@ -1,14 +1,18 @@
 /**
- * AI cleanup prompt generator.
+ * Cleanup-export generators (AI prompt + Tabular Editor script).
  *
- * Turns the existing audit's "unused measures" + "dead-chain measures"
- * findings into a markdown prompt the user can paste into the AI tool
- * of their choice (recommended: Claude Code with the `pbi-desktop`
- * plugin) to actually delete those measures from a live model.
+ * Two formats over the same audit data:
+ *   1. buildCleanupPrompt  — markdown for Claude Code / any AI agent.
+ *   2. buildTabularEditorScript — C# .csx script paste-into-TE2/TE3
+ *      Advanced Scripting tab. Direct execution, no AI loop.
  *
- * Lineage itself never mutates the model — this module is the entire
- * v1 surface area of the "AI cleanup handoff" feature. See
- * claudedocs/intake-specs/design-ai-cleanup-handoff.md for the
+ * Same input (FullData + category), same EXTERNALMEASURE / auto-date
+ * filtering, same Stage 1 / Stage 2 ordering. The two formats serve
+ * different users: AI prompt for users who want a conversational
+ * safety check, TE script for users already living in Tabular Editor.
+ *
+ * Lineage itself never mutates the model — this module just emits text.
+ * See claudedocs/intake-specs/design-ai-cleanup-handoff.md for the
  * locked decisions and the rationale for the read-only commitment.
  */
 import type { FullData, ModelMeasure } from "./data-builder.js";
@@ -222,4 +226,145 @@ ${renderTargetList(s2)}`);
   sections.push(VERIFICATION);
 
   return sections.join("\n\n") + "\n";
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Tabular Editor C# script (.csx) generator
+//
+// Targets TE2 (free) + TE3 (paid) — both run on .NET Framework 4.7.2+
+// or .NET 5+/.NET 6+, all of which support C# 6+ syntax including
+// string interpolation (`$"..."`) and anonymous types (used here).
+//
+// Anonymous types over value tuples on purpose: anonymous types
+// existed since C# 3.0, value tuples need C# 7 + System.ValueTuple.
+// Anonymous-type targets are universally portable across TE2/TE3
+// versions without dragging in any extra references.
+// ─────────────────────────────────────────────────────────────────────
+
+interface ScriptEntry {
+  table: string;
+  name: string;
+  stage: "Stage 1" | "Stage 2";
+}
+
+/** Escape a string for safe inclusion as a C# double-quoted literal. */
+function csLit(s: string): string {
+  return '"' + s
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, "\\\"")
+    .replace(/\r/g, "\\r")
+    .replace(/\n/g, "\\n")
+    + '"';
+}
+
+function teScriptHeader(category: CleanupCategory, date: string, s1Count: number, s2Count: number): string {
+  let summary: string;
+  switch (category) {
+    case "unused-measures":
+      summary = `${s1Count} directly-unused measure${s1Count === 1 ? "" : "s"}`;
+      break;
+    case "dead-chain-measures":
+      summary = `${s2Count} dead-chain measure${s2Count === 1 ? "" : "s"}`;
+      break;
+    case "measures-all":
+      summary = `${s1Count} directly-unused + ${s2Count} dead-chain`;
+      break;
+  }
+  return `// PowerBI-Lineage cleanup script — generated ${date}
+// Category: ${category} (${summary})
+//
+// USAGE
+//   1. Open the model in Tabular Editor 2 or 3.
+//   2. Paste this script into the "Advanced Scripting" tab.
+//   3. Run (F5).
+//   4. Tabular Editor does NOT auto-save — press Ctrl+S to persist
+//      deletions to the .pbix / .pbip / database.
+//   5. Re-open the project in PowerBI-Lineage to confirm the audit
+//      shrinks as expected.
+//
+// SAFETY GUARDS
+//   - Missing tables / measures are skipped, not errored — script is
+//     safe to re-run after a partial save.
+//   - EXTERNALMEASURE proxies are double-guarded at runtime in case
+//     one slipped past Lineage's static filter (rare but possible
+//     with multi-line/comment-obscured DAX).
+//   - Helper measures whose name starts with "_" are deleted along
+//     with the rest. If you want to spare them, edit the targets
+//     array below before running.
+//
+// Lineage never mutates models itself — this script is the user's
+// chosen way to act on the audit's findings. PBI Desktop's Ctrl+Z
+// does NOT undo TOM-level changes; make a git commit of the .pbip
+// before running if you want a rollback path.`;
+}
+
+function teScriptBody(entries: ScriptEntry[]): string {
+  if (entries.length === 0) {
+    return `
+
+Output("PowerBI-Lineage: no measures flagged for this category. Nothing to do.");
+`;
+  }
+  const tupleLines = entries.map(e =>
+    `    new { Table = ${csLit(e.table)}, Measure = ${csLit(e.name)}, Stage = ${csLit(e.stage)} },`,
+  ).join("\n");
+  return `
+
+var targets = new[] {
+${tupleLines}
+};
+
+int deleted = 0, skipped = 0;
+foreach (var t in targets) {
+    var tbl = Model.Tables.FindByName(t.Table);
+    if (tbl == null) {
+        Output($"SKIP {t.Stage}: table [{t.Table}] not found");
+        skipped++; continue;
+    }
+    var m = tbl.Measures.FindByName(t.Measure);
+    if (m == null) {
+        Output($"SKIP {t.Stage}: [{t.Table}].[{t.Measure}] not found (already deleted?)");
+        skipped++; continue;
+    }
+    if (m.Expression != null &&
+        m.Expression.IndexOf("EXTERNALMEASURE", StringComparison.OrdinalIgnoreCase) >= 0) {
+        Output($"SKIP {t.Stage}: [{t.Table}].[{t.Measure}] is an EXTERNALMEASURE proxy");
+        skipped++; continue;
+    }
+    m.Delete();
+    Output($"DELETED {t.Stage}: [{t.Table}].[{t.Measure}]");
+    deleted++;
+}
+Output("");
+Output($"Done. Deleted {deleted}, skipped {skipped}. Press Ctrl+S to persist.");
+`;
+}
+
+/**
+ * Generate a paste-into-Tabular-Editor cleanup script for the given
+ * category. Same filtering as buildCleanupPrompt — EXTERNALMEASURE
+ * proxies and auto-date measures excluded statically, with a runtime
+ * EXTERNALMEASURE guard inside the script as defence-in-depth.
+ *
+ * Stage 1 entries come first regardless of category. For measures-all,
+ * the script processes Stage 1 then Stage 2 in one pass — TE doesn't
+ * need the "re-audit between stages" beat that the AI prompt uses,
+ * because deletion is atomic within a single script run.
+ */
+export function buildTabularEditorScript(
+  data: FullData,
+  category: CleanupCategory,
+  opts: BuildCleanupPromptOptions = {},
+): string {
+  const date = isoDate(opts.now ?? new Date());
+  const s1 = stage1Targets(data);
+  const s2 = stage2Targets(data);
+  const entries: ScriptEntry[] = [];
+  if (category === "unused-measures" || category === "measures-all") {
+    for (const t of s1) entries.push({ table: t.table, name: t.name, stage: "Stage 1" });
+  }
+  if (category === "dead-chain-measures" || category === "measures-all") {
+    for (const t of s2) entries.push({ table: t.table, name: t.name, stage: "Stage 2" });
+  }
+  return teScriptHeader(category, date, s1.length, s2.length) + teScriptBody(entries);
 }

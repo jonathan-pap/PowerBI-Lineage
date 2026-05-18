@@ -963,6 +963,28 @@
     overflow-y: auto;
     flex: 1 1 auto;
   }
+  .cleanup-modal-format-tabs {
+    display: flex; gap: 4px; margin-bottom: 12px;
+    border-bottom: 1px solid var(--border-soft);
+    padding-bottom: 8px;
+  }
+  .cleanup-modal-format-btn {
+    appearance: none; cursor: pointer;
+    background: transparent;
+    color: var(--text-body);
+    opacity: 0.65;
+    border: 1px solid transparent;
+    border-radius: 4px 4px 0 0;
+    padding: 6px 12px; font-size: 12px; font-weight: 500;
+  }
+  .cleanup-modal-format-btn:hover { opacity: 1; background: rgba(255,255,255,0.04); }
+  .cleanup-modal-format-btn.is-active {
+    opacity: 1;
+    border-color: var(--border-soft);
+    border-bottom-color: transparent;
+    background: var(--surface-alt, rgba(255,255,255,0.04));
+    font-weight: 600;
+  }
   .cleanup-modal-hint {
     margin: 0 0 12px 0; font-size: 13px; opacity: 0.85;
   }

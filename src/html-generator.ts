@@ -417,16 +417,20 @@ ${CLIENT_JS}
   <div class="cleanup-modal-backdrop" data-action="close-cleanup-modal"></div>
   <div class="cleanup-modal-panel">
     <div class="cleanup-modal-header">
-      <h2 id="cleanup-modal-title">AI cleanup prompt</h2>
+      <h2 id="cleanup-modal-title">Cleanup export</h2>
       <button type="button" class="cleanup-modal-close" data-action="close-cleanup-modal" aria-label="Close">&times;</button>
     </div>
     <div class="cleanup-modal-body">
-      <p class="cleanup-modal-hint">Copy this prompt and paste it into Claude Code (with the <code>pbi-desktop</code> plugin) or any AI agent that can drive TOM / Tabular Editor CLI. PowerBI-Lineage will not run it — you do.</p>
+      <div class="cleanup-modal-format-tabs" role="tablist" aria-label="Output format">
+        <button type="button" class="cleanup-modal-format-btn is-active" data-action="cleanup-modal-format" data-format="ai-prompt" role="tab" aria-selected="true">AI prompt (.md)</button>
+        <button type="button" class="cleanup-modal-format-btn" data-action="cleanup-modal-format" data-format="te-script" role="tab" aria-selected="false">Tabular Editor script (.csx)</button>
+      </div>
+      <p id="cleanup-modal-hint" class="cleanup-modal-hint">Paste into Claude Code (with the <code>pbi-desktop</code> plugin) or any AI agent that can drive TOM / Tabular Editor CLI. PowerBI-Lineage will not run it — you do.</p>
       <pre id="cleanup-modal-pre" tabindex="0"></pre>
     </div>
     <div class="cleanup-modal-footer">
       <button type="button" class="cleanup-modal-btn cleanup-modal-btn-primary" data-action="cleanup-modal-copy">Copy to clipboard</button>
-      <button type="button" class="cleanup-modal-btn" data-action="cleanup-modal-download">Download .md</button>
+      <button type="button" class="cleanup-modal-btn" data-action="cleanup-modal-download" id="cleanup-modal-download-btn">Download .md</button>
       <span id="cleanup-modal-status" class="cleanup-modal-status" aria-live="polite"></span>
     </div>
   </div>

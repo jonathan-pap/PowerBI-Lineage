@@ -7,7 +7,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildCleanupPrompt } from "../src/ai-prompts.js";
+import { buildCleanupPrompt, buildTabularEditorScript } from "../src/ai-prompts.js";
 import type { FullData, ModelMeasure } from "../src/data-builder.js";
 
 // ─────────────────────────────────────────────────────────────────────
@@ -229,4 +229,129 @@ test("buildCleanupPrompt — title varies per category", () => {
   assert.ok(u.startsWith("# Cleanup task — delete unused Power BI measures\n"));
   assert.ok(d.startsWith("# Cleanup task — delete dead-chain Power BI measures\n"));
   assert.ok(a.startsWith("# Cleanup task — delete unused + dead-chain Power BI measures\n"));
+});
+
+// ═════════════════════════════════════════════════════════════════════
+// Tabular Editor script generator
+// ═════════════════════════════════════════════════════════════════════
+
+test("buildTabularEditorScript — header includes date and category summary", () => {
+  const data = mk({
+    measures: [
+      mkMeasure({ table: "Sales", name: "Old", status: "unused" }),
+    ],
+  });
+  const s = buildTabularEditorScript(data, "unused-measures", { now: FIXED_DATE });
+  assert.ok(s.startsWith("// PowerBI-Lineage cleanup script"), "header must lead with the cleanup tag");
+  assert.ok(s.includes("2026-05-17"), "header must include the ISO date");
+  assert.ok(s.includes("Category: unused-measures"), "header must echo the category");
+  assert.ok(s.includes("1 directly-unused measure)"), "header must summarise the count (singular)");
+});
+
+test("buildTabularEditorScript — emits anonymous-type target entries with anchored bracket form", () => {
+  const data = mk({
+    measures: [
+      mkMeasure({ table: "Sales", name: "Old Total", status: "unused" }),
+      mkMeasure({ table: "Sales", name: "Legacy YTD", status: "unused" }),
+    ],
+  });
+  const s = buildTabularEditorScript(data, "unused-measures", { now: FIXED_DATE });
+  assert.ok(s.includes('new { Table = "Sales", Measure = "Old Total", Stage = "Stage 1" }'),
+    "target tuple must use anonymous-type syntax with named props");
+  assert.ok(s.includes('new { Table = "Sales", Measure = "Legacy YTD", Stage = "Stage 1" }'),
+    "all targets must appear in the script body");
+});
+
+test("buildTabularEditorScript — EXTERNALMEASURE proxies are excluded at generation time", () => {
+  const data = mk({
+    measures: [
+      mkMeasure({
+        table: "Remote", name: "Remote Revenue",
+        daxExpression: "EXTERNALMEASURE(\"R\", DOUBLE, \"DirectQuery to AS - X\")",
+        status: "unused",
+        externalProxy: { remoteName: "R", type: "DOUBLE", externalModel: "DirectQuery to AS - X", cluster: null },
+      }),
+      mkMeasure({ table: "Sales", name: "Legit", status: "unused" }),
+    ],
+  });
+  const s = buildTabularEditorScript(data, "measures-all", { now: FIXED_DATE });
+  assert.ok(!s.includes("Remote Revenue"),
+    "EXTERNALMEASURE-bound measure must not appear in the target list");
+  assert.ok(s.includes("Legit"), "non-proxy measure should be in the target list");
+});
+
+test("buildTabularEditorScript — emits runtime EXTERNALMEASURE guard (defence in depth)", () => {
+  const data = mk({ measures: [mkMeasure({ table: "Sales", name: "Old", status: "unused" })] });
+  const s = buildTabularEditorScript(data, "unused-measures", { now: FIXED_DATE });
+  assert.ok(s.includes("EXTERNALMEASURE"),
+    "script body must check for EXTERNALMEASURE at runtime in case one slipped through static filter");
+  assert.ok(s.includes("StringComparison.OrdinalIgnoreCase"),
+    "runtime check must be case-insensitive");
+});
+
+test("buildTabularEditorScript — measures-all puts Stage 1 entries before Stage 2", () => {
+  const data = mk({
+    measures: [
+      mkMeasure({ table: "T", name: "S1a", status: "unused", daxDependencies: ["S2a"] }),
+      mkMeasure({ table: "T", name: "S2a", status: "indirect" }),
+    ],
+  });
+  const s = buildTabularEditorScript(data, "measures-all", { now: FIXED_DATE });
+  const s1Idx = s.indexOf('Measure = "S1a"');
+  const s2Idx = s.indexOf('Measure = "S2a"');
+  assert.ok(s1Idx >= 0 && s2Idx >= 0, "both stages must be present in measures-all");
+  assert.ok(s1Idx < s2Idx, "Stage 1 entries must come before Stage 2 in the target array");
+  // And the Stage tag on each tuple should be correct.
+  assert.ok(s.includes('Measure = "S1a", Stage = "Stage 1"'), "S1a should be tagged Stage 1");
+  assert.ok(s.includes('Measure = "S2a", Stage = "Stage 2"'), "S2a should be tagged Stage 2");
+});
+
+test("buildTabularEditorScript — auto-date table measures are excluded", () => {
+  const data = mk({
+    tables: [
+      { name: "LocalDateTable_x", description: "", isCalcGroup: false, origin: "auto-date" as const,
+        isCalculatedTable: false, parameterKind: null, columnCount: 0, measureCount: 0, keyCount: 0,
+        fkCount: 0, hiddenColumnCount: 0, columns: [], measures: [], relationships: [],
+        partitions: [], hierarchies: [] } as any,
+    ],
+    measures: [
+      mkMeasure({ table: "LocalDateTable_x", name: "Auto Y", status: "unused" }),
+      mkMeasure({ table: "Sales", name: "Old", status: "unused" }),
+    ],
+  });
+  const s = buildTabularEditorScript(data, "unused-measures", { now: FIXED_DATE });
+  assert.ok(!s.includes("Auto Y"), "auto-date measures must never appear in the target list");
+  assert.ok(s.includes('Measure = "Old"'), "user-table measures should appear");
+});
+
+test("buildTabularEditorScript — empty kill list produces the no-op stub", () => {
+  const s = buildTabularEditorScript(mk(), "unused-measures", { now: FIXED_DATE });
+  assert.ok(s.includes("no measures flagged for this category. Nothing to do"),
+    "empty category should produce an explicit no-op output");
+  assert.ok(!s.includes("var targets = new[]"),
+    "empty category should NOT emit an empty targets array");
+});
+
+test("buildTabularEditorScript — C# string escaping for awkward characters in names", () => {
+  const data = mk({
+    measures: [
+      mkMeasure({ table: 'T"With"Quotes', name: "M\\With\\Backslash", status: "unused" }),
+    ],
+  });
+  const s = buildTabularEditorScript(data, "unused-measures", { now: FIXED_DATE });
+  assert.ok(s.includes('Table = "T\\"With\\"Quotes"'), "double quotes in names must be C#-escaped");
+  assert.ok(s.includes('Measure = "M\\\\With\\\\Backslash"'), "backslashes in names must be C#-escaped");
+});
+
+test("buildTabularEditorScript — output ends with single trailing newline", () => {
+  const data = mk({ measures: [mkMeasure({ table: "Sales", name: "Old", status: "unused" })] });
+  const s = buildTabularEditorScript(data, "unused-measures", { now: FIXED_DATE });
+  assert.ok(s.endsWith("\n"));
+  assert.ok(!s.endsWith("\n\n"));
+});
+
+test("buildTabularEditorScript — reminds user to Ctrl+S after run", () => {
+  const data = mk({ measures: [mkMeasure({ table: "Sales", name: "Old", status: "unused" })] });
+  const s = buildTabularEditorScript(data, "unused-measures", { now: FIXED_DATE });
+  assert.ok(s.includes("Ctrl+S"), "TE doesn't auto-save; the script must remind the user");
 });
