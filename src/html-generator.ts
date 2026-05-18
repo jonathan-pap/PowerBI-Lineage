@@ -121,12 +121,22 @@ const DASHBOARD_CSS = readStyles();
 // ─────────────────────────────────────────────────────────────────────
 /**
  * Read one compiled client file (relative path under dist/client/)
- * and return its body with the tsc-inserted `export {};` stripped.
+ * and return its body with ESM module-export plumbing stripped — the
+ * inline <script> block we splice these into is a *classic* script,
+ * not a module, so any `export` keyword is a parse error that kills
+ * the entire script block silently.
  *
- * TypeScript auto-adds the export when a .ts file references ambient
- * declarations (our src/client/globals.d.ts) or stdlib types — this
- * would be a syntax error inside a classic `<script>` block so we
- * strip it unconditionally.
+ * Three patterns to strip:
+ *   1. `export {};`  — tsc auto-emits this on TS files that reference
+ *      ambient declarations (our `src/client/globals.d.ts`).
+ *   2. `export { a, b };` — named re-exports.
+ *   3. `export function foo()` / `export const foo` / `export let|var|class`
+ *      — inline exports on declarations. Stripped to leave the bare
+ *      declaration so the symbol becomes a script-scope global,
+ *      which is exactly what other concatenated files expect.
+ *
+ * Type-only imports / exports are already erased by tsc, so we don't
+ * need to handle them.
  */
 function readCompiledClientFile(rel: string): string {
   const candidates = [
@@ -135,7 +145,9 @@ function readCompiledClientFile(rel: string): string {
   ];
   for (const p of candidates) {
     try {
-      return fs.readFileSync(p, "utf8").replace(/\nexport\s*\{\s*\};?\s*$/s, "\n");
+      return fs.readFileSync(p, "utf8")
+        .replace(/^export\s+(async\s+function|function|const|let|var|class)\s/gm, "$1 ")
+        .replace(/^export\s*\{[^}]*\};?\s*$/gm, "");
     } catch { /* try next */ }
   }
   throw new Error(
@@ -158,6 +170,7 @@ function readCompiledClient(): string {
   const modules = [
     "render/escape.js",  // Stop 5 pass 2 — escHtml, escAttr, sc, uc (no deps)
     "render/md.js",      // Stop 5 pass 2 — markdown renderer (uses escHtml)
+    "../ai-prompts.js",  // self-contained; exports buildCleanupPrompt for the cleanup modal
     "main.js",           // still the big one; gets smaller every pass
   ];
   return modules.map(readCompiledClientFile).join("\n");
@@ -400,6 +413,24 @@ let GENERATED_AT=${safeJSON(ts)};
 // Client runtime — extracted to src/client/main.ts in Stop 5, inlined here from dist/client/main.js.
 ${CLIENT_JS}
 </script>
+<div id="cleanup-modal" class="cleanup-modal" hidden role="dialog" aria-modal="true" aria-labelledby="cleanup-modal-title">
+  <div class="cleanup-modal-backdrop" data-action="close-cleanup-modal"></div>
+  <div class="cleanup-modal-panel">
+    <div class="cleanup-modal-header">
+      <h2 id="cleanup-modal-title">AI cleanup prompt</h2>
+      <button type="button" class="cleanup-modal-close" data-action="close-cleanup-modal" aria-label="Close">&times;</button>
+    </div>
+    <div class="cleanup-modal-body">
+      <p class="cleanup-modal-hint">Copy this prompt and paste it into Claude Code (with the <code>pbi-desktop</code> plugin) or any AI agent that can drive TOM / Tabular Editor CLI. PowerBI-Lineage will not run it — you do.</p>
+      <pre id="cleanup-modal-pre" tabindex="0"></pre>
+    </div>
+    <div class="cleanup-modal-footer">
+      <button type="button" class="cleanup-modal-btn cleanup-modal-btn-primary" data-action="cleanup-modal-copy">Copy to clipboard</button>
+      <button type="button" class="cleanup-modal-btn" data-action="cleanup-modal-download">Download .md</button>
+      <span id="cleanup-modal-status" class="cleanup-modal-status" aria-live="polite"></span>
+    </div>
+  </div>
+</div>
 </body>
 </html>`;
 }

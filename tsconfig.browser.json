@@ -26,6 +26,7 @@
     "src/data-builder.ts",
     "src/md-generator.ts",
     "src/improvements.ts",
+    "src/ai-prompts.ts",
     "src/report-scanner.ts",
     "src/pbir-reader.ts",
     "src/render/**/*"

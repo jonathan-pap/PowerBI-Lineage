@@ -892,3 +892,116 @@
     /* BluPulse aurora overlay is a body::after pseudo — kill it in print. */
     body::after, body::before { display: none !important; }
   }
+
+  /* ─────────────────────────────────────────────────────────────────
+     AI cleanup prompt — Unused-tab toolbar + modal. Toolbar sits
+     above the orphan sections; clicking the button opens the modal.
+     Themed via existing surface/text/border tokens for dark, light,
+     and BluPulse.
+  ───────────────────────────────────────────────────────────────── */
+  .cleanup-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; flex-wrap: wrap;
+    padding: 12px 14px; margin-bottom: 16px;
+    background: var(--surface-alt, rgba(255,255,255,0.04));
+    border: 1px solid var(--border-soft);
+    border-left: 3px solid var(--clr-measure, #F59E0B);
+    border-radius: var(--radius-md, 6px);
+  }
+  .cleanup-bar-msg {
+    font-size: 13px; opacity: 0.9; flex: 1 1 280px;
+  }
+  .cleanup-bar-btn {
+    appearance: none; cursor: pointer;
+    background: var(--clr-measure, #F59E0B); color: #0B0D11;
+    border: 0; border-radius: 4px;
+    padding: 8px 14px; font-size: 13px; font-weight: 600;
+    white-space: nowrap;
+  }
+  .cleanup-bar-btn:hover { filter: brightness(1.05); }
+  .cleanup-bar-btn:focus-visible { outline: 2px solid var(--clr-measure, #F59E0B); outline-offset: 2px; }
+
+
+  .cleanup-modal[hidden] { display: none; }
+  .cleanup-modal {
+    position: fixed; inset: 0; z-index: 200;
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px;
+  }
+  .cleanup-modal-backdrop {
+    position: absolute; inset: 0;
+    background: rgba(0,0,0,0.55);
+    backdrop-filter: blur(2px);
+  }
+  .cleanup-modal-panel {
+    position: relative;
+    width: min(880px, 100%); max-height: 88vh;
+    display: flex; flex-direction: column;
+    background: var(--surface);
+    color: var(--text-body);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius-md, 8px);
+    box-shadow: 0 12px 40px rgba(0,0,0,0.45);
+    overflow: hidden;
+  }
+  .cleanup-modal-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .cleanup-modal-header h2 {
+    margin: 0; font-size: 16px; font-weight: 600;
+  }
+  .cleanup-modal-close {
+    appearance: none; background: transparent; border: 0; color: var(--text-body);
+    font-size: 22px; line-height: 1; cursor: pointer;
+    padding: 4px 8px; border-radius: 4px;
+  }
+  .cleanup-modal-close:hover { background: rgba(255,255,255,0.08); }
+  .cleanup-modal-body {
+    padding: 14px 18px;
+    overflow-y: auto;
+    flex: 1 1 auto;
+  }
+  .cleanup-modal-hint {
+    margin: 0 0 12px 0; font-size: 13px; opacity: 0.85;
+  }
+  .cleanup-modal-hint code {
+    padding: 1px 6px; border-radius: 3px;
+    background: rgba(255,255,255,0.08); font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 12px;
+  }
+  .cleanup-modal-body pre {
+    margin: 0; padding: 12px;
+    background: var(--surface-alt, rgba(255,255,255,0.04));
+    border: 1px solid var(--border-soft);
+    border-radius: 4px;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 12px; line-height: 1.5;
+    white-space: pre-wrap; word-break: break-word;
+    max-height: 56vh; overflow: auto;
+    user-select: text;
+  }
+  .cleanup-modal-footer {
+    display: flex; align-items: center; gap: 8px;
+    padding: 12px 18px;
+    border-top: 1px solid var(--border-soft);
+  }
+  .cleanup-modal-btn {
+    appearance: none; cursor: pointer;
+    background: transparent; color: var(--text-body);
+    border: 1px solid var(--border-soft);
+    border-radius: 4px;
+    padding: 7px 14px; font-size: 13px; font-weight: 500;
+  }
+  .cleanup-modal-btn:hover { background: rgba(255,255,255,0.08); }
+  .cleanup-modal-btn-primary {
+    background: var(--clr-measure, #F59E0B);
+    color: #0B0D11; border-color: transparent;
+  }
+  .cleanup-modal-btn-primary:hover { filter: brightness(1.05); }
+  .cleanup-modal-status {
+    margin-left: auto; font-size: 12px; opacity: 0.8; min-height: 1.2em;
+  }
+  .cleanup-modal-status.is-ok    { color: var(--clr-success, #22C55E); opacity: 1; }
+  .cleanup-modal-status.is-error { color: var(--clr-unused,  #EF4444); opacity: 1; }

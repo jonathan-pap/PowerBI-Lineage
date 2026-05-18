@@ -78,3 +78,18 @@ declare function uc(n: number): string;
 declare function mdRender(md: string): string;
 declare function mdEscapeHtml(s: string): string;
 declare function mdInline(s: string): string;
+
+// AI cleanup prompt builder — defined in src/ai-prompts.ts and
+// concatenated into the inline <script> via the manifest in
+// html-generator.ts. The module is self-contained (no other-module
+// runtime imports) precisely so it can be inlined like the render
+// helpers. Type signature mirrors the source.
+declare function buildCleanupPrompt(
+  data: any,  // eslint-disable-line @typescript-eslint/no-explicit-any
+  category: "unused-measures" | "dead-chain-measures" | "measures-all",
+  opts?: { now?: Date },
+): string;
+
+declare function countCleanupTargets(
+  data: any,  // eslint-disable-line @typescript-eslint/no-explicit-any
+): { stage1: number; stage2: number };

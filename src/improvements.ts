@@ -21,12 +21,18 @@
 
 import type { FullData, ModelMeasure } from "./data-builder.js";
 import type { ModelRelationship } from "./model-parser.js";
+import { buildCleanupPrompt, type CleanupCategory } from "./ai-prompts.js";
 
 // ─────────────────────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────────────────────
 
 export type ImprovementSeverity = "high" | "medium" | "low" | "info" | "good";
+
+/** Stable discriminator linking a check to downstream consumers (e.g.
+ *  the AI cleanup prompt builder). Optional — most checks don't need
+ *  one. Only set on checks whose findings have an automated follow-up. */
+export type ImprovementKind = "unused-measures" | "dead-chain-measures";
 
 export interface Improvement {
   severity: ImprovementSeverity;
@@ -41,6 +47,8 @@ export interface Improvement {
   maxListed?: number;
   /** Optional cross-reference hint pointing at another doc / tab. */
   crossRef?: string;
+  /** Stable identifier for downstream consumers. See ImprovementKind. */
+  kind?: ImprovementKind;
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -436,6 +444,7 @@ export function runImprovementChecks(data: FullData): Improvement[] {
       items: unusedMeasures.map(m => m.table + "[" + m.name + "]"),
       maxListed: 15,
       crossRef: "The dashboard's **Unused** tab shows the same list with full per-entity lineage context.",
+      kind: "unused-measures",
     });
   }
   const deadChainRaw = deadChainMeasures(data);
@@ -450,6 +459,7 @@ export function runImprovementChecks(data: FullData): Improvement[] {
       summary: "These are used by other measures, but those measures are never on a visual themselves.",
       rationale: "The chain terminates in nothing — these measures are effectively dead. Remove the top of the chain (the directly-unused measures) and these become unused in turn.",
       items: deadChain.slice(0, 20),
+      kind: "dead-chain-measures",
     });
   }
   const unusedColumns = userColumns.filter(c => c.status === "unused" && !c.isKey);
@@ -700,7 +710,28 @@ const SEVERITY_META: Record<ImprovementSeverity, { icon: string; label: string; 
   good:   { icon: "✅", label: "Strengths",       order: 4 },
 };
 
-function renderImprovementItem(it: Improvement): string[] {
+/** Map `Improvement.kind` to the `CleanupCategory` the prompt builder
+ *  expects. Same string today, but separate types so the two can drift
+ *  later without coupling. */
+const KIND_TO_CATEGORY: Record<ImprovementKind, CleanupCategory> = {
+  "unused-measures":     "unused-measures",
+  "dead-chain-measures": "dead-chain-measures",
+};
+
+function renderCleanupPromptBlock(data: FullData, kind: ImprovementKind): string[] {
+  const prompt = buildCleanupPrompt(data, KIND_TO_CATEGORY[kind]);
+  return [
+    "<details>",
+    "<summary>AI cleanup prompt (copy + paste into Claude Code or another AI agent)</summary>",
+    "",
+    prompt.replace(/\n+$/, ""),
+    "",
+    "</details>",
+    "",
+  ];
+}
+
+function renderImprovementItem(it: Improvement, data: FullData): string[] {
   const lines: string[] = [];
   lines.push(`### ${it.title}`);
   lines.push("");
@@ -722,6 +753,9 @@ function renderImprovementItem(it: Improvement): string[] {
   if (it.crossRef) {
     lines.push(`> ${it.crossRef}`);
     lines.push("");
+  }
+  if (it.kind) {
+    for (const ln of renderCleanupPromptBlock(data, it.kind)) lines.push(ln);
   }
   return lines;
 }
@@ -788,7 +822,7 @@ export function generateImprovementsMd(data: FullData, reportName: string, _mode
     lines.push(`## ${SEVERITY_META[sev].icon} ${SEVERITY_META[sev].label} (${group.length})`);
     lines.push("");
     for (const it of group) {
-      for (const ln of renderImprovementItem(it)) lines.push(ln);
+      for (const ln of renderImprovementItem(it, data)) lines.push(ln);
     }
     lines.push("---");
     lines.push("");
