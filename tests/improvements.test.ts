@@ -209,6 +209,69 @@ test("generateImprovementsMd — auto-date entry appears when auto-date tables e
 });
 
 // ─────────────────────────────────────────────────────────────────────
+// AI cleanup prompt — embedded <details> block per finding
+// ─────────────────────────────────────────────────────────────────────
+
+test("generateImprovementsMd — unused-measures finding embeds AI cleanup <details> block", () => {
+  const data = mk({
+    measures: [
+      mkMeasure({ table: "Sales", name: "Old Total", status: "unused", daxExpression: "SUM(Sales[X])" }),
+    ],
+  });
+  const md = generateImprovementsMd(data, "t");
+  assert.ok(md.includes("### 1 unused measure"), "expected unused-measures finding to render");
+  assert.ok(md.includes("<details>"), "expected <details> wrapper to render");
+  assert.ok(md.includes("AI cleanup prompt (copy + paste"), "expected summary text");
+  assert.ok(md.includes("# Cleanup task — delete unused Power BI measures"),
+    "expected the prompt's H1 title to be embedded");
+  assert.ok(md.includes("Sales[Old Total]"), "expected the kill target in the embedded prompt");
+});
+
+test("generateImprovementsMd — dead-chain finding embeds its own prompt block (Stage-2-only)", () => {
+  const data = mk({
+    measures: [
+      mkMeasure({ name: "Top", status: "unused", daxDependencies: ["Helper"] }),
+      mkMeasure({ name: "Helper", status: "indirect" }),
+    ],
+  });
+  const md = generateImprovementsMd(data, "t");
+  assert.ok(md.includes("only reachable through unused chains"), "expected dead-chain finding");
+  // Two findings (unused + dead-chain) → two <details> blocks
+  const detailsCount = (md.match(/<details>/g) || []).length;
+  assert.equal(detailsCount, 2, "expected one <details> per finding (unused + dead-chain)");
+  assert.ok(md.includes("# Cleanup task — delete dead-chain Power BI measures"),
+    "expected dead-chain-specific prompt header");
+});
+
+test("generateImprovementsMd — no <details> block when no unused / dead-chain findings", () => {
+  const md = generateImprovementsMd(mk(), "t");
+  assert.ok(!md.includes("<details>"), "empty model should not embed any cleanup prompt");
+});
+
+test("generateImprovementsMd — EXTERNALMEASURE proxy never appears in the embedded prompt body", () => {
+  const data = mk({
+    measures: [
+      mkMeasure({
+        table: "Remote", name: "Remote Revenue", status: "unused",
+        daxExpression: "EXTERNALMEASURE(\"R\", DOUBLE, \"DirectQuery to AS - X\")",
+        externalProxy: { remoteName: "R", type: "DOUBLE", externalModel: "DirectQuery to AS - X", cluster: null },
+      }),
+      mkMeasure({ table: "Sales", name: "Legit", status: "unused", daxExpression: "0" }),
+    ],
+  });
+  const md = generateImprovementsMd(data, "t");
+  // Find just the <details> block content
+  const start = md.indexOf("<details>");
+  const end = md.indexOf("</details>");
+  assert.ok(start >= 0 && end > start, "expected a <details> block to be present");
+  const block = md.slice(start, end);
+  assert.ok(!block.includes("Remote[Remote Revenue]"),
+    "EXTERNALMEASURE-bound measure must not appear in the embedded kill list");
+  assert.ok(block.includes("Sales[Legit]"),
+    "non-proxy unused measure should be in the embedded kill list");
+});
+
+// ─────────────────────────────────────────────────────────────────────
 // Fixture integration — H&S
 // ─────────────────────────────────────────────────────────────────────
 

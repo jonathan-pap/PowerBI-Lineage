@@ -328,6 +328,11 @@ document.addEventListener('click', function(e){
     case 'export-measures-csv':       exportMeasuresCsv(); break;
     case 'export-columns-csv':        exportColumnsCsv(); break;
     case 'export-relationships-csv':  exportRelationshipsCsv(); break;
+    // AI cleanup prompt modal — opens from Unused tab buttons.
+    case 'cleanup-modal-open':        openCleanupModal((d.category as CleanupModalCategory) || "measures-all"); break;
+    case 'close-cleanup-modal':       closeCleanupModal(); break;
+    case 'cleanup-modal-copy':        copyCleanupPromptToClipboard(); break;
+    case 'cleanup-modal-download':    downloadCleanupPromptAsMd(); break;
   }
 });
 
@@ -1161,7 +1166,7 @@ function renderUnused(){
   const unusedC=DATA.columns.filter((c: any) =>c.status==='unused'),indirectC=DATA.columns.filter((c: any) =>c.status==='indirect');
   const pureOrphanM=unusedM.filter((m: any) =>!m.dependedOnBy.length);
   const chainOrphanM=unusedM.filter((m: any) =>m.dependedOnBy.length>0);
-  let h='';
+  let h=renderCleanupBar();
 
   if(pureOrphanM.length) h+=orphanSection('pure-m','Unused Measures — Not Referenced Anywhere','No visual uses them and no other measure references them — safe to remove','var(--clr-unused)',pureOrphanM.length,'Measures',
     pureOrphanM.map((m: any) =>`<div class="lc clickable" style="border-left:3px solid var(--clr-unused);flex:0 0 auto" data-action="lineage" data-type="measure" data-name="${escAttr(m.name)}"><div class="lc-name">${escHtml(m.name)}</div><div class="lc-sub">${escHtml(m.table)} · ${escHtml(m.formatString||'')}</div></div>`).join(""));
@@ -1185,6 +1190,143 @@ function renderUnused(){
     '</div></div>';
   document.getElementById("unused-content")!.innerHTML=h;
 }
+
+// ─────────────────────────────────────────────────────────────────────
+// AI cleanup prompt modal — opened from the Unused tab. Lineage stays
+// read-only; this just packages the audit's kill-candidate list into a
+// markdown prompt the user pastes into Claude Code / another AI agent
+// that can drive TOM. The prompt builder lives in src/ai-prompts.ts
+// (self-contained, inlined via html-generator's manifest).
+// ─────────────────────────────────────────────────────────────────────
+
+type CleanupModalCategory = "unused-measures" | "dead-chain-measures" | "measures-all";
+
+/**
+ * Build the "Generate AI cleanup prompt" toolbar shown above the
+ * orphan sections in the Unused tab. Picks the right category based
+ * on what's available:
+ *   - Stage 1 + Stage 2 both have items → "measures-all" (combined)
+ *   - Only Stage 1                      → "unused-measures"
+ *   - Only Stage 2                      → "dead-chain-measures"
+ *   - Neither                           → empty string (hide bar)
+ * Counts on the button match what ends up in the prompt body
+ * (EXTERNALMEASURE proxies excluded), not what's on the cards below.
+ */
+function renderCleanupBar(): string {
+  if (!DATA || !DATA.measures) return '';
+  const counts = countCleanupTargets(DATA);
+  if (counts.stage1 === 0 && counts.stage2 === 0) return '';
+  let category: CleanupModalCategory;
+  let parts: string[] = [];
+  if (counts.stage1 > 0 && counts.stage2 > 0) {
+    category = 'measures-all';
+    parts.push(counts.stage1 + ' unused');
+    parts.push(counts.stage2 + ' dead-chain');
+  } else if (counts.stage1 > 0) {
+    category = 'unused-measures';
+    parts.push(counts.stage1 + ' unused measure' + (counts.stage1 === 1 ? '' : 's'));
+  } else {
+    category = 'dead-chain-measures';
+    parts.push(counts.stage2 + ' dead-chain measure' + (counts.stage2 === 1 ? '' : 's'));
+  }
+  const label = 'Generate AI cleanup prompt (' + parts.join(' + ') + ')';
+  const tooltip = "PowerBI-Lineage won't run this — copy + paste into Claude Code (with the pbi-desktop plugin) or another AI agent that can drive TOM. The prompt includes Stage 1/Stage 2 ordering and EXTERNALMEASURE safety guards.";
+  return '<div class="cleanup-bar">' +
+    '<div class="cleanup-bar-msg">Ready to act on these? Generate an AI prompt to delete the flagged measures.</div>' +
+    '<button type="button" class="cleanup-bar-btn" data-action="cleanup-modal-open" data-category="' + category + '" title="' + escAttr(tooltip) + '">' +
+      escHtml(label) +
+    '</button>' +
+  '</div>';
+}
+
+let currentCleanupPrompt: { category: CleanupModalCategory; body: string } | null = null;
+
+function openCleanupModal(category: CleanupModalCategory): void {
+  if (!DATA || !DATA.measures) return;
+  const body = buildCleanupPrompt(DATA, category);
+  currentCleanupPrompt = { category, body };
+  const modal = document.getElementById("cleanup-modal");
+  const pre   = document.getElementById("cleanup-modal-pre");
+  const title = document.getElementById("cleanup-modal-title");
+  const stat  = document.getElementById("cleanup-modal-status");
+  if (!modal || !pre || !title) return;
+  const titles: Record<CleanupModalCategory, string> = {
+    "unused-measures":     "AI cleanup prompt — directly unused measures",
+    "dead-chain-measures": "AI cleanup prompt — dead-chain measures",
+    "measures-all":        "AI cleanup prompt — unused + dead-chain measures",
+  };
+  title.textContent = titles[category];
+  pre.textContent = body;
+  if (stat) { stat.textContent = ""; stat.className = "cleanup-modal-status"; }
+  modal.hidden = false;
+  document.body.style.overflow = "hidden";
+}
+
+function closeCleanupModal(): void {
+  const modal = document.getElementById("cleanup-modal");
+  if (modal) modal.hidden = true;
+  document.body.style.overflow = "";
+  currentCleanupPrompt = null;
+}
+
+function setCleanupModalStatus(msg: string, kind: "ok" | "error"): void {
+  const s = document.getElementById("cleanup-modal-status");
+  if (!s) return;
+  s.textContent = msg;
+  s.className = "cleanup-modal-status is-" + kind;
+  // Auto-clear after 3s if untouched
+  const stamp = msg;
+  setTimeout(function(){
+    if (s.textContent === stamp) { s.textContent = ""; s.className = "cleanup-modal-status"; }
+  }, 3000);
+}
+
+function copyCleanupPromptToClipboard(): void {
+  if (!currentCleanupPrompt) return;
+  const body = currentCleanupPrompt.body;
+  const nav = navigator as Navigator & { clipboard?: { writeText: (s: string) => Promise<void> } };
+  if (nav.clipboard && nav.clipboard.writeText) {
+    nav.clipboard.writeText(body).then(
+      function(){ setCleanupModalStatus("Copied to clipboard ✓", "ok"); },
+      function(){ cleanupPromptSelectAllFallback(); },
+    );
+  } else {
+    cleanupPromptSelectAllFallback();
+  }
+}
+
+function cleanupPromptSelectAllFallback(): void {
+  const pre = document.getElementById("cleanup-modal-pre");
+  if (!pre) return;
+  const range = document.createRange();
+  range.selectNodeContents(pre);
+  const sel = window.getSelection();
+  if (sel) { sel.removeAllRanges(); sel.addRange(range); }
+  setCleanupModalStatus("Clipboard blocked — press Ctrl+C / Cmd+C", "error");
+}
+
+function downloadCleanupPromptAsMd(): void {
+  if (!currentCleanupPrompt) return;
+  const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  const filename = "cleanup-" + currentCleanupPrompt.category + "-" + stamp + ".md";
+  const blob = new Blob([currentCleanupPrompt.body], { type: "text/markdown;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click();
+  setTimeout(function(){
+    if (a.parentNode) a.parentNode.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, 200);
+  setCleanupModalStatus("Downloaded " + filename, "ok");
+}
+
+// Escape key closes the modal when it's open.
+document.addEventListener("keydown", function(e: KeyboardEvent){
+  if (e.key !== "Escape") return;
+  const modal = document.getElementById("cleanup-modal");
+  if (modal && !modal.hidden) closeCleanupModal();
+});
 
 // ─────────────────────────────────────────────────────────────────────
 // Sources tab view-toggle — segmented control that swaps between the

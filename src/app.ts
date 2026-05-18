@@ -15,6 +15,7 @@ import { generateImprovementsMd } from "./improvements.js";
 import { findSemanticModelPath } from "./model-parser.js";
 import { escHtml } from "./render/safe.js";
 import { validateReportPath } from "./path-guard.js";
+import { buildCleanupPrompt, type CleanupCategory } from "./ai-prompts.js";
 
 // Resolve the package version once at module load (falls back if unavailable).
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -24,6 +25,110 @@ const APP_VERSION: string = (() => {
     return typeof pkg.version === "string" && pkg.version ? pkg.version : "0.1.0";
   } catch { return "0.1.0"; }
 })();
+
+// ---------------------------------------------------------------------------
+// Subcommand dispatch — runs before any server-startup code. Currently
+// just `prompt` for the AI cleanup handoff; structured so additional
+// subcommands can slot in without growing this file too much.
+// ---------------------------------------------------------------------------
+
+function runPromptSubcommand(args: string[]): never {
+  // Parse `--key value` style flags. Unknown flags fail loudly so a
+  // typo doesn't silently produce the wrong prompt.
+  const flags: Record<string, string> = {};
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a === "--help" || a === "-h") {
+      printPromptUsage();
+      process.exit(0);
+    }
+    if (!a.startsWith("--")) {
+      console.error(`Unexpected positional arg: ${a}`);
+      printPromptUsage();
+      process.exit(2);
+    }
+    const key = a.slice(2);
+    const val = args[i + 1];
+    if (val === undefined || val.startsWith("--")) {
+      console.error(`Flag ${a} requires a value.`);
+      printPromptUsage();
+      process.exit(2);
+    }
+    flags[key] = val;
+    i++;
+  }
+
+  const validCategories: CleanupCategory[] = ["unused-measures", "dead-chain-measures", "measures-all"];
+  const category = flags.category as CleanupCategory;
+  if (!category || !validCategories.includes(category)) {
+    console.error(`--category is required; one of: ${validCategories.join(", ")}`);
+    printPromptUsage();
+    process.exit(2);
+  }
+
+  if (!flags.report) {
+    console.error(`--report <path-to-.Report-folder> is required.`);
+    printPromptUsage();
+    process.exit(2);
+  }
+
+  const validation = validateReportPath(flags.report);
+  if (!validation.ok) {
+    console.error(`Report path invalid: ${validation.reason}`);
+    process.exit(2);
+  }
+  const reportPath = validation.resolved;
+
+  try {
+    findSemanticModelPath(reportPath);
+  } catch (e) {
+    console.error(`Could not locate semantic model: ${(e as Error).message}`);
+    process.exit(2);
+  }
+
+  let data;
+  try {
+    data = buildFullData(reportPath);
+  } catch (e) {
+    console.error(`Parser error: ${(e as Error).message}`);
+    process.exit(1);
+  }
+
+  const prompt = buildCleanupPrompt(data, category);
+
+  if (flags.output) {
+    try {
+      fs.writeFileSync(flags.output, prompt, "utf8");
+      console.error(`Wrote ${prompt.length} bytes to ${flags.output}`);
+    } catch (e) {
+      console.error(`Could not write output: ${(e as Error).message}`);
+      process.exit(1);
+    }
+  } else {
+    process.stdout.write(prompt);
+  }
+  process.exit(0);
+}
+
+function printPromptUsage(): void {
+  console.error(`
+  powerbi-lineage prompt --category <c> --report <path> [--output <file>]
+
+  Generates a markdown prompt for an AI agent (Claude Code + pbi-desktop,
+  Cursor, etc.) to delete the measures the audit flags. Lineage does NOT
+  run the prompt — it just emits the markdown.
+
+  --category   unused-measures | dead-chain-measures | measures-all
+  --report     Path to a .Report folder inside a PBIP project
+  --output     Optional file path (defaults to stdout)
+`);
+}
+
+// Dispatch BEFORE the server-startup code below runs. Anything that
+// isn't a known subcommand falls through to the dashboard server.
+if (process.argv[2] === "prompt") {
+  runPromptSubcommand(process.argv.slice(3));
+}
 
 // ---------------------------------------------------------------------------
 // Recent paths storage

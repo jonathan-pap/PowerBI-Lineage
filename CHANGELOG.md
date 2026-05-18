@@ -6,6 +6,7 @@ See [`changelog/README.md`](changelog/README.md) for the full index.
 
 ## Latest releases
 
+- **[0.12.0](changelog/0.12.0.md)** — 2026-05-18 · AI cleanup prompt handoff — Unused-tab button + `<details>` block in `improvements.md` + `prompt` CLI subcommand generate a markdown prompt for Claude Code (or any AI agent) to delete flagged measures. Lineage stays read-only.
 - **[0.11.7](changelog/0.11.7.md)** — 2026-04-28 · Default tab is now Sources (was Measures); fix Measures + Columns flipping to ascending sort on report reload
 - **[0.11.6](changelog/0.11.6.md)** — 2026-04-26 · Cross-doc link integrity — fix `[Sources.md](#)` regression in Model.md §3.3 + Index.md glossary entries now link to their companion docs (Measures, DataDictionary, Functions, CalcGroups)
 - **[0.11.5](changelog/0.11.5.md)** — 2026-04-26 · Improvements audit names the entities — tables / measures / columns missing descriptions now list the actual offenders inline
