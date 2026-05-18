@@ -9,7 +9,7 @@ Open a PBIP project folder — get a searchable dashboard plus nine Markdown doc
 </p>
 
 <p align="center">
-  <img alt="Tests 276/276" src="https://img.shields.io/badge/tests-276%2F276-22c55e?style=flat-square">
+  <img alt="Tests 299/299" src="https://img.shields.io/badge/tests-299%2F299-22c55e?style=flat-square">
   <img alt="Runtime deps 0" src="https://img.shields.io/badge/runtime%20deps-0-64748b?style=flat-square">
   <img alt="Node ≥18" src="https://img.shields.io/badge/node-%E2%89%A518-5E6A7B?style=flat-square">
 </p>
@@ -199,7 +199,7 @@ scripts/
   serve-browser.mjs    Tiny static server for local testing
 
 changelog/             Per-version release notes (one file per release)
-tests/                 node:test suites — 276 tests, zero framework deps
+tests/                 node:test suites — 299 tests, zero framework deps
 ```
 
 ## Zero runtime dependencies
