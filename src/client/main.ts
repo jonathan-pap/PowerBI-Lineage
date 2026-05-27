@@ -225,6 +225,30 @@ const pageData=(DATA.pages||[]).slice();
 // chip's action without bubbling to the parent's toggle — no need
 // for event.stopPropagation() at each site.
 // ─────────────────────────────────────────────────────────────────────
+// Shared clipboard helper with navigator.clipboard → execCommand fallback +
+// optional visual "✓" feedback on the source button. Used by data-action
+// dispatchers (e.g. copy-ref) that need to copy a short string on click.
+function copyText(text: string, btn?: HTMLElement): void {
+  function ok(): void {
+    if (!btn) return;
+    const orig = btn.textContent;
+    btn.textContent = "✓";
+    setTimeout(function(){ btn.textContent = orig; }, 900);
+  }
+  function fallback(): void {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed"; ta.style.left = "-9999px";
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand("copy"); ok(); } catch (_e) { /* swallow */ }
+    document.body.removeChild(ta);
+  }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(ok).catch(fallback);
+  } else fallback();
+}
+
 // In-document anchor clicks inside the Docs tab (.md-rendered)
 // — intercept so they scroll to the heading within the Docs
 // container instead of appending #anchor to the URL (which makes the
@@ -303,6 +327,8 @@ document.addEventListener('click', function(e){
     case 'md-lite-mode':    switchMdLiteMode((d.mode as "lite" | "detailed") || "detailed"); break;
     case 'sort':            sortTable(d.table, d.key); break;
     case 'unused-filter':   toggleUnused(d.entity); break;
+    case 'clear-filter':    clearFilter(d.entity); break;
+    case 'copy-ref':        copyText("'" + (d.table || "") + "'[" + (d.column || "") + "]", el); break;
     case 'theme':           toggleTheme(); break;
     case 'theme-set':       setTheme(d.themeName || 'dark'); break;
     case 'show-whats-new':  showChangelogPopup(); break;
@@ -343,6 +369,17 @@ document.addEventListener('click', function(e){
 // missed the oninput ones; this closes the "no inline handlers"
 // invariant. Same structural guarantee: user text reaches
 // filterTable via HTMLInputElement.value (browser-decoded, safe).
+// Debounce search-driven re-renders so fast typing doesn't re-render a whole
+// table / re-rank the typeahead on every keystroke. Keyed per input (action +
+// entity) so Measures and Columns debounce independently. ~140ms reads as
+// instant but coalesces a burst of keystrokes into one render.
+const SEARCH_DEBOUNCE_MS = 140;
+const inputDebounce: Record<string, ReturnType<typeof setTimeout>> = {};
+function debounceInput(key: string, fn: () => void): void {
+  if (inputDebounce[key]) clearTimeout(inputDebounce[key]);
+  inputDebounce[key] = setTimeout(fn, SEARCH_DEBOUNCE_MS);
+}
+
 document.addEventListener('input', function(e){
   const target = e.target as Element | null;
   const el = target?.closest && target.closest('[data-action]') as HTMLInputElement | null;
@@ -350,8 +387,17 @@ document.addEventListener('input', function(e){
   var a = el.getAttribute('data-action');
   var d = el.dataset;
   switch (a) {
-    case 'filter': filterTable(d.entity, el.value); break;
-    case 'lineage-search': renderLineageSearchResults(el.value); break;
+    case 'filter': {
+      const entity = d.entity as string, value = el.value;
+      debounceInput('filter:' + entity, function(){ filterTable(entity, value); });
+      break;
+    }
+    case 'lineage-search': {
+      const value = el.value;
+      lineageSearchActive = -1; // typing invalidates any keyboard highlight
+      debounceInput('lineage-search', function(){ renderLineageSearchResults(value); });
+      break;
+    }
   }
 });
 
@@ -376,6 +422,68 @@ document.addEventListener('click', function(e){
         + '</div>';
     }
   }
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// Lineage typeahead keyboard navigation — ↓/↑ move a highlight through the
+// dropdown hits, Enter opens the highlighted (or first) hit, Esc dismisses.
+// Reads hits straight from the DOM so it stays in sync with whatever
+// renderLineageSearchResults() last rendered. Delegated off document so it
+// works regardless of script/DOM load order.
+// ─────────────────────────────────────────────────────────────────────
+let lineageSearchActive = -1; // index of the highlighted hit, -1 = none
+
+function lineageHits(): HTMLElement[] {
+  const host = document.getElementById("lineage-search-results");
+  if (!host || host.style.display === "none") return [];
+  return Array.from(host.querySelectorAll(".lineage-search-hit")) as HTMLElement[];
+}
+function highlightLineageHit(idx: number): void {
+  const hits = lineageHits();
+  if (!hits.length) return;
+  lineageSearchActive = idx;
+  hits.forEach(function(h, i){
+    if (i === idx) { h.classList.add("active"); h.scrollIntoView({ block: "nearest" }); }
+    else h.classList.remove("active");
+  });
+}
+function moveLineageHighlight(delta: number): void {
+  const hits = lineageHits();
+  if (!hits.length) return;
+  const idx = lineageSearchActive < 0
+    ? (delta > 0 ? 0 : hits.length - 1)
+    : (lineageSearchActive + delta + hits.length) % hits.length;
+  highlightLineageHit(idx);
+}
+document.addEventListener("keydown", function(e: KeyboardEvent){
+  const t = e.target as HTMLElement | null;
+  if (!t || t.id !== "lineage-search-input") return;
+  if (e.key === "ArrowDown") { if (lineageHits().length) { e.preventDefault(); moveLineageHighlight(1); } }
+  else if (e.key === "ArrowUp") { if (lineageHits().length) { e.preventDefault(); moveLineageHighlight(-1); } }
+  else if (e.key === "Enter") {
+    let hits = lineageHits();
+    if (!hits.length) { // flush a pending debounced render so Enter still works mid-debounce
+      renderLineageSearchResults((t as HTMLInputElement).value);
+      hits = lineageHits();
+    }
+    const pick = (lineageSearchActive >= 0 && hits[lineageSearchActive]) || hits[0];
+    if (pick) { e.preventDefault(); navigateLineage(pick.dataset.type, pick.dataset.name); lineageSearchActive = -1; }
+  } else if (e.key === "Escape") {
+    const host = document.getElementById("lineage-search-results");
+    if (host) { host.style.display = "none"; host.innerHTML = ""; }
+    lineageSearchActive = -1;
+  }
+});
+
+// Global "/" shortcut — classic site-search: jumps to the Lineage tab and
+// focuses the typeahead. Ignored when the user is already typing somewhere
+// (inputs, textareas, contenteditable) so it doesn't hijack normal text entry.
+document.addEventListener("keydown", function(e: KeyboardEvent){
+  if (e.key !== "/" || e.ctrlKey || e.altKey || e.metaKey) return;
+  const t = e.target as HTMLElement | null;
+  if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+  e.preventDefault();
+  switchTab("lineage"); // switchTab focuses #lineage-search-input on a 0ms timeout
 });
 
 // uc — see src/client/render/escape.ts
@@ -473,6 +581,13 @@ function switchTab( id: any) {
     const input = document.getElementById("lineage-search-input") as HTMLInputElement | null;
     if (input) setTimeout(function(){ input.focus(); }, 0);
   }
+  // Measures / Columns tabs: focus + select the search box so the user can
+  // type to filter immediately. Mirrors the Lineage tab's "single keystroke
+  // from tab-switch to typing" pattern.
+  if (id === "measures" || id === "columns") {
+    const search = document.querySelector('.search-input[data-entity="' + id + '"]') as HTMLInputElement | null;
+    if (search) setTimeout(function(){ search.focus(); search.select(); }, 0);
+  }
   // Functions + Calc Groups tabs display DAX bodies. Running through
   // addCopyButtons() here (which also highlights) colourises any new
   // blocks that weren't highlighted at initial render.
@@ -485,7 +600,7 @@ function renderMeasures(){
   items.sort((a: any, b: any) =>{let av=a[s.key],bv=b[s.key];if(typeof av==='string')return s.desc?bv.localeCompare(av):av.localeCompare(bv);return s.desc?bv-av:av-bv;});
   if(showUnusedOnly.measures)items=items.filter((m: any) =>m.status!=='direct');
   if(searchTerms.measures){const q=searchTerms.measures.toLowerCase();items=items.filter((m: any) =>m.name.toLowerCase().includes(q)||m.table.toLowerCase().includes(q));}
-  document.getElementById("tbody-measures")!.innerHTML=items.map((m: any) =>{
+  document.getElementById("tbody-measures")!.innerHTML=items.length?items.map((m: any) =>{
     const deps=m.daxDependencies.map((d: any) =>`<span class="dep-chip" data-action="lineage" data-type="measure" data-name="${escAttr(d)}">${escHtml(d)}</span>`).join("")||'<span style="color:var(--text-faint)">—</span>';
     const pages=[...new Set(m.usedIn.map((u: any) =>u.pageName))];
     const used=pages.map((p: any) =>`<span class="used-chip">${escHtml(p)}</span>`).join("")||'<span style="color:var(--text-faint)">—</span>';
@@ -493,7 +608,7 @@ function renderMeasures(){
     const nameAttr=m.description?' title="'+escAttr(m.description)+'" data-desc="1"':'';
     const descRow=m.description?'<div class="desc-muted" style="margin-top:2px;font-size:11px">'+escHtml(m.description)+'</div>':'';
     return `<tr class="${sc(m.status)}"><td><span class="field-name"${nameAttr} data-action="lineage" data-type="measure" data-name="${escAttr(m.name)}">${escHtml(m.name)}</span>${statusBadge}${descRow}</td><td><span class="field-table">${escHtml(m.table)}</span></td><td><span class="usage-count ${uc(m.usageCount)}">${m.usageCount}</span></td><td><span class="usage-count ${uc(m.pageCount)}">${m.pageCount}</span></td><td>${deps}</td><td>${used}</td><td><span class="format-str">${escHtml(m.formatString||'—')}</span></td></tr>`;
-  }).join("");
+  }).join(""):tableEmptyRow(7,"measures");
   setPanelFooter("footer-measures",
     "Showing "+items.length+" of "+DATA.measures.length+" measures · "+DATA.totals.measuresUnused+" unused · "+DATA.totals.measuresIndirect+" indirect",
     sortIndicator(sortState.measures));
@@ -504,7 +619,7 @@ function renderColumns(){
   items.sort((a: any, b: any) =>{let av=a[s.key],bv=b[s.key];if(typeof av==='string')return s.desc?bv.localeCompare(av):av.localeCompare(bv);return s.desc?bv-av:av-bv;});
   if(showUnusedOnly.columns)items=items.filter((c: any) =>c.status!=='direct');
   if(searchTerms.columns){const q=searchTerms.columns.toLowerCase();items=items.filter((c: any) =>c.name.toLowerCase().includes(q)||c.table.toLowerCase().includes(q));}
-  document.getElementById("tbody-columns")!.innerHTML=items.map((c: any) =>{
+  document.getElementById("tbody-columns")!.innerHTML=items.length?items.map((c: any) =>{
     const pages=[...new Set(c.usedIn.map((u: any) =>u.pageName))];
     const used=pages.map((p: any) =>`<span class="used-chip">${escHtml(p)}</span>`).join("")||'<span style="color:var(--text-faint)">—</span>';
     // SLICER badge intentionally omitted here — it now lives on the per-column
@@ -514,7 +629,7 @@ function renderColumns(){
     const cNameAttr=c.description?' title="'+escAttr(c.description)+'" data-desc="1"':'';
     const cDescRow=c.description?'<div class="desc-muted" style="margin-top:2px;font-size:11px">'+escHtml(c.description)+'</div>':'';
     return `<tr class="${sc(c.status)}"><td><span class="field-name"${cNameAttr} data-action="lineage" data-type="column" data-name="${escAttr(c.name)}">${escHtml(c.name)}</span>${statusBadge}${cDescRow}</td><td><span class="field-table">${escHtml(c.table)}</span></td><td><span class="mono" style="font-size:11px;color:#64748B">${escHtml(c.dataType)}</span></td><td><span class="usage-count ${uc(c.usageCount)}">${c.usageCount}</span></td><td><span class="usage-count ${uc(c.pageCount)}">${c.pageCount}</span></td><td>${used}</td></tr>`;
-  }).join("");
+  }).join(""):tableEmptyRow(6,"columns");
   setPanelFooter("footer-columns",
     "Showing "+items.length+" of "+DATA.columns.length+" columns · "+DATA.totals.columnsUnused+" unused",
     sortIndicator(sortState.columns));
@@ -1875,7 +1990,12 @@ function renderSourceMap(){
       if(r.isHidden)flags.push('<span class="dep-chip" style="background:rgba(100,116,139,.1);color:var(--text-dim);border-color:rgba(100,116,139,.2);padding:1px 7px;font-size:10px">hidden</span>');
       if(r.isCalculated)flags.push('<span class="dep-chip" style="background:rgba(167,139,250,.1);color:var(--clr-upstream);border-color:rgba(167,139,250,.2);padding:1px 7px;font-size:10px">calc</span>');
       body+='<tr>'+
-        '<td><code style="color:var(--code-name)">'+escHtml(r.column)+'</code>'+(flags.length?' '+flags.join(" "):'')+'</td>'+
+        '<td><code style="color:var(--code-name)">'+escHtml(r.column)+'</code>'+(flags.length?' '+flags.join(" "):'')+
+          '<button data-action="copy-ref" data-table="'+escAttr(r.table)+'" data-column="'+escAttr(r.column)+'" '+
+          'title="Copy DAX reference" '+
+          'style="margin-left:8px;padding:1px 6px;font-size:10px;background:transparent;border:1px solid var(--border);'+
+          'border-radius:4px;cursor:pointer;color:var(--text-faint);vertical-align:middle">⎘</button>'+
+        '</td>'+
         '<td>'+escHtml(r.table)+'</td>'+
         '<td style="color:var(--text-dim);font-size:12px">'+escHtml(r.dataType)+'</td>'+
         '<td>'+escHtml(r.mode)+'</td>'+
@@ -2090,6 +2210,36 @@ function renderCalcGroups(){
 function sortTable( t: any, k: any) {const s=sortState[t];if(s.key===k)s.desc=!s.desc;else{s.key=k;s.desc=true;}t==="measures"?renderMeasures():renderColumns();}
 function filterTable( t: any, v: any) {searchTerms[t]=v;t==="measures"?renderMeasures():renderColumns();}
 function toggleUnused( t: any) {showUnusedOnly[t]=!showUnusedOnly[t];document.getElementById("btn-unused-"+(t==="measures"?"m":"c"))!.classList.toggle("active");t==="measures"?renderMeasures():renderColumns();}
+
+// Full-width placeholder row shown when a Measures/Columns table renders zero
+// rows. Distinguishes "no search match" (offers a clear link) from "no unused
+// left" (a positive) from "empty model".
+function tableEmptyRow(colspan: number, entity: string): string {
+  const term = searchTerms[entity];
+  let inner: string;
+  if (term) {
+    inner = 'No ' + entity + ' match “' + escHtml(term) + '”'
+      + '<span data-action="clear-filter" data-entity="' + escAttr(entity) + '" '
+      + 'style="cursor:pointer;color:var(--accent);text-decoration:underline;margin-left:8px">Clear search</span>';
+  } else if (showUnusedOnly[entity]) {
+    inner = 'No unused ' + entity + ' — everything here is referenced. ✓';
+  } else {
+    inner = 'No ' + entity + ' in this model.';
+  }
+  return '<tr class="table-empty-row"><td colspan="' + colspan + '" '
+    + 'style="text-align:center;padding:32px 16px;color:var(--text-faint);font-size:13px">' + inner + '</td></tr>';
+}
+
+// Clear only the search term for a table (leaves the unused-only toggle as-is)
+// and re-render. Cancels any pending debounced filter so a stale keystroke
+// can't re-apply the term after the clear.
+function clearFilter(entity: any){
+  if (inputDebounce['filter:' + entity]) clearTimeout(inputDebounce['filter:' + entity]);
+  searchTerms[entity] = "";
+  const input = document.querySelector('.search-input[data-entity="' + entity + '"]') as HTMLInputElement | null;
+  if (input) input.value = "";
+  entity === "measures" ? renderMeasures() : renderColumns();
+}
 
 // Docs-tab Lite/Detailed mode toggle. "detailed" preserves the current
 // behaviour (the rich reference shape); "lite" emits the paste-into-

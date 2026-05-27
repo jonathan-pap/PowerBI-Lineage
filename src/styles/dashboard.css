@@ -297,6 +297,8 @@
   .search-input{flex:1;padding:var(--space-4) var(--space-5);font-size:var(--fs-md);font-family:inherit;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);color:var(--text-body);outline:none;transition:border-color .15s}
   .search-input:focus{border-color:var(--accent)}
   .search-input::placeholder{color:var(--text-faint)}
+  .lineage-search-hit:hover,.lineage-search-hit.active{background:var(--row-hover)}
+  .lineage-search-hit.active{box-shadow:inset 2px 0 0 var(--accent)}
   .filter-btn{padding:6px 12px;font-size:11px;border:1px solid var(--border);border-radius:6px;cursor:pointer;background:var(--surface);color:var(--text-dim);font-family:inherit;transition:all .15s}
   .filter-btn:hover,.filter-btn.active{background:var(--border);color:var(--text)}
   .filter-btn.active{border-color:var(--accent);color:var(--accent)}
