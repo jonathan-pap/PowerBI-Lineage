@@ -1989,12 +1989,15 @@ function renderSourceMap(){
       const flags=[];
       if(r.isHidden)flags.push('<span class="dep-chip" style="background:rgba(100,116,139,.1);color:var(--text-dim);border-color:rgba(100,116,139,.2);padding:1px 7px;font-size:10px">hidden</span>');
       if(r.isCalculated)flags.push('<span class="dep-chip" style="background:rgba(167,139,250,.1);color:var(--clr-upstream);border-color:rgba(167,139,250,.2);padding:1px 7px;font-size:10px">calc</span>');
+      // Template literals around the data-* attributes — string concatenation
+      // that splices `' + escAttr(...) + '` inside `data-table="…"` trips the
+      // XSS-fuzz structural test, which scans the inlined script source for
+      // raw single-quotes inside data-* attribute patterns. Same rule the
+      // lineage typeahead follows (see renderLineageSearchResults).
+      const copyBtn = `<button data-action="copy-ref" data-table="${escAttr(r.table)}" data-column="${escAttr(r.column)}" title="Copy DAX reference" style="margin-left:8px;padding:1px 6px;font-size:10px;background:transparent;border:1px solid var(--border);border-radius:4px;cursor:pointer;color:var(--text-faint);vertical-align:middle">⎘</button>`;
       body+='<tr>'+
         '<td><code style="color:var(--code-name)">'+escHtml(r.column)+'</code>'+(flags.length?' '+flags.join(" "):'')+
-          '<button data-action="copy-ref" data-table="'+escAttr(r.table)+'" data-column="'+escAttr(r.column)+'" '+
-          'title="Copy DAX reference" '+
-          'style="margin-left:8px;padding:1px 6px;font-size:10px;background:transparent;border:1px solid var(--border);'+
-          'border-radius:4px;cursor:pointer;color:var(--text-faint);vertical-align:middle">⎘</button>'+
+          copyBtn+
         '</td>'+
         '<td>'+escHtml(r.table)+'</td>'+
         '<td style="color:var(--text-dim);font-size:12px">'+escHtml(r.dataType)+'</td>'+
@@ -2218,9 +2221,12 @@ function tableEmptyRow(colspan: number, entity: string): string {
   const term = searchTerms[entity];
   let inner: string;
   if (term) {
-    inner = 'No ' + entity + ' match “' + escHtml(term) + '”'
-      + '<span data-action="clear-filter" data-entity="' + escAttr(entity) + '" '
-      + 'style="cursor:pointer;color:var(--accent);text-decoration:underline;margin-left:8px">Clear search</span>';
+    // Template literal for the data-entity attribute — string concatenation
+    // here trips the XSS-fuzz structural test (raw single-quotes inside the
+    // inlined script's data-* attribute patterns). See note above and the
+    // matching pattern in renderLineageSearchResults / renderSourceMap.
+    inner = `No ${escHtml(entity)} match “${escHtml(term)}”`
+      + ` <span data-action="clear-filter" data-entity="${escAttr(entity)}" style="cursor:pointer;color:var(--accent);text-decoration:underline;margin-left:8px">Clear search</span>`;
   } else if (showUnusedOnly[entity]) {
     inner = 'No unused ' + entity + ' — everything here is referenced. ✓';
   } else {
