@@ -534,12 +534,26 @@ function rewireLandingButtons(): void {
  */
 // LoadMode type now lives in ./pair-picker.ts (imported at the top).
 
+// Sum the byte sizes of a VFS map (UTF-16 chars — close enough as a proxy
+// for the "loaded" stat shown briefly before the overlay dismisses).
+function totalVfsSize(files: Map<string, string>): number {
+  let n = 0;
+  for (const v of files.values()) n += v.length;
+  return n;
+}
+function fmtBytes(n: number): string {
+  if (n < 1024) return n + " B";
+  if (n < 1024 * 1024) return (n / 1024).toFixed(1) + " KB";
+  return (n / (1024 * 1024)).toFixed(2) + " MB";
+}
+
 async function processFiles(
   files: Map<string, string>,
   pickedName: string,
   fromSample: boolean,
   loadMode: LoadMode = "full",
 ): Promise<void> {
+  const t0 = performance.now();
   if (files.size === 0) {
     // The two-step picker handles the ".Report / .SemanticModel
     // picked directly" case upstream, so if we arrive here with zero
@@ -635,6 +649,16 @@ async function processFiles(
     improvementsMdLite,
   }, loadMode);
 
+  // Briefly surface the load stat (tables/measures/size/duration) before
+  // dismissing the overlay — gives users a transparent signal of model
+  // size and parse cost. ~800 ms is long enough to read, short enough not
+  // to feel like a delay.
+  const dt = Math.round(performance.now() - t0);
+  const sz = fmtBytes(totalVfsSize(files));
+  setStatus(`Loaded · ${fullData.tables.length} tables · ${fullData.measures.length} measures · ${sz} · ${dt} ms`);
+  // eslint-disable-next-line no-console
+  console.log(`[entry] loaded "${reportName}" — ${fullData.tables.length} tables · ${fullData.measures.length} measures · ${sz} in ${dt}ms (fromSample=${fromSample})`);
+  await new Promise(r => setTimeout(r, 800));
   hideOverlay();
   setStatus("");
 }
