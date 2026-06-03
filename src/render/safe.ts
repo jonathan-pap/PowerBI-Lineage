@@ -110,3 +110,17 @@ export function safeJSON(value: unknown): string {
     .replace(/\u2028/g, "\\u2028")
     .replace(/\u2029/g, "\\u2029");
 }
+
+/**
+ * Markdown table-cell context. Escapes the pipe character (column separator)
+ * and collapses newlines to spaces so a value containing `|` or line breaks
+ * doesn't break the surrounding table row. Falsy values collapse to empty
+ * string \u2014 matches the pre-existing per-module helper this consolidates
+ * (was duplicated byte-for-byte in improvements.ts and md-generator.ts).
+ *
+ * Use for: any text spliced into a markdown table cell.
+ */
+export function escMd(s: string | undefined | null): string {
+  if (!s) return "";
+  return String(s).replace(/\|/g, "\\|").replace(/\r?\n/g, " ");
+}

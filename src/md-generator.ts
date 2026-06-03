@@ -1,5 +1,7 @@
 import type { FullData, TableData, ModelMeasure } from "./data-builder.js";
 import type { ModelRelationship, PhysicalSource } from "./model-parser.js";
+// Markdown table-cell escape — shared with improvements.ts via render/safe.ts.
+import { escMd as esc } from "./render/safe.js";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Output modes
@@ -108,10 +110,7 @@ function xref(text: string, doc: XrefDoc, anchor: string): string {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function esc(s: string | undefined | null): string {
-  if (!s) return "";
-  return String(s).replace(/\|/g, "\\|").replace(/\r?\n/g, " ");
-}
+// `esc` is the markdown table-cell escape, imported above from render/safe.ts.
 
 /**
  * Render a measure/column status as a coloured <span> badge that the

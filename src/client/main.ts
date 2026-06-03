@@ -191,6 +191,11 @@ let sortState: Record<string, { key: string; desc: boolean }> = {
 };
 let showUnusedOnly: Record<string, boolean> = { measures: false, columns: false };
 let searchTerms: Record<string, string> = { measures: "", columns: "" };
+// Tabs that share the sort/filter/unused state shape. Tightens the function
+// signatures below so a typo like sortTable("measure", …) fails at compile.
+// The state Records above stay string-keyed (per the note above) — Entity is
+// a subset of string, so lookups still type-check.
+type Entity = "measures" | "columns";
 let openPages=new Set();
 let openTables=new Set();
 
@@ -325,9 +330,9 @@ document.addEventListener('click', function(e){
     case 'md-tab':          switchMd(d.md); break;
     case 'md-mode':         switchMdMode(d.mode); break;
     case 'md-lite-mode':    switchMdLiteMode((d.mode as "lite" | "detailed") || "detailed"); break;
-    case 'sort':            sortTable(d.table, d.key); break;
-    case 'unused-filter':   toggleUnused(d.entity); break;
-    case 'clear-filter':    clearFilter(d.entity); break;
+    case 'sort':            sortTable(d.table as Entity, d.key as string); break;
+    case 'unused-filter':   toggleUnused(d.entity as Entity); break;
+    case 'clear-filter':    clearFilter(d.entity as Entity); break;
     case 'copy-ref':        copyText("'" + (d.table || "") + "'[" + (d.column || "") + "]", el); break;
     case 'theme':           toggleTheme(); break;
     case 'theme-set':       setTheme(d.themeName || 'dark'); break;
@@ -388,7 +393,7 @@ document.addEventListener('input', function(e){
   var d = el.dataset;
   switch (a) {
     case 'filter': {
-      const entity = d.entity as string, value = el.value;
+      const entity = d.entity as Entity, value = el.value;
       debounceInput('filter:' + entity, function(){ filterTable(entity, value); });
       break;
     }
@@ -407,6 +412,17 @@ document.addEventListener('input', function(e){
 // the empty-state placeholder if there's no active selection — we
 // blank the content while the dropdown is open, so dismissing without
 // a pick should bring the prompt back rather than leave a void.
+
+// Lineage tab's "type or click an entity" placeholder. Single source
+// of truth — was inlined identically in 3 places (switchTab, the
+// dropdown-dismiss handler, and renderLineageSearchResults).
+function lineageEmptyState(): string {
+  return '<div style="text-align:center;padding:48px 20px;color:var(--text-faint)">'
+    + '<div style="font-size:14px">Type above to search any measure or column,</div>'
+    + '<div style="font-size:14px;margin-top:4px">or click an entity in <strong>Measures</strong> · <strong>Columns</strong> · <strong>Pages</strong> · <strong>Tables</strong> to trace it.</div>'
+    + '</div>';
+}
+
 document.addEventListener('click', function(e){
   const target = e.target as HTMLElement | null;
   if (!target) return;
@@ -416,10 +432,7 @@ document.addEventListener('click', function(e){
     if (results) results.style.display = "none";
     const content = document.getElementById("lineage-content");
     if (content && !content.querySelector(".lineage-hero") && !content.innerHTML.trim()) {
-      content.innerHTML = '<div style="text-align:center;padding:48px 20px;color:var(--text-faint)">'
-        + '<div style="font-size:14px">Type above to search any measure or column,</div>'
-        + '<div style="font-size:14px;margin-top:4px">or click an entity in <strong>Measures</strong> · <strong>Columns</strong> · <strong>Pages</strong> · <strong>Tables</strong> to trace it.</div>'
-        + '</div>';
+      content.innerHTML = lineageEmptyState();
     }
   }
 });
@@ -571,10 +584,7 @@ function switchTab( id: any) {
     // populates the content directly.
     const content = document.getElementById("lineage-content")!;
     if (!content.innerHTML.trim()) {
-      content.innerHTML = '<div style="text-align:center;padding:48px 20px;color:var(--text-faint)">'
-        + '<div style="font-size:14px">Type above to search any measure or column,</div>'
-        + '<div style="font-size:14px;margin-top:4px">or click an entity in <strong>Measures</strong> · <strong>Columns</strong> · <strong>Pages</strong> · <strong>Tables</strong> to trace it.</div>'
-        + '</div>';
+      content.innerHTML = lineageEmptyState();
     }
     // Focus the search input on entry — single keystroke from tab-switch
     // to typing the entity name.
@@ -666,10 +676,7 @@ function renderLineageSearchResults(query: string): void {
     // Restore the empty-state prompt when the user clears the query
     // and nothing is selected. If a selection IS rendered, leave it.
     if (content && !hasSelection) {
-      content.innerHTML = '<div style="text-align:center;padding:48px 20px;color:var(--text-faint)">'
-        + '<div style="font-size:14px">Type above to search any measure or column,</div>'
-        + '<div style="font-size:14px;margin-top:4px">or click an entity in <strong>Measures</strong> · <strong>Columns</strong> · <strong>Pages</strong> · <strong>Tables</strong> to trace it.</div>'
-        + '</div>';
+      content.innerHTML = lineageEmptyState();
     }
     return;
   }
@@ -2210,14 +2217,14 @@ function renderCalcGroups(){
   document.getElementById("calcgroups-content")!.innerHTML=h;
 }
 
-function sortTable( t: any, k: any) {const s=sortState[t];if(s.key===k)s.desc=!s.desc;else{s.key=k;s.desc=true;}t==="measures"?renderMeasures():renderColumns();}
-function filterTable( t: any, v: any) {searchTerms[t]=v;t==="measures"?renderMeasures():renderColumns();}
-function toggleUnused( t: any) {showUnusedOnly[t]=!showUnusedOnly[t];document.getElementById("btn-unused-"+(t==="measures"?"m":"c"))!.classList.toggle("active");t==="measures"?renderMeasures():renderColumns();}
+function sortTable(t: Entity, k: string) {const s=sortState[t];if(s.key===k)s.desc=!s.desc;else{s.key=k;s.desc=true;}t==="measures"?renderMeasures():renderColumns();}
+function filterTable(t: Entity, v: string) {searchTerms[t]=v;t==="measures"?renderMeasures():renderColumns();}
+function toggleUnused(t: Entity) {showUnusedOnly[t]=!showUnusedOnly[t];document.getElementById("btn-unused-"+(t==="measures"?"m":"c"))!.classList.toggle("active");t==="measures"?renderMeasures():renderColumns();}
 
 // Full-width placeholder row shown when a Measures/Columns table renders zero
 // rows. Distinguishes "no search match" (offers a clear link) from "no unused
 // left" (a positive) from "empty model".
-function tableEmptyRow(colspan: number, entity: string): string {
+function tableEmptyRow(colspan: number, entity: Entity): string {
   const term = searchTerms[entity];
   let inner: string;
   if (term) {
@@ -2239,7 +2246,7 @@ function tableEmptyRow(colspan: number, entity: string): string {
 // Clear only the search term for a table (leaves the unused-only toggle as-is)
 // and re-render. Cancels any pending debounced filter so a stale keystroke
 // can't re-apply the term after the clear.
-function clearFilter(entity: any){
+function clearFilter(entity: Entity){
   if (inputDebounce['filter:' + entity]) clearTimeout(inputDebounce['filter:' + entity]);
   searchTerms[entity] = "";
   const input = document.querySelector('.search-input[data-entity="' + entity + '"]') as HTMLInputElement | null;
