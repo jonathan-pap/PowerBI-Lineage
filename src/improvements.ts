@@ -22,6 +22,8 @@
 import type { FullData, ModelMeasure } from "./data-builder.js";
 import type { ModelRelationship } from "./model-parser.js";
 import { buildCleanupPrompt, type CleanupCategory } from "./ai-prompts.js";
+// Markdown table-cell escape — shared with md-generator.ts via render/safe.ts.
+import { escMd as esc } from "./render/safe.js";
 
 // ─────────────────────────────────────────────────────────────────────
 // Types
@@ -49,15 +51,6 @@ export interface Improvement {
   crossRef?: string;
   /** Stable identifier for downstream consumers. See ImprovementKind. */
   kind?: ImprovementKind;
-}
-
-// ─────────────────────────────────────────────────────────────────────
-// MD helpers — self-contained so this module can stand alone
-// ─────────────────────────────────────────────────────────────────────
-
-function esc(s: string | undefined | null): string {
-  if (!s) return "";
-  return String(s).replace(/\|/g, "\\|").replace(/\r?\n/g, " ");
 }
 
 // ─────────────────────────────────────────────────────────────────────
