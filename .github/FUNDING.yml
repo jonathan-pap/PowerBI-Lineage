@@ -1,24 +1,13 @@
-# Sponsorship channels — PARKED.
+# Sponsorship channels — active.
 #
-# This file controls the "❤️ Sponsor" button that GitHub shows on
-# the repo's main page. While every line below is commented, the
-# button is hidden — the file just sits here as scaffolding ready
-# to activate.
+# Controls the "❤️ Sponsor" button on the repo's main page. GitHub
+# Sponsors is approved for jonathan-pap; one-time donations are enabled
+# on the sponsor profile so visitors can tip without subscribing.
 #
-# To turn it on:
-#   1. Pick ONE channel (Buy Me a Coffee recommended for this
-#      project — casual tip jar, one-time payments, no subscription
-#      pressure, ~5% fee).
-#   2. Register the account and note your username.
-#   3. Uncomment the matching line below and fill in the username.
-#   4. Commit → GitHub re-indexes within minutes and the Sponsor
-#      button appears.
-#
-# Why commented-out rather than deleted: keeps the options visible
-# for future-you. If Buy Me a Coffee turns out to be wrong for the
-# project, flipping to GitHub Sponsors or Ko-fi is a one-line edit.
+# Alternate channels stay commented as a safety net — they aren't
+# exclusive, so adding a second one later is a one-line edit.
 
+github: jonathan-pap
 # buy_me_a_coffee: <bmc-username>
-# github: <github-username-or-org>
 # ko_fi: <ko-fi-username>
 # custom: ["https://example.com/support"]
