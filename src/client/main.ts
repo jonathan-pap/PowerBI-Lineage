@@ -510,13 +510,13 @@ function renderSummary(){
   const tipIndirect=`Not on any visual, but referenced by direct measures via DAX or used in a relationship — keep these. ${t.measuresIndirect} measures · ${t.columnsIndirect} columns.`;
   const tipUnused=`Not referenced anywhere in the report — safe to remove. ${t.measuresUnused} measures · ${t.columnsUnused} columns.`;
   const tipPages=`Total pages in the report. ${visibleCount} visible · ${hiddenCount} hidden (tooltip / drillthrough / nav-suppressed).`;
-  const tipVisuals=`Total visuals across all pages.`;
+  const tipVisuals=`Data-bound visuals across all pages — charts, tables, cards, slicers, maps. Decorative shapes, textboxes, images, and action buttons aren't counted.`;
   document.getElementById("summary")!.innerHTML=`
     <div class="stat has-tip" data-tooltip="${tipDirect}"><div class="stat-value good">${t.measuresDirect+t.columnsDirect}</div><div class="stat-label">Direct</div><div class="stat-detail">${t.measuresDirect}M · ${t.columnsDirect}C</div></div>
     <div class="stat has-tip" data-tooltip="${tipIndirect}"><div class="stat-value ${t.measuresIndirect+t.columnsIndirect>0?'warn':''}">${t.measuresIndirect+t.columnsIndirect}</div><div class="stat-label">Indirect</div><div class="stat-detail">${t.measuresIndirect}M · ${t.columnsIndirect}C</div></div>
     <div class="stat has-tip" data-tooltip="${tipUnused}"><div class="stat-value ${totalOrphan>0?'danger':''}">${totalOrphan}</div><div class="stat-label">Unused</div><div class="stat-detail">${t.measuresUnused}M · ${t.columnsUnused}C</div></div>
     <div class="stat has-tip" data-tooltip="${tipPages}"><div class="stat-value">${t.pages}</div><div class="stat-label">Pages</div><div class="stat-detail">${visibleCount}V · ${hiddenCount}H</div></div>
-    <div class="stat has-tip" data-tooltip="${tipVisuals}"><div class="stat-value">${t.visuals}</div><div class="stat-label">Visuals</div></div>
+    <div class="stat has-tip" data-tooltip="${tipVisuals}"><div class="stat-value">${t.dataVisuals}</div><div class="stat-label">Visuals</div></div>
   `;
 }
 
@@ -1020,7 +1020,7 @@ function renderPages(){
       <div class="page-header" data-action="page-toggle" data-name="${escAttr(p.name)}">
         <div class="page-name">${escHtml(p.name)}${hiddenBadge}</div>
         <div class="page-stats">
-          <div class="page-stat"><div class="page-stat-val" style="color:var(--clr-downstream)">${p.visualCount}</div><div class="page-stat-label">Visuals</div></div>
+          <div class="page-stat"><div class="page-stat-val" style="color:var(--clr-downstream)">${p.dataVisualCount}</div><div class="page-stat-label">Visuals</div></div>
           <div class="page-stat"><div class="page-stat-val" style="color:var(--clr-measure)">${p.measureCount}</div><div class="page-stat-label">Measures</div></div>
           <div class="page-stat"><div class="page-stat-val" style="color:var(--clr-column)">${p.columnCount}</div><div class="page-stat-label">Columns</div></div>
           <div class="page-stat"><div class="page-stat-val" style="color:var(--clr-slicer)">${p.slicerCount}</div><div class="page-stat-label">Slicers</div></div>
@@ -1045,7 +1045,7 @@ function renderPages(){
           <div style="display:flex;flex-wrap:wrap;gap:4px">${columnChips||'<span style="color:#475569;font-size:12px">None</span>'}</div>
         </div>
         <div class="page-section">
-          <div class="page-section-title">Visuals (${p.visualCount})<span class="line"></span></div>
+          <div class="page-section-title">Visuals (${p.visuals.length})<span class="line"></span></div>
           ${visualRows||(p.visualCount>0?'<span style="color:#475569;font-size:12px">No data-bound visuals on this page — text, shape, or image only.</span>':'<span style="color:#475569;font-size:12px">Empty page.</span>')}
         </div>
       </div></div>
@@ -1053,7 +1053,7 @@ function renderPages(){
   }).join("");
   var hiddenCount=(DATA.hiddenPages||[]).length;
   var visibleCount=pageData.length-hiddenCount;
-  var totalVisuals=pageData.reduce(function(a: any, p: any){return a+(p.visualCount||0);},0);
+  var totalVisuals=pageData.reduce(function(a: any, p: any){return a+(p.dataVisualCount||0);},0);
   var pf=document.getElementById("pages-content");
   if(pf)pf.insertAdjacentHTML("beforeend",
     '<div class="panel-footer"><div class="left">'+

@@ -28,7 +28,7 @@ function mk(over: Partial<FullData> = {}): FullData {
     totals: {
       measuresInModel: 0, measuresDirect: 0, measuresIndirect: 0, measuresUnused: 0,
       columnsInModel: 0, columnsDirect: 0, columnsIndirect: 0, columnsUnused: 0,
-      relationships: 0, functions: 0, calcGroups: 0, tables: 0, pages: 0, visuals: 0,
+      relationships: 0, functions: 0, calcGroups: 0, tables: 0, pages: 0, visuals: 0, dataVisuals: 0,
     },
     ...over,
   } as FullData;

@@ -87,6 +87,7 @@ function buildAdversarialData(name: string): FullData {
     pages: [{
       name,
       visualCount: 0,
+      dataVisualCount: 0,
       measures: [name],
       columns: [name],
       measureCount: 1,
@@ -97,7 +98,7 @@ function buildAdversarialData(name: string): FullData {
       visuals: [],
     } as any],
     hiddenPages: [],
-    allPages: [{ name, hidden: false, visualCount: 0 }],
+    allPages: [{ name, hidden: false, visualCount: 0, dataVisualCount: 0 }],
     expressions: [],
     compatibilityLevel: null,
     modelProperties: { name: "Test", description: "" } as any,
@@ -105,7 +106,7 @@ function buildAdversarialData(name: string): FullData {
       measuresInModel: 1, measuresDirect: 1, measuresIndirect: 0, measuresUnused: 0,
       columnsInModel: 1, columnsDirect: 1, columnsIndirect: 0, columnsUnused: 0,
       relationships: 0, functions: 0, calcGroups: 0, tables: 1,
-      pages: 1, visuals: 0,
+      pages: 1, visuals: 0, dataVisuals: 0,
     },
   } as unknown as FullData;
 }

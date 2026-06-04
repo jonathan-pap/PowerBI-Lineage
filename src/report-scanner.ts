@@ -47,7 +47,13 @@ function extractVisualTitle(visual: any): string {
 export interface PageMeta {
   name: string;
   hidden: boolean;
+  /** Total elements under `visuals/` on this page — includes decorative
+   *  shapes, textboxes, images, action buttons. Use for filesystem-level
+   *  counts (and the page-layout wireframe, which needs every box). */
   visualCount: number;
+  /** Data-bound visuals only — what users mean when they say "visuals
+   *  on this page". Excludes shapes/textboxes/images/buttons. */
+  dataVisualCount: number;
   /** Canvas width in PBI coordinate space (default 1280 for 16:9). */
   width: number;
   /** Canvas height (default 720). */
@@ -70,13 +76,51 @@ export interface ScannedVisual {
   visualId: string;
   visualType: string;
   visualTitle: string;
+  /** True when this visual contributes to documented data lineage —
+   *  charts, tables, cards, slicers, maps, AI visuals, custom visuals,
+   *  etc. False for shapes, textboxes, images, action buttons, page
+   *  navigators, and visual groups. Drives the "data visual" count
+   *  shown in the UI and MD docs. */
+  isDataVisual: boolean;
   position: VisualPosition;
 }
 
 const DEFAULT_PAGE_WIDTH = 1280;
 const DEFAULT_PAGE_HEIGHT = 720;
 
-export function scanReportBindings(reportPath: string): { bindings: RawBinding[]; pageCount: number; visualCount: number; hiddenPages: string[]; allPages: PageMeta[]; scannedVisuals: ScannedVisual[] } {
+/**
+ * Power BI `visualType` strings that represent non-data canvas elements:
+ * decorative shapes, text annotations, images, action buttons, navigation
+ * helpers, and visual groups (containers — the grouped visuals already
+ * count individually). Lower-cased for case-insensitive matching.
+ *
+ * Anything not in this set is treated as a data visual — including
+ * unknown custom visuals, which keeps the count future-proof when PBI
+ * adds new chart types.
+ */
+const NON_DATA_VISUAL_TYPES: ReadonlySet<string> = new Set([
+  "shape",
+  "basicshape",
+  "textbox",
+  "image",
+  "actionbutton",
+  "pagenavigator",
+  "bookmarknavigator",
+  "group",
+]);
+
+/**
+ * Predicate: does this visual contribute to the report's data lineage?
+ * A visual qualifies if its type is not on the non-data denylist. Empty
+ * / missing visualType is treated as non-data (defensive).
+ */
+export function isDataVisual(visual: any): boolean {
+  const t = String(visual?.visual?.visualType || "").trim().toLowerCase();
+  if (!t) return false;
+  return !NON_DATA_VISUAL_TYPES.has(t);
+}
+
+export function scanReportBindings(reportPath: string): { bindings: RawBinding[]; pageCount: number; visualCount: number; dataVisualCount: number; hiddenPages: string[]; allPages: PageMeta[]; scannedVisuals: ScannedVisual[] } {
   const project = new PbirProject(reportPath);
   const pageIds = project.listPageIds();
   const bindings: RawBinding[] = [];
@@ -84,6 +128,7 @@ export function scanReportBindings(reportPath: string): { bindings: RawBinding[]
   const allPages: PageMeta[] = [];
   const scannedVisuals: ScannedVisual[] = [];
   let totalVisuals = 0;
+  let totalDataVisuals = 0;
 
   for (const pageId of pageIds) {
     const page = project.getPage(pageId);
@@ -93,13 +138,21 @@ export function scanReportBindings(reportPath: string): { bindings: RawBinding[]
     const visualIds = project.listVisualIds(pageId);
     const pageWidth = typeof (page as any).width === "number" && (page as any).width > 0 ? (page as any).width : DEFAULT_PAGE_WIDTH;
     const pageHeight = typeof (page as any).height === "number" && (page as any).height > 0 ? (page as any).height : DEFAULT_PAGE_HEIGHT;
-    allPages.push({ name: pageName, hidden: isHidden, visualCount: visualIds.length, width: pageWidth, height: pageHeight });
+    // dataVisualCount is computed below as visuals are inspected, then
+    // back-filled onto the PageMeta entry pushed here.
+    const pageMeta: PageMeta = { name: pageName, hidden: isHidden, visualCount: visualIds.length, dataVisualCount: 0, width: pageWidth, height: pageHeight };
+    allPages.push(pageMeta);
 
     for (const visualId of visualIds) {
       totalVisuals++;
       try {
         const visual = project.getVisual(pageId, visualId);
         const visualType = (visual as any).visual?.visualType || "unknown";
+        const isData = isDataVisual(visual);
+        if (isData) {
+          totalDataVisuals++;
+          pageMeta.dataVisualCount++;
+        }
         const visualTitle = extractVisualTitle(visual) || visualType;
         const vId = (visual as any).name || visualId;
         const ctx = { pageId, pageName, visualId: vId, visualType, visualTitle };
@@ -110,6 +163,7 @@ export function scanReportBindings(reportPath: string): { bindings: RawBinding[]
         const pos = (visual as any).position || {};
         scannedVisuals.push({
           pageId, pageName, visualId: vId, visualType, visualTitle,
+          isDataVisual: isData,
           position: {
             x: typeof pos.x === "number" ? pos.x : 0,
             y: typeof pos.y === "number" ? pos.y : 0,
@@ -163,5 +217,5 @@ export function scanReportBindings(reportPath: string): { bindings: RawBinding[]
     }
   }
 
-  return { bindings, pageCount: pageIds.length, visualCount: totalVisuals, hiddenPages, allPages, scannedVisuals };
+  return { bindings, pageCount: pageIds.length, visualCount: totalVisuals, dataVisualCount: totalDataVisuals, hiddenPages, allPages, scannedVisuals };
 }

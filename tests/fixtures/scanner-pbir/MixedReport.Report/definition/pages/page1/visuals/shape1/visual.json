@@ -1,0 +1,6 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.7.0/schema.json",
+  "name": "shape1",
+  "position": { "x": 0, "y": 220, "z": 2, "height": 100, "width": 200 },
+  "visual": { "visualType": "shape" }
+}
