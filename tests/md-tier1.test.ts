@@ -39,7 +39,7 @@ function empty(): FullData {
     totals: {
       measuresInModel: 0, measuresDirect: 0, measuresIndirect: 0, measuresUnused: 0,
       columnsInModel: 0, columnsDirect: 0, columnsIndirect: 0, columnsUnused: 0,
-      relationships: 0, functions: 0, calcGroups: 0, tables: 0, pages: 0, visuals: 0,
+      relationships: 0, functions: 0, calcGroups: 0, tables: 0, pages: 0, visuals: 0, dataVisuals: 0,
     },
   } as unknown as FullData;
 }
@@ -167,9 +167,9 @@ if (FIXTURE_EXISTS) {
     const nextRx = /\n(?:## |### )\S/m;
     const tailHi = pages.slice(tailStart).search(nextRx);
     const section = pages.slice(headerIdx, tailStart + (tailHi > 0 ? tailHi : pages.length - tailStart));
-    const vWord = p.visualCount === 1 ? "visual" : "visuals";
-    assert.ok(section.includes(`**${p.visualCount}** ${vWord}`),
-      `page section for "${p.name}" should carry its visualCount in the compact stats line`);
+    const vWord = p.dataVisualCount === 1 ? "visual" : "visuals";
+    assert.ok(section.includes(`**${p.dataVisualCount}** ${vWord}`),
+      `page section for "${p.name}" should carry its dataVisualCount in the compact stats line`);
     if (p.measureCount > 0) {
       const mWord = p.measureCount === 1 ? "measure" : "measures";
       assert.ok(section.includes(`**${p.measureCount}** ${mWord}`),

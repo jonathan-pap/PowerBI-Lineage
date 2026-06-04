@@ -214,7 +214,14 @@ export interface WireframeVisual {
 
 export interface PageData {
   name: string;
+  /** Total elements on the page — includes decorative shapes, textboxes,
+   *  images, action buttons. Use for filesystem-level counts and to drive
+   *  empty-state copy that distinguishes "blank page" from "shapes only". */
   visualCount: number;
+  /** Data-bound visuals only — charts, tables, cards, slicers, maps, AI,
+   *  custom visuals. Excludes shapes/textboxes/images/buttons. This is the
+   *  number rendered as "Visuals" in the dashboard and Markdown docs. */
+  dataVisualCount: number;
   measures: string[];
   columns: string[];
   measureCount: number;
@@ -268,7 +275,7 @@ export interface FullData {
   /** All pages in the report, including those with no data-field bindings
    *  (e.g., text-only pages, blank pages, tooltip/drillthrough pages that
    *  weren't populated yet). Needed so the Pages tab can show the full list. */
-  allPages: { name: string; hidden: boolean; visualCount: number }[];
+  allPages: { name: string; hidden: boolean; visualCount: number; dataVisualCount: number }[];
   /** Top-level M expressions / parameters from expressions.tmdl or model.bim. */
   expressions: ModelExpression[];
   /** Compatibility level read from database.tmdl / model.bim, when available. */
@@ -289,7 +296,12 @@ export interface FullData {
     calcGroups: number;
     tables: number;
     pages: number;
+    /** Total visual containers under `visuals/` across all pages —
+     *  includes decorative shapes, textboxes, images, action buttons. */
     visuals: number;
+    /** Data-bound visuals only across all pages. The "Visuals" KPI in the
+     *  dashboard header and MD report summary reads from this. */
+    dataVisuals: number;
   };
 }
 
@@ -316,7 +328,7 @@ export function buildFullData(reportPath: string): FullData {
   const modelPath = findSemanticModelPath(reportPath);
   const rawModel = parseModel(modelPath);
   const allMeasureNames = rawModel.measures.map(m => m.name);
-  const { bindings, pageCount, visualCount, hiddenPages, allPages, scannedVisuals } = scanReportBindings(reportPath);
+  const { bindings, pageCount, visualCount, dataVisualCount, hiddenPages, allPages, scannedVisuals } = scanReportBindings(reportPath);
 
   // Build a lookup from shared-expression name to its AS cluster URL
   // (first string literal argument to `AnalysisServices.Database(...)`).
@@ -733,6 +745,7 @@ export function buildFullData(reportPath: string): FullData {
         // pass only sees visuals with data refs, which undercounts text/shape
         // visuals on otherwise-populated pages.
         visualCount: meta.visualCount,
+        dataVisualCount: meta.dataVisualCount,
         measures: [...p.measures],
         columns: [...p.columns],
         measureCount: p.measures.size,
@@ -750,6 +763,7 @@ export function buildFullData(reportPath: string): FullData {
     return {
       name: meta.name,
       visualCount: meta.visualCount,
+      dataVisualCount: meta.dataVisualCount,
       measures: [],
       columns: [],
       measureCount: 0,
@@ -850,6 +864,7 @@ export function buildFullData(reportPath: string): FullData {
       tables: tables.length,
       pages: pageCount,
       visuals: visualCount,
+      dataVisuals: dataVisualCount,
     },
   };
 }

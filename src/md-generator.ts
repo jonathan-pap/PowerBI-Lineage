@@ -601,7 +601,7 @@ export function generateMarkdown(data: FullData, reportName: string, mode: MdMod
   lines.push(`| **Model entities** | ${userTableCount} tables · ${userColumnCount} columns · ${data.totals.measuresInModel} measures · ${data.totals.relationships} relationships${autoDateDisplay} |`);
   lines.push(`| **User-defined functions** | ${udfCount} |`);
   lines.push(`| **Calculation groups** | ${calcGroups.length}${calcGroups.length > 0 ? ` (${cgItemCount} item${cgItemCount === 1 ? "" : "s"})` : ""} |`);
-  lines.push(`| **Report surface** | ${data.totals.pages} pages · ${data.totals.visuals} visuals |`);
+  lines.push(`| **Report surface** | ${data.totals.pages} pages · ${data.totals.dataVisuals} visuals |`);
   lines.push(`| **Scope** | Schema, relationships, usage classification. DAX expressions omitted. |`);
   lines.push(`| **Companion documents** | Data Dictionary · Sources · Measures · Functions · Calc Groups · Pages · Improvements · Index |`);
   lines.push("");
@@ -1016,7 +1016,7 @@ export function generateMarkdown(data: FullData, reportName: string, mode: MdMod
       // Desktop. Display only; the data layer still carries the raw name.
       const display = p.name.replace(/\s+/g, " ").trim();
       const dupTag = dupNames.has(display) ? " _(duplicate name)_" : "";
-      lines.push(`| ${i + 1} | ${esc(display)}${dupTag} | ${vis} | ${p.visualCount} | ${p.measureCount} | ${p.columnCount} | ${p.slicerCount} |`);
+      lines.push(`| ${i + 1} | ${esc(display)}${dupTag} | ${vis} | ${p.dataVisualCount} | ${p.measureCount} | ${p.columnCount} | ${p.slicerCount} |`);
     });
     lines.push("");
   }
@@ -2274,13 +2274,13 @@ export function generatePagesMd(data: FullData, reportName: string, mode: MdMode
   const visible = data.pages
     .filter(p => !hiddenSet.has(p.name))
     .sort((a, b) => (b.measureCount + b.columnCount) - (a.measureCount + a.columnCount)
-                  || b.visualCount - a.visualCount
+                  || b.dataVisualCount - a.dataVisualCount
                   || a.name.localeCompare(b.name));
   const hidden = data.pages
     .filter(p => hiddenSet.has(p.name))
     .sort((a, b) => a.name.localeCompare(b.name));
 
-  const totalVisuals = data.pages.reduce((a, p) => a + (p.visualCount || 0), 0);
+  const totalVisuals = data.pages.reduce((a, p) => a + (p.dataVisualCount || 0), 0);
   const totalMeasures = data.pages.reduce((a, p) => a + (p.measureCount || 0), 0);
   const totalColumns = data.pages.reduce((a, p) => a + (p.columnCount || 0), 0);
 
@@ -2318,7 +2318,7 @@ export function generatePagesMd(data: FullData, reportName: string, mode: MdMode
     lines.push("");
     for (const p of visible) {
       const anchor = adoSlug(`${p.name}`);
-      lines.push(`- [${esc(p.name)}](#${anchor}) — ${p.visualCount} visual${p.visualCount === 1 ? "" : "s"}, ${p.measureCount} measure${p.measureCount === 1 ? "" : "s"}, ${p.columnCount} column${p.columnCount === 1 ? "" : "s"}`);
+      lines.push(`- [${esc(p.name)}](#${anchor}) — ${p.dataVisualCount} visual${p.dataVisualCount === 1 ? "" : "s"}, ${p.measureCount} measure${p.measureCount === 1 ? "" : "s"}, ${p.columnCount} column${p.columnCount === 1 ? "" : "s"}`);
     }
     lines.push("");
   }
@@ -2344,7 +2344,7 @@ export function generatePagesMd(data: FullData, reportName: string, mode: MdMode
 
     // Compact one-line stats instead of a 5-row stat table
     const statBits: string[] = [];
-    statBits.push(`**${p.visualCount}** visual${p.visualCount === 1 ? "" : "s"}`);
+    statBits.push(`**${p.dataVisualCount}** visual${p.dataVisualCount === 1 ? "" : "s"}`);
     if (p.slicerCount > 0) statBits.push(`**${p.slicerCount}** slicer${p.slicerCount === 1 ? "" : "s"}`);
     if (p.measureCount > 0) statBits.push(`**${p.measureCount}** measure${p.measureCount === 1 ? "" : "s"}`);
     if (p.columnCount > 0) statBits.push(`**${p.columnCount}** column${p.columnCount === 1 ? "" : "s"}`);
@@ -2418,7 +2418,7 @@ export function generatePagesMd(data: FullData, reportName: string, mode: MdMode
     lines.push("|---|--:|--:|--:|");
     for (const p of hidden) {
       const totalBind = (p.measureCount || 0) + (p.columnCount || 0);
-      lines.push(`| ${esc(p.name)} | ${p.visualCount} | ${p.slicerCount} | ${totalBind} |`);
+      lines.push(`| ${esc(p.name)} | ${p.dataVisualCount} | ${p.slicerCount} | ${totalBind} |`);
     }
     lines.push("");
     lines.push("</details>");

@@ -68,6 +68,7 @@ function buildFullDataWithPayload(payload: string): FullData {
       tables: 0,
       pages: 0,
       visuals: 0,
+      dataVisuals: 0,
     },
   } as unknown as FullData;
 }
